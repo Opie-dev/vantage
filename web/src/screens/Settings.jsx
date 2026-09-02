@@ -34,7 +34,7 @@ import {
 } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { INSTITUTIONS, epfAccounts, totalRate, withRates } from '@/lib/institutions'
+import { INSTITUTIONS, totalRate, withRates } from '@/lib/institutions'
 
 import { useVantage } from '@/lib/store'
 import {
@@ -48,7 +48,6 @@ import {
   withholdingSummary,
 } from '@/lib/calc'
 import { dtfmt, fmt, fmtS, pctS, toneClass } from '@/lib/format'
-import { EPF_WAGE_THRESHOLD, epfFromGross } from '@/lib/calc'
 
 /**
  * Light, dark, or follow the machine.
@@ -647,142 +646,6 @@ function RatesCard() {
   )
 }
 
-/**
- * EPF, in one place: the accounts a contribution is split across, and the rates
- * used to suggest one.
- *
- * These lived nowhere before. The accounts were created from the income form and
- * the rates did not exist at all, so every payslip's EPF was typed from scratch.
- * Gathering them here means an income source only has to say whether EPF applies.
- *
- * The rates SUGGEST, they do not decide. Below RM20,000 a month EPF is not a
- * percentage: the Third Schedule rounds wages into bands and each band carries a
- * fixed contribution, so a suggestion lands within a few ringgit of the payslip
- * rather than on it. The payslip stays authoritative and is typed over the
- * suggestion, which is why nothing here is ever written to an event by itself.
- */
-function EpfCard() {
-  const { state, setPreference, createEpfAccounts } = useVantage()
-  const p = state.preferences || {}
-
-  const held = new Set(state.assets.filter(a => !a.archived).map(a => a.product_id).filter(Boolean))
-  const accounts = epfAccounts()
-  const missing = accounts.filter(a => !held.has(a.id))
-
-  const [draft, setDraft] = useState(null)
-  const value = k => (draft && k in draft ? draft[k] : String(p[k] ?? ''))
-  const setD = (k, v) => setDraft(d => ({ ...(d || {}), [k]: v }))
-
-  const commit = k => {
-    const raw = draft?.[k]
-    if (raw == null) return
-    const n = Number(raw)
-    setDraft(d => {
-      const next = { ...(d || {}) }
-      delete next[k]
-      return Object.keys(next).length ? next : null
-    })
-    if (raw !== '' && Number.isFinite(n) && n >= 0 && n <= 100 && n !== p[k]) {
-      setPreference({ [k]: n })
-    }
-  }
-
-  const Rate = ({ id, k, label, hint }) => (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id} className="text-faint text-[11px]">
-        {label}
-      </Label>
-      <Input
-        id={id}
-        className="num h-8 w-[84px]"
-        type="number"
-        step="0.5"
-        min="0"
-        max="100"
-        value={value(k)}
-        onChange={e => setD(k, e.target.value)}
-        onBlur={() => commit(k)}
-        onKeyDown={e => e.key === 'Enter' && e.currentTarget.blur()}
-      />
-      {hint ? <span className="text-faint text-[10.5px]">{hint}</span> : null}
-    </div>
-  )
-
-  const example = epfFromGross(5000, p)
-
-  return (
-    <Card className="gap-3">
-      <CardHeader className="px-4">
-        <span className="eyebrow">EPF</span>
-        <p className="text-muted-foreground mt-1 text-[12.5px]">
-          The accounts a contribution is split across, and the rates used to suggest one. An
-          employment income source then only has to say whether EPF applies.
-        </p>
-      </CardHeader>
-      <CardContent className="grid gap-3 px-4">
-        <div className="grid gap-1">
-          {accounts.map(a => (
-            <div key={a.id} className="flex items-baseline gap-2 text-[12.5px]">
-              <span className="num text-primary w-[38px] font-semibold">
-                {Math.round(a.share * 100)}%
-              </span>
-              <span className="flex-1">{a.name.replace('EPF ', '')}</span>
-              <span
-                className={cn(
-                  'text-[10.5px] tracking-[0.05em] uppercase',
-                  held.has(a.id) ? 'text-muted-foreground' : 'text-faint',
-                )}
-              >
-                {held.has(a.id) ? 'set up' : 'not set up'}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {missing.length ? (
-          <div>
-            <Button size="sm" variant="outline" onClick={createEpfAccounts}>
-              Create {missing.length === 3 ? 'all three' : `the missing ${missing.length}`}
-            </Button>
-          </div>
-        ) : null}
-
-        <div className="border-hairline grid gap-2 border-t pt-3">
-          <span className="eyebrow">Contribution rates</span>
-          <div className="flex flex-wrap items-start gap-3">
-            <Rate id="epf-emp" k="epfEmployeePct" label="Employee" />
-            <Rate
-              id="epf-erl"
-              k="epfEmployerPctLow"
-              label="Employer"
-              hint={`gross ≤ ${fmt(EPF_WAGE_THRESHOLD, 'MYR')}`}
-            />
-            <Rate
-              id="epf-erh"
-              k="epfEmployerPctHigh"
-              label="Employer"
-              hint={`gross > ${fmt(EPF_WAGE_THRESHOLD, 'MYR')}`}
-            />
-          </div>
-          <p className="text-faint text-[11px] leading-relaxed">
-            Statutory for a citizen under 60 is <span className="num">11</span> /{' '}
-            <span className="num">13</span> / <span className="num">12</span>. From 60 it becomes{' '}
-            <span className="num">0</span> and <span className="num">4</span> — set the rates rather
-            than being asked your age. On a gross of {fmt(EPF_WAGE_THRESHOLD, 'MYR')} that suggests{' '}
-            <span className="num">{fmt(example.employee, 'MYR')}</span> from you and{' '}
-            <span className="num">{fmt(example.employer, 'MYR')}</span> from your employer.
-          </p>
-          <p className="text-faint text-[11px] leading-relaxed">
-            A suggestion, not the figure. Below {fmt(20000, 'MYR')} a month EPF is not a percentage
-            at all — the Third Schedule rounds wages into bands, each with a fixed contribution — so
-            expect a few ringgit of difference and type what the payslip says.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function Settings() {
   return (
     <div className="mx-auto grid max-w-[1180px] gap-3.5 lg:grid-cols-2 lg:items-start">
@@ -793,7 +656,6 @@ export default function Settings() {
       </div>
       <div className="grid gap-3.5">
         <TaxCard />
-        <EpfCard />
         <RatesCard />
         <DataCard />
       </div>

@@ -219,10 +219,6 @@ export const INSTITUTIONS = [
         id: 'EPF_PERSARAAN',
         name: 'EPF Akaun Persaraan',
         label: 'Akaun Persaraan — was Account 1 · 75%',
-        // Share of every contribution. EPF_SPLIT in income.service.js divides by
-        // the same three numbers server-side and the two must agree — the same
-        // mirroring the services already do for the database CHECK constraints.
-        share: 0.75,
         rate_basis: 'MADB',
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
@@ -233,7 +229,6 @@ export const INSTITUTIONS = [
         id: 'EPF_SEJAHTERA',
         name: 'EPF Akaun Sejahtera',
         label: 'Akaun Sejahtera — was Account 2 · 15%',
-        share: 0.15,
         rate_basis: 'MADB',
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
@@ -244,7 +239,6 @@ export const INSTITUTIONS = [
         id: 'EPF_FLEKSIBEL',
         name: 'EPF Akaun Fleksibel',
         label: 'Akaun Fleksibel — Account 3 · 10%',
-        share: 0.10,
         rate_basis: 'MADB',
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
@@ -374,17 +368,6 @@ export function estimatedRate(product, now = new Date()) {
   const year = lastCompleteYear(product.fiscal_year, now) + 1
   if (year <= latest.year) return null
   return { ...latest, year, estimated: true, basedOn: latest.year }
-}
-
-/**
- * The three accounts every EPF contribution is split across.
- *
- * Exported as a set rather than looked up ad hoc because two places need exactly
- * this list and must agree on it: the button that creates them, and the server
- * that divides a payroll contribution 75/15/10 between them.
- */
-export function epfAccounts() {
-  return institutionOf('EPF')?.products || []
 }
 
 /** The institution record for an id, or undefined for OTHER and unknowns. */

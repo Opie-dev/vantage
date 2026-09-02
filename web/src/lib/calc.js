@@ -46,13 +46,7 @@ export const EMPTY_STATE = {
   incomeEvents: [],
   funds: [],
   fx: 4.22,
-  preferences: {
-    pnlBasis: 'price',
-    dashboardTheme: 'income',
-    epfEmployeePct: 11,
-    epfEmployerPctLow: 13,
-    epfEmployerPctHigh: 12,
-  },
+  preferences: { pnlBasis: 'price', dashboardTheme: 'income' },
   lastSync: null,
 }
 
@@ -2346,41 +2340,6 @@ const ON_TOP_FIELDS = ['epf_employer', 'socso_employer', 'eis_employer']
 const sumOf = (e, keys) => keys.reduce((t, k) => t + (e[k] || 0), 0)
 
 /** What actually reached you. */
-/**
- * Monthly wage at which the employer's EPF rate steps down. Mirrors
- * EPF_WAGE_THRESHOLD in preferences.service.js.
- */
-export const EPF_WAGE_THRESHOLD = 5000
-
-/**
- * What EPF would probably be on this gross, from the rates in Settings.
- *
- * A SUGGESTION, never an answer. Below RM20,000 a month EPF does not use a
- * percentage at all — the Third Schedule rounds wages into bands, RM20 steps to
- * RM5,000 and RM100 above, each band carrying a fixed contribution — so this
- * lands within a few ringgit rather than on the number. The payslip is the
- * authority and its figures are typed over these.
- *
- * The employer's rate is picked by the wage, because it steps at RM5,000. From
- * age 60 the statutory pair is 0% and 4%, which is expressed by setting the
- * rates in Settings rather than by asking anyone's age here.
- */
-export function epfFromGross(gross, prefs = {}) {
-  const g = Number(gross) || 0
-  const rate = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
-  const employeePct = rate(prefs.epfEmployeePct, 11)
-  const employerPct =
-    g <= EPF_WAGE_THRESHOLD ? rate(prefs.epfEmployerPctLow, 13) : rate(prefs.epfEmployerPctHigh, 12)
-  if (g <= 0) return { employee: 0, employer: 0, employeePct, employerPct }
-  const round2 = v => Math.round(v * 100) / 100
-  return {
-    employee: round2((g * employeePct) / 100),
-    employer: round2((g * employerPct) / 100),
-    employeePct,
-    employerPct,
-  }
-}
-
 export function netOf(e) {
   return e.gross - sumOf(e, DEDUCTED_FIELDS)
 }

@@ -16,43 +16,6 @@ const income = require('../models/income.model');
 const assets = require('../models/assets.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 
-/**
- * How EPF allocates a contribution, since the 2024 restructuring.
- *
- * Every ringgit that goes in is split three ways on the way. Booking the whole
- * amount into one account — all epf_asset_id alone can express — leaves three
- * balances that are each wrong and a total that happens to be right, which is
- * the worst kind of wrong: it reconciles.
- *
- * Applied only when all three accounts exist. Two of them is not a split it is
- * safe to guess at, so that case falls back to the single linked account.
- */
-const EPF_SPLIT = [
-  { productId: 'EPF_PERSARAAN', share: 0.75, label: 'Akaun Persaraan' },
-  { productId: 'EPF_SEJAHTERA', share: 0.15, label: 'Akaun Sejahtera' },
-  { productId: 'EPF_FLEKSIBEL', share: 0.10, label: 'Akaun Fleksibel' },
-];
-
-/**
- * Divide `total` by the shares above, in sen, losing nothing.
- *
- * The last account takes the remainder rather than its own rounded share. Three
- * independently rounded figures do not have to add up to what went in, and a sen
- * that vanishes here never comes back — it would sit as a permanent difference
- * between the payslip and the EPF balance it produced.
- */
-function splitEpf(total) {
-  const cents = Math.round(total * 100);
-  const out = [];
-  let used = 0;
-  EPF_SPLIT.forEach((part, i) => {
-    const c = i === EPF_SPLIT.length - 1 ? cents - used : Math.round(cents * part.share);
-    used += c;
-    out.push({ ...part, amount: c / 100 });
-  });
-  return out;
-}
-
 /** Mirrors income_sources_kind_check. */
 const KINDS = ['EMPLOYMENT', 'FREELANCE', 'RENTAL', 'OTHER'];
 const CADENCES = ['MONTHLY', 'IRREGULAR'];
@@ -213,19 +176,7 @@ async function addEvent(sourceId, body) {
   }
 
   const epfTotal = f.epf_employee + f.epf_employer;
-
-  // Prefer the three restructured accounts when they exist, whichever one the
-  // source happens to be linked to — EPF is one membership, so the split is the
-  // same no matter which employer the payslip came from.
-  const trio = epfTotal > 0
-    ? await assets.findByProductIds(EPF_SPLIT.map(p => p.productId))
-    : [];
-  const byProduct = new Map(trio.map(a => [a.product_id, a]));
-  const splitAcross = EPF_SPLIT.every(p => byProduct.has(p.productId))
-    ? splitEpf(epfTotal).map(p => ({ ...p, asset: byProduct.get(p.productId) }))
-    : null;
-
-  const bookEpf = epfTotal > 0 && (splitAcross != null || s.epf_asset_id != null);
+  const bookEpf = epfTotal > 0 && s.epf_asset_id != null;
 
   return transaction(async client => {
     const row = (await income.insertEvent(client, {
@@ -236,29 +187,14 @@ async function addEvent(sourceId, body) {
       note, source,
     })).rows[0];
 
-    const halves =
-      `${f.epf_employee.toFixed(2)} yours + ${f.epf_employer.toFixed(2)} employer`;
-
-    if (splitAcross) {
-      for (const part of splitAcross) {
-        if (part.amount <= 0) continue;
-        await client.query(
-          `INSERT INTO asset_entries (asset_id,type,date,amount,note,source)
-           VALUES ($1,'DEPOSIT',$2,$3,$4,'payroll')`,
-          [part.asset.id, date, part.amount,
-            `${s.name} — ${halves}, ${Math.round(part.share * 100)}% to ${part.label}`]);
-      }
-    } else if (bookEpf) {
+    if (bookEpf) {
       await client.query(
         `INSERT INTO asset_entries (asset_id,type,date,amount,note,source)
          VALUES ($1,'DEPOSIT',$2,$3,$4,'payroll')`,
-        [s.epf_asset_id, date, epfTotal, `${s.name} — ${halves}`]);
+        [s.epf_asset_id, date, epfTotal,
+          `${s.name} — ${f.epf_employee.toFixed(2)} yours + ${f.epf_employer.toFixed(2)} employer`]);
     }
-    return {
-      ...row,
-      epfBooked: bookEpf ? epfTotal : 0,
-      epfAccounts: splitAcross ? splitAcross.length : bookEpf ? 1 : 0,
-    };
+    return { ...row, epfBooked: bookEpf ? epfTotal : 0 };
   });
 }
 
