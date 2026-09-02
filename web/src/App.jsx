@@ -624,7 +624,14 @@ function AssetDialog() {
     variant === 'SHARIAH' && r.shariah != null ? r.shariah : r.rate
 
   /**
-   * Copy one declared year into the rate fields.
+   * Put one year's declared figures into the rate fields.
+   *
+   * Not a choice the form offers. There is exactly one right answer — the most
+   * recent figure for the fund, which is the year in progress where one is still
+   * running — and asking the user to pick a year would be asking them to guess
+   * at something the app already knows. The history is shown so the number can
+   * be checked, not so it can be selected; a rate that is wrong is corrected in
+   * Settings, where it is fixed for every account rather than for this one.
    *
    * The bonus is written as its own field rather than folded into the rate,
    * because assetRate() sums them and the two have different standing: ASB's
@@ -660,7 +667,11 @@ function AssetDialog() {
   const pickProduct = id => {
     const picked = withRates(productOf(f.institution_id, id), state.declaredRates)
     if (!picked) return
-    const latest = latestRate(picked)
+    // The newest entry, which is the in-progress year's estimate when one is
+    // running and the last declared year otherwise. Same number either way — the
+    // estimate carries it forward — so this only decides what the field is
+    // LABELLED, and the honest label is the year actually being projected.
+    const use = (picked.rates || [])[0] || latestRate(picked)
     setF(p => ({
       ...p,
       product_id: id,
@@ -669,10 +680,10 @@ function AssetDialog() {
       rate_quote: picked.rate_quote,
       fiscal_year: picked.fiscal_year,
       unit_cap: picked.unit_cap == null ? '' : String(picked.unit_cap),
-      rate_year: latest ? latest.year : null,
-      rate_estimated: false,
-      last_rate: latest ? String(latest.rate) : '',
-      last_bonus: latest && latest.bonus ? String(latest.bonus) : '',
+      rate_year: use ? use.year : null,
+      rate_estimated: Boolean(use && use.estimated),
+      last_rate: use ? String(use.rate) : '',
+      last_bonus: use && use.bonus ? String(use.bonus) : '',
       rate_variant: 'CONVENTIONAL',
     }))
   }
@@ -812,11 +823,12 @@ function AssetDialog() {
         >
           <Input
             id="as-rate"
-            className="num"
+            className={cn('num', prod && 'text-muted-foreground')}
             type="number"
             step="0.01"
             placeholder="5.75"
             value={f.last_rate}
+            readOnly={Boolean(prod)}
             onChange={e => set('last_rate', e.target.value)}
           />
         </Field>
@@ -832,11 +844,12 @@ function AssetDialog() {
           >
             <Input
               id="as-bonus"
-              className="num"
+              className={cn('num', prod && 'text-muted-foreground')}
               type="number"
               step="0.01"
               placeholder="0.55"
               value={f.last_bonus}
+              readOnly={Boolean(prod)}
               onChange={e => set('last_bonus', e.target.value)}
             />
           </Field>
@@ -854,28 +867,28 @@ function AssetDialog() {
               Declared {prod.rate_quote === 'SEN_PER_UNIT' ? 'sen per unit' : 'per cent'}, by
               financial year
             </span>
+            {/* Read-only. These are here so the figure above can be checked
+                against the fund's record, not so a year can be chosen — the app
+                uses the most recent one and there is no second right answer. */}
             <div className="flex flex-wrap gap-1.5">
               {rates.map(r => {
                 const on = f.rate_year === r.year
                 const shown =
                   f.rate_variant === 'SHARIAH' && r.shariah != null ? r.shariah : totalRate(r)
                 return (
-                  <button
+                  <span
                     key={r.year}
-                    type="button"
-                    onClick={() => applyRate(r.year)}
-                    aria-pressed={on}
                     title={
                       r.estimated
                         ? `Not declared yet — carried forward from ${r.basedOn}`
                         : `Declared for the year to ${r.year}`
                     }
                     className={cn(
-                      'rounded-md border px-2 py-1 text-[11.5px] transition-colors',
+                      'rounded-md border px-2 py-1 text-[11.5px]',
                       r.estimated && 'border-dashed',
                       on
                         ? 'border-primary bg-primary/10 text-foreground'
-                        : 'border-border text-muted-foreground hover:border-primary/60',
+                        : 'border-border text-muted-foreground',
                     )}
                   >
                     <span className="num">{r.year}</span>{' '}
@@ -885,7 +898,12 @@ function AssetDialog() {
                         est
                       </span>
                     ) : null}
-                  </button>
+                    {r.mine ? (
+                      <span className="text-primary ml-1 text-[10px] tracking-[0.06em] uppercase">
+                        yours
+                      </span>
+                    ) : null}
+                  </span>
                 )
               })}
             </div>
@@ -916,12 +934,12 @@ function AssetDialog() {
             ) : null}
 
             <p className="text-faint text-[11px]">
+              {declared.some(r => r.bonus) ? 'Base rate plus bonus, as declared. ' : ''}
+              The most recent figure is used automatically — shown above, and editable under
+              Declared rates in Settings.{' '}
               {estimate
-                ? `${estimate.year} has not been declared yet — that figure is ${estimate.basedOn} carried forward, so treat any projection from it as an estimate. `
+                ? `${estimate.year} has not been declared yet, so that one is ${estimate.basedOn} carried forward and any projection from it is an estimate.`
                 : ''}
-              {declared.some(r => r.bonus)
-                ? 'Base rate plus bonus, as declared. Pick a year to use it, or type your own.'
-                : 'Pick a year to use it, or type your own.'}
               {stale
                 ? ' A newer year has since closed - check the latest announcement before relying on this.'
                 : ''}
