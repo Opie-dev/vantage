@@ -74,6 +74,8 @@ import {
   FISCAL_YEARS,
   INSTITUTIONS,
   OTHER,
+  SHARIAH,
+  estimatedRate,
   institutionOf,
   latestRate,
   productOf,
@@ -596,6 +598,7 @@ function AssetDialog() {
     // Which declared year the rate above came from, and - for EPF - which of
     // its two series. Neither is saved; they only drive the two fields that are.
     rate_year: null,
+    rate_estimated: false,
     rate_variant: 'CONVENTIONAL',
   })
   const [busy, setBusy] = useState(false)
@@ -603,7 +606,11 @@ function AssetDialog() {
 
   const inst = institutionOf(f.institution_id)
   const prod = productOf(f.institution_id, f.product_id)
-  const rates = prod?.rates || []
+  const declared = prod?.rates || []
+  // The year in progress, carried forward from the last declared one. It leads
+  // the list because it is the year an account opened today will actually earn.
+  const estimate = prod ? estimatedRate(prod) : null
+  const rates = estimate ? [estimate, ...declared] : declared
   // EPF is the only one that declares two series. Everything else has one, and
   // asking which would be a question with a single answer.
   const hasShariah = rates.some(r => r.shariah != null)
@@ -627,6 +634,7 @@ function AssetDialog() {
     setF(p => ({
       ...p,
       rate_year: year,
+      rate_estimated: Boolean(r.estimated),
       rate_variant: variant,
       last_rate: String(rateUnder(r, variant)),
       last_bonus: r.bonus ? String(r.bonus) : '',
@@ -659,6 +667,7 @@ function AssetDialog() {
       fiscal_year: picked.fiscal_year,
       unit_cap: picked.unit_cap == null ? '' : String(picked.unit_cap),
       rate_year: latest ? latest.year : null,
+      rate_estimated: false,
       last_rate: latest ? String(latest.rate) : '',
       last_bonus: latest && latest.bonus ? String(latest.bonus) : '',
       rate_variant: 'CONVENTIONAL',
@@ -790,7 +799,11 @@ function AssetDialog() {
           </Select>
         </Field>
         <Field
-          label={f.rate_year ? 'Rate declared for ' + f.rate_year : 'Last declared rate'}
+          label={
+            f.rate_year
+              ? (f.rate_estimated ? 'Rate estimated for ' : 'Rate declared for ') + f.rate_year
+              : 'Last declared rate'
+          }
           htmlFor="as-rate"
           hint={f.rate_year ? undefined : 'Leave blank until one is declared.'}
         >
@@ -826,6 +839,12 @@ function AssetDialog() {
           </Field>
         ) : null}
 
+        {inst?.shariah ? (
+          <p className="text-faint col-span-2 -mt-1 text-[11px] leading-relaxed">
+            {SHARIAH[inst.shariah]}
+          </p>
+        ) : null}
+
         {rates.length ? (
           <div className="col-span-2 grid gap-1.5">
             <span className="eyebrow">
@@ -843,8 +862,14 @@ function AssetDialog() {
                     type="button"
                     onClick={() => applyRate(r.year)}
                     aria-pressed={on}
+                    title={
+                      r.estimated
+                        ? `Not declared yet — carried forward from ${r.basedOn}`
+                        : `Declared for the year to ${r.year}`
+                    }
                     className={cn(
                       'rounded-md border px-2 py-1 text-[11.5px] transition-colors',
+                      r.estimated && 'border-dashed',
                       on
                         ? 'border-primary bg-primary/10 text-foreground'
                         : 'border-border text-muted-foreground hover:border-primary/60',
@@ -852,6 +877,11 @@ function AssetDialog() {
                   >
                     <span className="num">{r.year}</span>{' '}
                     <span className="num font-semibold">{shown.toFixed(2)}</span>
+                    {r.estimated ? (
+                      <span className="text-faint ml-1 text-[10px] tracking-[0.06em] uppercase">
+                        est
+                      </span>
+                    ) : null}
                   </button>
                 )
               })}
@@ -883,7 +913,10 @@ function AssetDialog() {
             ) : null}
 
             <p className="text-faint text-[11px]">
-              {rates.some(r => r.bonus)
+              {estimate
+                ? `${estimate.year} has not been declared yet — that figure is ${estimate.basedOn} carried forward, so treat any projection from it as an estimate. `
+                : ''}
+              {declared.some(r => r.bonus)
                 ? 'Base rate plus bonus, as declared. Pick a year to use it, or type your own.'
                 : 'Pick a year to use it, or type your own.'}
               {stale

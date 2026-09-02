@@ -53,6 +53,29 @@ const EPF_RATES = [
   { year: 2020, rate: 5.2, shariah: 4.9 },
 ]
 
+/**
+ * Shariah standing, which is a different question per institution and is asked
+ * about often enough to belong on screen rather than in a search.
+ *
+ *   COMPLIANT  fully Shariah-compliant. One rate, nothing to choose.
+ *   FATWA      not Shariah-compliant BY STRUCTURE, but permitted for Muslim
+ *              investors under fatwa on maslahah grounds. Still one rate: this
+ *              is a ruling about the fund, not a variant of it.
+ *   ELECTION   the institution runs two funds and you elect between them, so
+ *              the declared rate genuinely differs. EPF alone does this.
+ *
+ * The distinction matters because only ELECTION changes a number. A fund can be
+ * conventional in structure and still declare exactly one distribution, which is
+ * the case for every ASNB fixed-price fund.
+ */
+export const SHARIAH = {
+  COMPLIANT: 'Shariah-compliant.',
+  FATWA:
+    'Not Shariah-compliant by structure, but permitted for Muslim investors under fatwa, on maslahah grounds. One rate is declared either way. ASNB does offer separate Shariah funds - ASN Equity Shariah, ASN Imbang Shariah, ASN Sukuk - but those are variable-price and are not in this list.',
+  ELECTION:
+    'You elect Simpanan Konvensional or Simpanan Shariah once, and it applies to all three accounts. The two declare different rates, so pick yours below.',
+}
+
 /** Sentinel for an institution not in the list — Radix rejects ''. */
 export const OTHER = '__other__'
 
@@ -66,6 +89,7 @@ export const INSTITUTIONS = [
     id: 'ASNB',
     label: 'ASNB',
     hint: 'Amanah Saham Nasional Berhad',
+    shariah: 'FATWA',
     products: [
       {
         id: 'ASB',
@@ -159,6 +183,7 @@ export const INSTITUTIONS = [
     id: 'EPF',
     label: 'EPF',
     hint: 'Kumpulan Wang Simpanan Pekerja (KWSP)',
+    shariah: 'ELECTION',
     // The 2024 restructuring split the old two accounts into three. New
     // contributions go 75 / 15 / 10, and all three earn the same declared
     // dividend on the same MADB basis — they differ in what you may withdraw,
@@ -200,6 +225,7 @@ export const INSTITUTIONS = [
     id: 'TH',
     label: 'Tabung Haji',
     hint: 'Lembaga Tabung Haji',
+    shariah: 'COMPLIANT',
     products: [
       {
         id: 'TH_SAVINGS',
@@ -259,6 +285,31 @@ export function rateIsStale(product, now = new Date()) {
   const latest = latestRate(product)
   if (!latest) return false
   return latest.year < lastCompleteYear(product.fiscal_year, now)
+}
+
+/**
+ * A stand-in rate for the financial year currently in progress.
+ *
+ * The year a fund is earning right now has no declared rate — that is what
+ * "in progress" means — but the estimator still has to project it, and the only
+ * defensible input is what the fund last actually paid. So this carries the
+ * newest declared rate forward and marks it, rather than leaving the current
+ * year blank or letting last year's figure masquerade as this year's.
+ *
+ * The year is computed per fund, never assumed. On 2 September 2026 ASB is
+ * midway through its 2026 year, while ASB 2 — whose year ended in March — has
+ * already been paid for 2026 and is earning 2027. A hardcoded "2026" would be
+ * wrong for half the catalogue.
+ *
+ * Returns null when the year in progress has in fact already been declared,
+ * so nothing is invented on top of a real figure.
+ */
+export function estimatedRate(product, now = new Date()) {
+  const latest = latestRate(product)
+  if (!latest) return null
+  const year = lastCompleteYear(product.fiscal_year, now) + 1
+  if (year <= latest.year) return null
+  return { ...latest, year, estimated: true, basedOn: latest.year }
 }
 
 /** The institution record for an id, or undefined for OTHER and unknowns. */
