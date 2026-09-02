@@ -44,14 +44,18 @@ import {
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+// Every form in the app opens as a right-hand side panel rather than a centred
+// dialog. The Sheet primitives are aliased to the Dialog names they replace so
+// the forms below read exactly as they did — what changed is where a form
+// appears, not how one is written.
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+  Sheet as Dialog,
+  SheetContent as DialogContent,
+  SheetDescription as DialogDescription,
+  SheetFooter as DialogFooter,
+  SheetHeader as DialogHeader,
+  SheetTitle as DialogTitle,
+} from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -64,6 +68,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
+import { GOAL_KIND, GOAL_NEEDS_INSTRUMENT, goalIncomeIsNet } from '@/lib/calc'
 import LockScreen from '@/components/LockScreen'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -75,7 +80,7 @@ import Positions from '@/screens/Positions'
 import History from '@/screens/History'
 import Wallet from '@/screens/Wallet'
 import CalendarScreen from '@/screens/Calendar'
-import Goals from '@/screens/Goals'
+import Goals, { KIND_OPTIONS, WHOLE, isIncome } from '@/screens/Goals'
 import Instruments from '@/screens/Instruments'
 import Assets from '@/screens/Assets'
 import Money from '@/screens/Money'
@@ -1372,6 +1377,185 @@ function IncomeEventDialog({ prefill }) {
   )
 }
 
+/**
+ * A goal, as a side panel like every other form.
+ *
+ * It used to sit inline at the bottom of the Goals screen, which meant the page
+ * ended in an empty form whether or not you wanted one, and the form was the
+ * only one in the app not to look like the others.
+ *
+ * The two families take different fields, and the switch is the goal type: a
+ * share goal counts shares in the instrument's own currency, an income goal
+ * counts ringgit so that a per-holding target and a portfolio-wide one can be
+ * compared at all.
+ */
+function GoalDialog() {
+  const { state, closeModal, addGoal } = useVantage()
+  const [kind, setKind] = useState(GOAL_KIND.SHARES)
+  const [ticker, setTicker] = useState('')
+  const [target, setTarget] = useState('500')
+  const [amount, setAmount] = useState('1000')
+  const [monthly, setMonthly] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const instruments = state.instruments
+  const income = isIncome(kind)
+  // Per-payment is per holding only: combined across holdings it would measure
+  // which funds happened to pay that day rather than the portfolio.
+  const needsInstrument = GOAL_NEEDS_INSTRUMENT.has(kind)
+  const picked = needsInstrument
+    ? ticker && ticker !== WHOLE
+      ? ticker
+      : instruments[0]?.ticker || ''
+    : ticker || WHOLE
+  const blocked = needsInstrument && !instruments.length
+
+  const save = async () => {
+    if (blocked || busy) return
+    setBusy(true)
+    const ok = await addGoal(
+      income
+        ? {
+            kind,
+            ticker: picked === WHOLE ? undefined : picked,
+            target_amount: Number(amount) || 0,
+          }
+        : {
+            kind: GOAL_KIND.SHARES,
+            ticker: picked,
+            target_qty: Number(target) || 1,
+            monthly_budget: monthly ? Number(monthly) : null,
+          },
+    )
+    setBusy(false)
+    if (ok) closeModal()
+  }
+
+  const amountLabel =
+    kind === GOAL_KIND.INCOME_MONTHLY
+      ? 'Target per month (RM)'
+      : kind === GOAL_KIND.INCOME_PER_PAYMENT
+        ? 'Target per payment (RM)'
+        : 'Target (RM)'
+
+  return (
+    <DialogContent className="sm:max-w-[480px]">
+      <DialogHeader>
+        <DialogTitle>New goal</DialogTitle>
+        <DialogDescription>
+          A number of shares to accumulate, or a dividend target. Income targets are always in
+          ringgit, so a per-holding goal and a portfolio-wide one stay comparable.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid gap-3">
+        <Field
+          label="Goal type"
+          htmlFor="g-kind"
+          hint={KIND_OPTIONS.find(o => o.id === kind)?.hint}
+        >
+          <Select value={kind} onValueChange={setKind}>
+            <SelectTrigger id="g-kind" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {KIND_OPTIONS.map(o => (
+                <SelectItem key={o.id} value={o.id}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field
+          label={income ? 'Scope' : 'Instrument'}
+          htmlFor="g-t"
+          hint={blocked ? 'Add an instrument first, with + Instrument at the top right.' : undefined}
+        >
+          <Select value={picked} onValueChange={setTicker} disabled={blocked}>
+            <SelectTrigger id="g-t" className="w-full">
+              <SelectValue placeholder="No instruments yet" />
+            </SelectTrigger>
+            <SelectContent>
+              {income && !needsInstrument ? <SelectItem value={WHOLE}>All holdings</SelectItem> : null}
+              {instruments.map(i => (
+                <SelectItem key={i.ticker} value={i.ticker}>
+                  {i.ticker}
+                  <span className="text-faint ml-1">{i.currency}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {income ? (
+          <Field
+            label={amountLabel}
+            htmlFor="g-amount"
+            hint={
+              'Counts ' +
+              (goalIncomeIsNet(state)
+                ? 'what reached your wallet after tax'
+                : 'dividends as declared, before tax') +
+              ' — set by the P&L basis in Settings.'
+            }
+          >
+            <Input
+              id="g-amount"
+              type="number"
+              min="1"
+              step="100"
+              className="num"
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+            />
+          </Field>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Target shares" htmlFor="g-target">
+              <Input
+                id="g-target"
+                type="number"
+                min="1"
+                step="1"
+                className="num"
+                value={target}
+                onChange={e => setTarget(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Monthly budget (RM)"
+              htmlFor="g-monthly"
+              hint="Optional — what you plan to put in each month."
+            >
+              <Input
+                id="g-monthly"
+                type="number"
+                min="0"
+                step="10"
+                placeholder="optional"
+                className="num"
+                value={monthly}
+                onChange={e => setMonthly(e.target.value)}
+              />
+            </Field>
+          </div>
+        )}
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={busy || blocked}>
+          Save
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 function Modals() {
   const { modal, closeModal } = useVantage()
   const open = Boolean(modal)
@@ -1385,6 +1569,7 @@ function Modals() {
       {modal?.kind === 'commitment' && <CommitmentDialog />}
       {modal?.kind === 'income' && <IncomeDialog />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'goal' && <GoalDialog />}
     </Dialog>
   )
 }

@@ -50,6 +50,7 @@ const VantageContext = createContext(null)
  *   openAssetEntry: (prefill?: object) => void,
  *   openCommitment: () => void,
  *   openIncome: () => void,
+ *   openGoal: () => void,
  *   openIncomeEvent: (prefill?: object) => void,
  *   addIncomeSource: (body: object) => Promise<boolean>,
  *   addIncomeEvent: (sourceId: number, body: object) => Promise<boolean>,
@@ -341,6 +342,7 @@ export function VantageProvider({ children }) {
       openAsset: () => setModal({ kind: 'asset', prefill: {} }),
       openCommitment: () => setModal({ kind: 'commitment', prefill: {} }),
       openIncome: () => setModal({ kind: 'income', prefill: {} }),
+      openGoal: () => setModal({ kind: 'goal', prefill: {} }),
       openIncomeEvent,
       openAssetEntry,
 
