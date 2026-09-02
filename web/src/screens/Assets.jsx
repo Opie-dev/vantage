@@ -26,7 +26,7 @@ import { Progress } from '@/components/ui/progress'
 import { TableBody, TableCell, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-import { assetLedger, assetsTotal, distributionOutlook } from '@/lib/calc'
+import { assetLedger, assetsTotal, distributionOutlook, toRM } from '@/lib/calc'
 import { dfmt, dfmtLong, fmt, fmtBare, fmtS, pct1, toneClass } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
@@ -413,7 +413,27 @@ export default function Assets() {
     const t = assetsTotal(state)
     // Computed here rather than inside assetRows() because it needs today's date,
     // and a pure function of state alone cannot have one.
-    return { ...t, rows: t.rows.map(r => ({ ...r, outlook: distributionOutlook(state, r.asset) })) }
+    const rows = t.rows.map(r => ({ ...r, outlook: distributionOutlook(state, r.asset) }))
+
+    // What every account is on track to declare, added up.
+    //
+    // Kept well away from `earned`, which counts distributions actually
+    // recorded. Nothing has been declared yet — that is what makes these
+    // estimates — so folding them together would turn a projection into
+    // history, and the return figure into something no statement will ever
+    // agree with.
+    //
+    // The years being summed are not the same year: ASB 2 is mid-2027 while EPF
+    // is mid-2026, because their financial years end in different months. Each
+    // is the year that account is currently earning, which is the only sense in
+    // which "this year" means anything across a mixed set, and the label says so.
+    const onTrackRM = rows.reduce(
+      (sum, r) => sum + (r.outlook?.projected == null ? 0 : toRM(state, r.outlook.projected, r.cur)),
+      0,
+    )
+    const rated = rows.filter(r => r.outlook?.projected != null).length
+
+    return { ...t, rows, onTrackRM, rated }
   }, [state])
   const ledger = useMemo(() => assetLedger(state), [state])
   const oldest = ledger.length ? ledger[ledger.length - 1].date : null
@@ -439,7 +459,7 @@ export default function Assets() {
   return (
     <div className="grid gap-3">
       {live(total).length ? (
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         <Stat label="Outside moomoo" value={fmt(total.valueRM, 'MYR')} sub="combined balance" />
         <Stat
           label="Contributed"
@@ -456,8 +476,23 @@ export default function Assets() {
           label="Return on contributed"
           value={total.returnPct == null ? '—' : pct1(total.returnPct)}
           valueClass={total.returnPct ? 'text-gain' : ''}
-          sub="cumulative — not annualised"
+          sub={
+            total.earnedRM
+              ? 'cumulative — not annualised'
+              : 'nothing declared yet, so nothing realised'
+          }
         />
+        {/* Only once something can actually be projected. A fifth tile reading
+            zero would say the accounts are heading nowhere, when the truth is
+            that none of them has a rate recorded. */}
+        {total.rated ? (
+          <Stat
+            label="On track this year"
+            value={fmtS(total.onTrackRM, 'MYR')}
+            valueClass="text-cash"
+            sub={`estimate · ${total.rated} account${total.rated === 1 ? '' : 's'}, each in its own financial year`}
+          />
+        ) : null}
       </div>
       ) : null}
 
