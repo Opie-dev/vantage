@@ -242,10 +242,13 @@ try {
   // A typo like '08-30' or 'MIN_MONTLY' would otherwise pass every render and
   // only fail at save, on the one account nobody adds twice.
   {
-    const { FISCAL_YEARS, INSTITUTIONS, OTHER } = await server.ssrLoadModule('/src/lib/institutions.js')
+    const { FISCAL_YEARS, INSTITUTIONS, OTHER, lastCompleteYear, latestRate, rateIsStale } =
+      await server.ssrLoadModule('/src/lib/institutions.js')
     const years = new Set(FISCAL_YEARS.map(y => y.value))
     const seen = new Set()
     let n = 0
+    let rated = 0
+    const behind = []
     for (const inst of INSTITUTIONS) {
       if (inst.id === OTHER) throw new Error(`institution "${inst.id}" collides with the OTHER sentinel`)
       if (!inst.products.length) throw new Error(`institution "${inst.id}" has no products`)
@@ -269,9 +272,39 @@ try {
           throw new Error(`${p.id}: unit_cap must be a positive number or null`)
         }
         if (!p.name || !p.label) throw new Error(`${p.id}: needs both a name and a label`)
+
+        // Declared rates are the part that feeds the estimator, so they get the
+        // strictest checks. The year test is the one that matters most: it
+        // catches a rate invented for a financial year that has not closed yet,
+        // which no announcement could exist for.
+        const complete = lastCompleteYear(p.fiscal_year)
+        const rateYears = new Set()
+        for (const r of p.rates || []) {
+          if (rateYears.has(r.year)) throw new Error(`${p.id}: two rates for ${r.year}`)
+          rateYears.add(r.year)
+          if (!(r.rate > 0)) throw new Error(`${p.id} ${r.year}: rate must be a positive number`)
+          if (r.bonus != null && !(r.bonus >= 0)) {
+            throw new Error(`${p.id} ${r.year}: bonus must be zero or more`)
+          }
+          if (r.shariah != null && !(r.shariah > 0)) {
+            throw new Error(`${p.id} ${r.year}: shariah rate must be a positive number`)
+          }
+          if (r.year > complete) {
+            throw new Error(
+              `${p.id}: has a rate for ${r.year}, but that financial year has not closed yet ` +
+                `(latest that could be declared: ${complete})`,
+            )
+          }
+        }
+        if (p.rates?.length) rated++
+        if (rateIsStale(p)) behind.push(`${p.id} (newest ${latestRate(p).year}, ${complete} has closed)`)
       }
     }
     console.log(`  catalogue   ${INSTITUTIONS.length} institutions, ${n} accounts, all match the DB constraints`)
+    console.log(`  rates       ${rated}/${n} accounts carry a declared-rate history`)
+    // Not a failure: a year closing is normal and the form says so in the UI.
+    // Printing it is the nudge to refresh the file.
+    if (behind.length) console.log(`  NOTE        rate history is behind for: ${behind.join(', ')}`)
   }
 
   const root = createRoot(document.getElementById('root'))

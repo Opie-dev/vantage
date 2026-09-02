@@ -20,11 +20,38 @@
  *     of the month it was made. The same deposit is worth different money under
  *     the two, which is why the app asks rather than assuming.
  *
- * Everything here is a starting point the form leaves editable. Rates are
- * deliberately NOT included: they are declared annually and would be stale
- * within months, and a stale rate presented as a default is worse than a blank
- * field. Sources are in the pull request that added this file.
+ * Everything here is a starting point the form leaves editable.
+ *
+ * Declared rates ARE included, as a dated history rather than a bare default.
+ * The distinction matters: a past rate is a fact that never changes — ASB's
+ * 2024 distribution is permanently 5.75 sen — whereas an undated "current rate"
+ * silently rots the day the next one is declared. So every figure carries the
+ * financial year it was earned in, and rateIsStale() below reports when the
+ * newest rate on file is older than the year the account is now in, rather than
+ * letting the estimator quietly project last year's number forever.
+ *
+ * Rates are keyed by FINANCIAL year, not the calendar year of the announcement.
+ * The two differ for every ASNB fund that does not end in December: ASB 2's
+ * "2026" is the year to 31 March 2026, announced that same March.
+ *
+ * Sources are in the pull request that added this file.
  */
+
+/**
+ * EPF declares one rate for Simpanan Konvensional and another for Simpanan
+ * Shariah, and all three accounts earn whichever applies to the member — the
+ * split is a choice made once, not per account. The two converged in 2024 and
+ * have stayed level since, but they were as far apart as 0.60pp in 2022, so
+ * both are kept.
+ */
+const EPF_RATES = [
+  { year: 2025, rate: 6.15, shariah: 6.15 },
+  { year: 2024, rate: 6.3, shariah: 6.3 },
+  { year: 2023, rate: 5.5, shariah: 5.4 },
+  { year: 2022, rate: 5.35, shariah: 4.75 },
+  { year: 2021, rate: 6.1, shariah: 5.65 },
+  { year: 2020, rate: 5.2, shariah: 4.9 },
+]
 
 /** Sentinel for an institution not in the list — Radix rejects ''. */
 export const OTHER = '__other__'
@@ -48,6 +75,14 @@ export const INSTITUTIONS = [
         rate_quote: 'SEN_PER_UNIT',
         fiscal_year: '12-31',
         unit_cap: 300000,
+        rates: [
+          { year: 2025, rate: 5.2, bonus: 0.55 },
+          { year: 2024, rate: 5.5, bonus: 0.25 },
+          { year: 2023, rate: 4.25, bonus: 1.0 },
+          { year: 2022, rate: 3.35, bonus: 1.25 },
+          { year: 2021, rate: 4.25, bonus: 0.75 },
+          { year: 2020, rate: 3.5, bonus: 0.75 },
+        ],
       },
       {
         id: 'ASB2',
@@ -57,6 +92,11 @@ export const INSTITUTIONS = [
         rate_quote: 'SEN_PER_UNIT',
         fiscal_year: '03-31',
         unit_cap: 300000,
+        rates: [
+          { year: 2026, rate: 5.5 },
+          { year: 2025, rate: 5.5 },
+          { year: 2024, rate: 5.25 },
+        ],
       },
       {
         id: 'ASB3',
@@ -66,6 +106,10 @@ export const INSTITUTIONS = [
         rate_quote: 'SEN_PER_UNIT',
         fiscal_year: '06-30',
         unit_cap: null,
+        rates: [
+          { year: 2026, rate: 5.5 },
+          { year: 2025, rate: 5.25 },
+        ],
       },
       {
         id: 'ASM',
@@ -75,6 +119,11 @@ export const INSTITUTIONS = [
         rate_quote: 'SEN_PER_UNIT',
         fiscal_year: '03-31',
         unit_cap: null,
+        rates: [
+          { year: 2026, rate: 5.0 },
+          { year: 2025, rate: 5.0 },
+          { year: 2024, rate: 4.75 },
+        ],
       },
       {
         id: 'ASM2W',
@@ -84,6 +133,11 @@ export const INSTITUTIONS = [
         rate_quote: 'SEN_PER_UNIT',
         fiscal_year: '08-31',
         unit_cap: null,
+        rates: [
+          { year: 2026, rate: 5.0 },
+          { year: 2025, rate: 4.75 },
+          { year: 2024, rate: 4.75 },
+        ],
       },
       {
         id: 'ASM3',
@@ -93,6 +147,11 @@ export const INSTITUTIONS = [
         rate_quote: 'SEN_PER_UNIT',
         fiscal_year: '09-30',
         unit_cap: null,
+        rates: [
+          { year: 2025, rate: 4.75 },
+          { year: 2024, rate: 4.75 },
+          { year: 2022, rate: 3.75 },
+        ],
       },
     ],
   },
@@ -113,6 +172,7 @@ export const INSTITUTIONS = [
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
         unit_cap: null,
+        rates: EPF_RATES,
       },
       {
         id: 'EPF_SEJAHTERA',
@@ -122,6 +182,7 @@ export const INSTITUTIONS = [
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
         unit_cap: null,
+        rates: EPF_RATES,
       },
       {
         id: 'EPF_FLEKSIBEL',
@@ -131,6 +192,7 @@ export const INSTITUTIONS = [
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
         unit_cap: null,
+        rates: EPF_RATES,
       },
     ],
   },
@@ -147,10 +209,57 @@ export const INSTITUTIONS = [
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
         unit_cap: null,
+        rates: [
+          { year: 2025, rate: 3.5 },
+          { year: 2024, rate: 3.25 },
+          { year: 2023, rate: 3.1 },
+          { year: 2022, rate: 3.1 },
+          { year: 2021, rate: 3.1 },
+          { year: 2020, rate: 3.1 },
+        ],
       },
     ],
   },
 ]
+
+/** The newest declared rate on file for a product, or null. */
+export function latestRate(product) {
+  const rates = product?.rates
+  if (!rates || !rates.length) return null
+  return rates.reduce((best, r) => (r.year > best.year ? r : best), rates[0])
+}
+
+/** Base rate plus any bonus — what the account actually paid that year. */
+export function totalRate(r) {
+  return r ? r.rate + (r.bonus || 0) : 0
+}
+
+/**
+ * The financial year an account is currently earning, given its year end.
+ *
+ * A fund whose year ends 31 March is, in September 2026, already earning its
+ * 2027 year. The newest rate on file can therefore be two years behind the
+ * current one without anything being wrong — the year just has not ended yet.
+ * So this reports the most recent year that COULD have been declared, and
+ * rateIsStale() compares against that rather than against today's date.
+ */
+export function lastCompleteYear(fiscalYear, now = new Date()) {
+  const endMonth = Number(String(fiscalYear || '12-31').slice(0, 2))
+  const y = now.getFullYear()
+  // getMonth() is 0-based; a year ending in month N completes at the end of N.
+  return now.getMonth() + 1 > endMonth ? y : y - 1
+}
+
+/**
+ * True when the newest rate on file is older than the last year that has
+ * actually finished — meaning a declaration has happened, or is overdue, that
+ * this file does not know about.
+ */
+export function rateIsStale(product, now = new Date()) {
+  const latest = latestRate(product)
+  if (!latest) return false
+  return latest.year < lastCompleteYear(product.fiscal_year, now)
+}
 
 /** The institution record for an id, or undefined for OTHER and unknowns. */
 export function institutionOf(id) {

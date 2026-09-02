@@ -74,7 +74,10 @@ import {
   INSTITUTIONS,
   OTHER,
   institutionOf,
+  latestRate,
   productOf,
+  rateIsStale,
+  totalRate,
 } from '@/lib/institutions'
 import LockScreen from '@/components/LockScreen'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -586,13 +589,48 @@ function AssetDialog() {
     rate_basis: 'MIN_MONTHLY',
     rate_quote: 'PERCENT',
     last_rate: '',
+    last_bonus: '',
     unit_cap: '',
     fiscal_year: '12-31',
+    // Which declared year the rate above came from, and - for EPF - which of
+    // its two series. Neither is saved; they only drive the two fields that are.
+    rate_year: null,
+    rate_variant: 'CONVENTIONAL',
   })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
   const inst = institutionOf(f.institution_id)
+  const prod = productOf(f.institution_id, f.product_id)
+  const rates = prod?.rates || []
+  // EPF is the only one that declares two series. Everything else has one, and
+  // asking which would be a question with a single answer.
+  const hasShariah = rates.some(r => r.shariah != null)
+  const stale = prod ? rateIsStale(prod) : false
+
+  /** The number this fund actually paid in `r`, under the chosen series. */
+  const rateUnder = (r, variant = f.rate_variant) =>
+    variant === 'SHARIAH' && r.shariah != null ? r.shariah : r.rate
+
+  /**
+   * Copy one declared year into the rate fields.
+   *
+   * The bonus is written as its own field rather than folded into the rate,
+   * because assetRate() sums them and the two have different standing: ASB's
+   * base rate is the fund's earnings, the bonus is discretionary and has ranged
+   * from 0.25 to 1.25 sen over the last six years.
+   */
+  const applyRate = (year, variant = f.rate_variant) => {
+    const r = rates.find(x => x.year === year)
+    if (!r) return
+    setF(p => ({
+      ...p,
+      rate_year: year,
+      rate_variant: variant,
+      last_rate: String(rateUnder(r, variant)),
+      last_bonus: r.bonus ? String(r.bonus) : '',
+    }))
+  }
 
   // Changing institution clears the fund, because "ASB 2" under EPF would be a
   // nonsense the rest of the form would then happily prefill from.
@@ -608,16 +646,21 @@ function AssetDialog() {
   // facts about the product, so picking one fills them in. They stay editable —
   // a fund can change its terms, and this file would not know.
   const pickProduct = id => {
-    const prod = productOf(f.institution_id, id)
-    if (!prod) return
+    const picked = productOf(f.institution_id, id)
+    if (!picked) return
+    const latest = latestRate(picked)
     setF(p => ({
       ...p,
       product_id: id,
-      name: prod.name,
-      rate_basis: prod.rate_basis,
-      rate_quote: prod.rate_quote,
-      fiscal_year: prod.fiscal_year,
-      unit_cap: prod.unit_cap == null ? '' : String(prod.unit_cap),
+      name: picked.name,
+      rate_basis: picked.rate_basis,
+      rate_quote: picked.rate_quote,
+      fiscal_year: picked.fiscal_year,
+      unit_cap: picked.unit_cap == null ? '' : String(picked.unit_cap),
+      rate_year: latest ? latest.year : null,
+      last_rate: latest ? String(latest.rate) : '',
+      last_bonus: latest && latest.bonus ? String(latest.bonus) : '',
+      rate_variant: 'CONVENTIONAL',
     }))
   }
 
@@ -635,6 +678,7 @@ function AssetDialog() {
       // Sen-per-unit accounts are the ones that talk about units at all.
       unit_label: f.rate_quote === 'SEN_PER_UNIT' ? 'units' : '',
       last_rate: f.last_rate === '' ? null : Number(f.last_rate),
+      last_bonus: f.last_bonus === '' ? null : Number(f.last_bonus),
       unit_cap: f.unit_cap === '' ? null : Number(f.unit_cap),
       fiscal_year: f.fiscal_year,
     })
@@ -744,7 +788,11 @@ function AssetDialog() {
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Last declared rate" htmlFor="as-rate" hint="Leave blank until one is declared.">
+        <Field
+          label={f.rate_year ? 'Rate declared for ' + f.rate_year : 'Last declared rate'}
+          htmlFor="as-rate"
+          hint={f.rate_year ? undefined : 'Leave blank until one is declared.'}
+        >
           <Input
             id="as-rate"
             className="num"
@@ -755,6 +803,94 @@ function AssetDialog() {
             onChange={e => set('last_rate', e.target.value)}
           />
         </Field>
+
+        {/* The bonus is a real column the form never exposed, so ASB's could not
+            be recorded at all - and assetRate() adds it to the base rate, so
+            leaving it out understated every ASB projection by up to 1.25 sen. */}
+        {rates.some(r => r.bonus) || f.institution_id === OTHER ? (
+          <Field
+            label="Bonus"
+            htmlFor="as-bonus"
+            hint="Added to the rate. ASB declares one; most accounts do not."
+          >
+            <Input
+              id="as-bonus"
+              className="num"
+              type="number"
+              step="0.01"
+              placeholder="0.55"
+              value={f.last_bonus}
+              onChange={e => set('last_bonus', e.target.value)}
+            />
+          </Field>
+        ) : null}
+
+        {rates.length ? (
+          <div className="col-span-2 grid gap-1.5">
+            <span className="eyebrow">
+              Declared {prod.rate_quote === 'SEN_PER_UNIT' ? 'sen per unit' : 'per cent'}, by
+              financial year
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {rates.map(r => {
+                const on = f.rate_year === r.year
+                const shown =
+                  f.rate_variant === 'SHARIAH' && r.shariah != null ? r.shariah : totalRate(r)
+                return (
+                  <button
+                    key={r.year}
+                    type="button"
+                    onClick={() => applyRate(r.year)}
+                    aria-pressed={on}
+                    className={cn(
+                      'rounded-md border px-2 py-1 text-[11.5px] transition-colors',
+                      on
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary/60',
+                    )}
+                  >
+                    <span className="num">{r.year}</span>{' '}
+                    <span className="num font-semibold">{shown.toFixed(2)}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {hasShariah ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-faint text-[11px]">Your savings are</span>
+                {[
+                  ['CONVENTIONAL', 'Konvensional'],
+                  ['SHARIAH', 'Shariah'],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => applyRate(f.rate_year, id)}
+                    aria-pressed={f.rate_variant === id}
+                    className={cn(
+                      'rounded-md border px-2 py-0.5 text-[11.5px] transition-colors',
+                      f.rate_variant === id
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border text-muted-foreground hover:border-primary/60',
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <p className="text-faint text-[11px]">
+              {rates.some(r => r.bonus)
+                ? 'Base rate plus bonus, as declared. Pick a year to use it, or type your own.'
+                : 'Pick a year to use it, or type your own.'}
+              {stale
+                ? ' A newer year has since closed - check the latest announcement before relying on this.'
+                : ''}
+            </p>
+          </div>
+        ) : null}
         <Field label="Holding cap" htmlFor="as-cap" hint="A progress bar, never a limit — optional.">
           <Input
             id="as-cap"
