@@ -55,6 +55,7 @@ const VantageContext = createContext(null)
  *   openGoal: () => void,
  *   openIncomeEvent: (prefill?: object) => void,
  *   addIncomeSource: (body: object) => Promise<boolean>,
+ *   deleteIncomeSource: (id: number) => Promise<boolean>,
  *   addIncomeEvent: (sourceId: number, body: object) => Promise<boolean>,
  *   addCommitment: (body: object) => Promise<boolean>,
  *   updateCommitment: (id: number, body: object) => Promise<boolean>,
@@ -360,6 +361,7 @@ export function VantageProvider({ children }) {
         mutate(() => api.deleteDeclaredRate(id), 'Reverted to the built-in figure'),
       addCommitment: body => mutate(() => api.addCommitment(body), `${body.name} added`),
       addIncomeSource: body => mutate(() => api.addIncomeSource(body), `${body.name} added`),
+      deleteIncomeSource: id => mutate(() => api.deleteIncomeSource(id), 'Income source removed'),
       addIncomeEvent: (sourceId, body) => mutate(() => api.addIncomeEvent(sourceId, body), 'Payment recorded'),
       deleteIncomeEvent: (sourceId, eventId) =>
         mutate(() => api.deleteIncomeEvent(sourceId, eventId), 'Payment removed'),
