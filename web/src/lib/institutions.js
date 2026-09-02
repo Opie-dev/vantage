@@ -92,6 +92,25 @@ export const INSTITUTIONS = [
     shariah: 'FATWA',
     products: [
       {
+        // ASB can declare THREE things, and only two of them are here.
+        //
+        //   income distribution   on every unit
+        //   bonus                 on every unit; part of the headline total
+        //   Bonus Tambahan        ON THE FIRST 30,000 UNITS ONLY, and only in
+        //                         some years — 0.50 sen in 2022, 0.75 in 2020,
+        //                         nothing in 2023, 2024 or 2025.
+        //
+        // The rates below are the first two, which is exactly the headline
+        // figure ASNB announces: 2022 is recorded as 4.60, the number in the
+        // press release, NOT 5.10. Do not "fix" it by folding the Tambahan in.
+        //
+        // The reason is that a rate here is a single number applied to the whole
+        // balance, and the Tambahan is not that: it pays on min(balance, 30,000),
+        // so its worth depends on how much you hold. Adding it would overstate
+        // every balance above 30,000 units — badly, at the cap ASB allows, where
+        // 0.50 sen on the first tenth of a holding would be counted on all of it.
+        // Leaving it out understates a holding under 30,000 units in those two
+        // years instead, which is the error worth having: it never flatters.
         id: 'ASB',
         name: 'ASB',
         label: 'ASB — Amanah Saham Bumiputera',
