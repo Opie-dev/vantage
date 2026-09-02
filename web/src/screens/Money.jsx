@@ -89,7 +89,7 @@ function Line({ label, value, tone = '', strong = false, rule = false }) {
 
 /* ── coming in ────────────────────────────────────────────────────────────── */
 
-function SourceRow({ r, onRecord, onRemove }) {
+function SourceRow({ r, onRecord, onEdit, onRemove }) {
   const s = r.source
   const d = r.last ? deductionsOf(r.last) : null
 
@@ -134,6 +134,7 @@ function SourceRow({ r, onRecord, onRemove }) {
           <PlusIcon />
           Record
         </Button>
+        <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.source)} />
         <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
       </div>
 
@@ -440,6 +441,7 @@ export default function Money() {
                     key={r.id}
                     r={r}
                     onRecord={id => openIncomeEvent({ source_id: id })}
+                    onEdit={openIncome}
                     onRemove={deleteIncomeSource}
                   />
                 ))}

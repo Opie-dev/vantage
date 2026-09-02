@@ -51,7 +51,8 @@ const VantageContext = createContext(null)
  *   openAsset: () => void,
  *   openAssetEntry: (prefill?: object) => void,
  *   openCommitment: (prefill?: object) => void,
- *   openIncome: () => void,
+ *   openIncome: (prefill?: object) => void,
+ *   updateIncomeSource: (id: number, body: object) => Promise<boolean>,
  *   openGoal: () => void,
  *   openIncomeEvent: (prefill?: object) => void,
  *   addIncomeSource: (body: object) => Promise<boolean>,
@@ -345,7 +346,8 @@ export function VantageProvider({ children }) {
       openAsset: () => setModal({ kind: 'asset', prefill: {} }),
       // With a row, the form edits it; without, it adds one.
       openCommitment: (prefill = {}) => setModal({ kind: 'commitment', prefill }),
-      openIncome: () => setModal({ kind: 'income', prefill: {} }),
+      // With a row, the form edits it; without, it adds one.
+      openIncome: (prefill = {}) => setModal({ kind: 'income', prefill }),
       openGoal: () => setModal({ kind: 'goal', prefill: {} }),
       openIncomeEvent,
       openAssetEntry,
@@ -362,6 +364,8 @@ export function VantageProvider({ children }) {
         mutate(() => api.deleteDeclaredRate(id), 'Reverted to the built-in figure'),
       addCommitment: body => mutate(() => api.addCommitment(body), `${body.name} added`),
       addIncomeSource: body => mutate(() => api.addIncomeSource(body), `${body.name} added`),
+      updateIncomeSource: (id, body) =>
+        mutate(() => api.updateIncomeSource(id, body), `${body.name} updated`),
       deleteIncomeSource: id => mutate(() => api.deleteIncomeSource(id), 'Income source removed'),
       addIncomeEvent: (sourceId, body) => mutate(() => api.addIncomeEvent(sourceId, body), 'Payment recorded'),
       deleteIncomeEvent: (sourceId, eventId) =>

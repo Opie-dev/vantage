@@ -1425,15 +1425,17 @@ function CommitmentDialog({ prefill }) {
  * and are what net pay is computed from. They simply no longer write anywhere
  * else.
  */
-function IncomeDialog() {
-  const { closeModal, addIncomeSource } = useVantage()
+function IncomeDialog({ prefill }) {
+  const { closeModal, addIncomeSource, updateIncomeSource } = useVantage()
+  const editing = prefill.id != null
+  const str = (v, fallback = '') => (v == null ? fallback : String(v))
   const [f, setF] = useState({
-    kind: 'EMPLOYMENT',
-    name: '',
-    payer: '',
-    cadence: 'MONTHLY',
-    pay_day: '25',
-    gross_default: '',
+    kind: prefill.kind || 'EMPLOYMENT',
+    name: str(prefill.name),
+    payer: str(prefill.payer),
+    cadence: prefill.cadence || 'MONTHLY',
+    pay_day: str(prefill.pay_day, '25'),
+    gross_default: str(prefill.gross_default),
   })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -1442,14 +1444,19 @@ function IncomeDialog() {
   const save = async () => {
     if (!f.name.trim()) return
     setBusy(true)
-    const ok = await addIncomeSource({
-      kind: f.kind,
+    const body = {
       name: f.name.trim(),
       payer: f.payer.trim(),
-      cadence: f.cadence,
       pay_day: monthly ? Number(f.pay_day) : null,
       gross_default: f.gross_default === '' ? null : Number(f.gross_default),
-    })
+    }
+    // kind and cadence are omitted on an edit because the server refuses to
+    // change either — a source whose shape changed would leave its recorded
+    // payments describing something that no longer exists. Both are locked in
+    // the form too, rather than being sent and bounced back as an error.
+    const ok = editing
+      ? await updateIncomeSource(prefill.id, body)
+      : await addIncomeSource({ ...body, kind: f.kind, cadence: f.cadence })
     setBusy(false)
     if (ok) closeModal()
   }
@@ -1457,15 +1464,19 @@ function IncomeDialog() {
   return (
     <DialogContent className="sm:max-w-[480px]">
       <DialogHeader>
-        <DialogTitle>Add income source</DialogTitle>
+        <DialogTitle>{editing ? `Edit ${prefill.name}` : 'Add income source'}</DialogTitle>
         <DialogDescription>
           Where money arrives from. Each payment is recorded against it, and net pay is worked out
           from the payslip rather than typed.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Kind" htmlFor="in-kind">
-          <Select value={f.kind} onValueChange={v => set('kind', v)}>
+        <Field
+          label="Kind"
+          htmlFor="in-kind"
+          hint={editing ? 'Fixed once saved.' : undefined}
+        >
+          <Select value={f.kind} onValueChange={v => set('kind', v)} disabled={editing}>
             <SelectTrigger id="in-kind" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -1491,9 +1502,13 @@ function IncomeDialog() {
           label="How often?"
           htmlFor="in-cadence"
           className="col-span-2"
-          hint="An irregular source is averaged over three months and drawn faded — it is never treated as a floor."
+          hint={
+            editing
+              ? 'Fixed once saved — recorded payments would stop describing what they were.'
+              : 'An irregular source is averaged over three months and drawn faded — it is never treated as a floor.'
+          }
         >
-          <Select value={f.cadence} onValueChange={v => set('cadence', v)}>
+          <Select value={f.cadence} onValueChange={v => set('cadence', v)} disabled={editing}>
             <SelectTrigger id="in-cadence" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -1906,7 +1921,7 @@ function Modals() {
       {modal?.kind === 'asset' && <AssetDialog />}
       {modal?.kind === 'assetEntry' && <AssetEntryDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
-      {modal?.kind === 'income' && <IncomeDialog />}
+      {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'goal' && <GoalDialog />}
     </Dialog>
