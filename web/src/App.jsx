@@ -593,19 +593,24 @@ function CashDialog({ prefill }) {
  * the UI addresses the account by and there is nothing useful for the owner to
  * decide about it.
  */
-function AssetDialog() {
-  const { state, closeModal, addAsset } = useVantage()
+function AssetDialog({ prefill }) {
+  const { state, closeModal, addAsset, updateAsset } = useVantage()
+  const editing = prefill.id != null
+  const str = (v, fallback = '') => (v == null ? fallback : String(v))
   const [f, setF] = useState({
-    institution_id: '',
-    product_id: '',
-    name: '',
-    institution: '',
-    rate_basis: 'MIN_MONTHLY',
-    rate_quote: 'PERCENT',
-    last_rate: '',
-    last_bonus: '',
-    unit_cap: '',
-    fiscal_year: '12-31',
+    // An existing account already names its institution, and the catalogue is
+    // only there to fill a blank form — so editing starts on the free-text side
+    // rather than trying to match a saved name back to a catalogue entry.
+    institution_id: editing ? OTHER : '',
+    product_id: str(prefill.product_id),
+    name: str(prefill.name),
+    institution: str(prefill.institution),
+    rate_basis: prefill.rate_basis || 'MIN_MONTHLY',
+    rate_quote: prefill.rate_quote || 'PERCENT',
+    last_rate: str(prefill.last_rate),
+    last_bonus: str(prefill.last_bonus),
+    unit_cap: str(prefill.unit_cap),
+    fiscal_year: prefill.fiscal_year || '12-31',
     // Which declared year the rate above came from, and - for EPF - which of
     // its two series. Neither is saved; they only drive the two fields that are.
     rate_year: null,
@@ -709,9 +714,8 @@ function AssetDialog() {
   const save = async () => {
     if (!slug) return
     setBusy(true)
-    const ok = await addAsset({
+    const body = {
       name: f.name.trim(),
-      slug,
       institution: f.institution.trim(),
       rate_basis: f.rate_basis,
       rate_quote: f.rate_quote,
@@ -725,7 +729,10 @@ function AssetDialog() {
       // that needed it was reverted — but the column is applied and an account
       // that records what it IS costs nothing and is not recoverable later.
       product_id: f.product_id || null,
-    })
+    }
+    // slug is not sent on an edit: it is the key the UI addresses an account by,
+    // and the service refuses to change it — renaming would orphan those links.
+    const ok = editing ? await updateAsset(prefill.id, body) : await addAsset({ ...body, slug })
     setBusy(false)
     if (ok) closeModal()
   }
@@ -733,7 +740,7 @@ function AssetDialog() {
   return (
     <DialogContent className="sm:max-w-[500px]">
       <DialogHeader>
-        <DialogTitle>Add account</DialogTitle>
+        <DialogTitle>{editing ? `Edit ${prefill.name}` : 'Add account'}</DialogTitle>
         <DialogDescription>
           Something you hold outside moomoo — ASB, Tabung Haji, EPF. It gets its own tables and
           never touches your broker positions, wallet or income figures.
@@ -818,9 +825,18 @@ function AssetDialog() {
               <SelectItem value="MADB">
                 From the end of each month I contribute — EPF
               </SelectItem>
+              <SelectItem value="NONE">
+                It does not declare a rate — a bank savings account
+              </SelectItem>
             </SelectContent>
           </Select>
         </Field>
+        {/* All of this describes a declared distribution, so none of it applies
+            to an account that declares none. Hidden rather than disabled: a
+            greyed row of rate fields still reads as something you failed to
+            fill in. */}
+        {f.rate_basis === 'NONE' ? null : (
+        <>
         <Field label="Rate is quoted in" htmlFor="as-quote">
           <Select value={f.rate_quote} onValueChange={v => set('rate_quote', v)}>
             <SelectTrigger id="as-quote" className="w-full">
@@ -873,6 +889,14 @@ function AssetDialog() {
               onChange={e => set('last_bonus', e.target.value)}
             />
           </Field>
+        ) : null}
+
+        {f.rate_basis === 'NONE' ? (
+          <p className="text-faint col-span-2 -mt-1 text-[11.5px] leading-relaxed">
+            No rate, no financial year and no estimate — the balance is whatever the entries add up
+            to. That is the whole of what this app can say about a bank savings account, and saying
+            less is better than projecting a year of income it never declared.
+          </p>
         ) : null}
 
         {inst?.shariah ? (
@@ -971,6 +995,9 @@ function AssetDialog() {
             field would be a question with no answer — and a progress bar towards
             a number the user invented is worse than no progress bar. Kept for an
             institution typed in by hand, where the app cannot know. */}
+        </>
+        )}
+
         {!inst || inst.hasCap !== false ? (
           <Field label="Holding cap" htmlFor="as-cap" hint="A progress bar, never a limit — optional.">
             <Input
@@ -984,6 +1011,7 @@ function AssetDialog() {
             />
           </Field>
         ) : null}
+        {f.rate_basis === 'NONE' ? null : (
         <Field
           label="Financial year ends"
           htmlFor="as-fy"
@@ -1003,6 +1031,7 @@ function AssetDialog() {
             </SelectContent>
           </Select>
         </Field>
+        )}
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={closeModal}>
@@ -1954,7 +1983,7 @@ function Modals() {
       {modal?.kind === 'instrument' && <InstrumentDialog />}
       {modal?.kind === 'transaction' && <TransactionDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cash' && <CashDialog prefill={modal.prefill || {}} />}
-      {modal?.kind === 'asset' && <AssetDialog />}
+      {modal?.kind === 'asset' && <AssetDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'assetEntry' && <AssetEntryDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}

@@ -17,7 +17,7 @@
  */
 
 import { useMemo } from 'react'
-import { PlusIcon, TrashIcon } from 'lucide-react'
+import { PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -49,10 +49,12 @@ const TD = 'px-2.5 py-1.5 align-middle whitespace-nowrap'
 const BASIS_LABEL = {
   MIN_MONTHLY: 'average of monthly minimums',
   MADB: 'aggregate daily balance',
+  NONE: 'no declared rate',
 }
 
 /** '5.75 sen' for ASB, '3.50%' for the rest. The provider's own unit, not ours. */
 function rateText(a) {
+  if (a.rate_basis === 'NONE') return null
   if (a.last_rate == null) return null
   const base = a.rate_quote === 'SEN_PER_UNIT' ? `${a.last_rate} sen` : `${a.last_rate}%`
   if (!a.last_bonus) return base
@@ -202,7 +204,21 @@ function Stat({ label, value, valueClass = '', sub }) {
  * account is configured as, which is the part worth checking before you start
  * typing balances into it.
  */
-function SetupRow({ row, onAdd, onRemove }) {
+/** An icon action on a card, with the words in the tooltip and on the button. */
+function CardAction({ icon: Icon, label, onClick, tip }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
+          <Icon />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tip || label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function SetupRow({ row, onAdd, onEdit, onRemove }) {
   const { asset: a } = row
   const rate = rateText(a)
 
@@ -226,24 +242,18 @@ function SetupRow({ row, onAdd, onRemove }) {
         <PlusIcon />
         Entry
       </Button>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Remove the ${a.name} account`}
-            onClick={() => onRemove(a.id)}
-          >
-            <TrashIcon />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>Remove — only possible while it has no entries</TooltipContent>
-      </Tooltip>
+      <CardAction icon={PencilIcon} label={`Edit ${a.name}`} onClick={() => onEdit(a)} />
+      <CardAction
+        icon={TrashIcon}
+        label={`Remove the ${a.name} account`}
+        tip="Remove — only possible while it has no entries"
+        onClick={() => onRemove(a.id)}
+      />
     </div>
   )
 }
 
-function AccountCard({ row, onAdd }) {
+function AccountCard({ row, onAdd, onEdit }) {
   const { asset: a } = row
   const rate = rateText(a)
 
@@ -267,6 +277,10 @@ function AccountCard({ row, onAdd }) {
             <PlusIcon />
             Entry
           </Button>
+          {/* The rate basis, financial year and cap all live behind this, and
+              all three change what the estimator says — a wrong one was
+              uncorrectable once the account was saved. */}
+          <CardAction icon={PencilIcon} label={`Edit ${a.name}`} onClick={() => onEdit(a)} />
         </div>
 
         <div className="stat mt-3">{fmt(row.balance, row.cur)}</div>
@@ -316,7 +330,10 @@ function AccountCard({ row, onAdd }) {
               {row.entries.length === 1 ? 'entry' : 'entries'} · last on{' '}
               <span className="num">{dfmtLong(row.lastEntry.date)}</span>
             </p>
-            <Estimator asset={a} outlook={row.outlook} />
+            {/* Nothing to project for a cash pot: the estimator's whole job is
+                to apply a declared rate over a financial year, and this kind of
+                account has neither. */}
+            {a.rate_basis === 'NONE' ? null : <Estimator asset={a} outlook={row.outlook} />}
           </>
         )}
       </CardContent>
@@ -442,7 +459,12 @@ export default function Assets() {
       {live(total).length ? (
         <div className="grid gap-3 lg:grid-cols-2">
           {live(total).map(row => (
-            <AccountCard key={row.id} row={row} onAdd={id => openAssetEntry({ asset_id: id })} />
+            <AccountCard
+              key={row.id}
+              row={row}
+              onAdd={id => openAssetEntry({ asset_id: id })}
+              onEdit={openAsset}
+            />
           ))}
         </div>
       ) : null}
@@ -457,6 +479,7 @@ export default function Assets() {
                   key={row.id}
                   row={row}
                   onAdd={id => openAssetEntry({ asset_id: id })}
+                  onEdit={openAsset}
                   onRemove={deleteAsset}
                 />
               ))}
