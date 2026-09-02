@@ -25,7 +25,7 @@
  */
 
 import { useMemo } from 'react'
-import { PlusIcon } from 'lucide-react'
+import { PlusIcon, TrashIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,27 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { deductionsOf, waterfall } from '@/lib/calc'
 import { dfmtLong, fmt, fmtS, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
+
+/**
+ * Remove a row.
+ *
+ * The server refuses to delete an income source that has recorded payments, and
+ * says why — deleting it would take the payslip history with it. That refusal
+ * arrives as a toast from mutate(), so this button does not try to predict it:
+ * a rule enforced in one place cannot drift from a copy of itself in another.
+ */
+function RemoveButton({ label, onClick }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
+          <TrashIcon />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
 
 /** One colour per kind, so the eye can group without reading. */
 const KIND_COLOR = {
@@ -63,7 +84,7 @@ function Line({ label, value, tone = '', strong = false, rule = false }) {
 
 /* ── coming in ────────────────────────────────────────────────────────────── */
 
-function SourceRow({ r, onRecord }) {
+function SourceRow({ r, onRecord, onRemove }) {
   const s = r.source
   const d = r.last ? deductionsOf(r.last) : null
 
@@ -108,6 +129,7 @@ function SourceRow({ r, onRecord }) {
           <PlusIcon />
           Record
         </Button>
+        <RemoveButton label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
       </div>
 
       {d && d.deducted > 0 ? (
@@ -161,7 +183,7 @@ function SourceRow({ r, onRecord }) {
 
 /* ── going out ────────────────────────────────────────────────────────────── */
 
-function CommitmentRow({ r }) {
+function CommitmentRow({ r, onRemove }) {
   const c = r.commitment
 
   return (
@@ -253,6 +275,7 @@ function CommitmentRow({ r }) {
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
+      <RemoveButton label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
     </div>
   )
 }
@@ -260,7 +283,8 @@ function CommitmentRow({ r }) {
 /* ── screen ───────────────────────────────────────────────────────────────── */
 
 export default function Money() {
-  const { state, openCommitment, openIncome, openIncomeEvent } = useVantage()
+  const { state, openCommitment, openIncome, openIncomeEvent, deleteIncomeSource, deleteCommitment } =
+    useVantage()
   const w = useMemo(() => waterfall(state), [state])
   const out = w.commitments
   const hasFlat = out.rows.some(r => r.kind === 'LOAN' && r.flat)
@@ -406,7 +430,12 @@ export default function Money() {
             {hasIncome ? (
               <div className="mt-1">
                 {w.rows.map(r => (
-                  <SourceRow key={r.id} r={r} onRecord={id => openIncomeEvent({ source_id: id })} />
+                  <SourceRow
+                    key={r.id}
+                    r={r}
+                    onRecord={id => openIncomeEvent({ source_id: id })}
+                    onRemove={deleteIncomeSource}
+                  />
                 ))}
                 <p className="text-faint mt-3 text-[11.5px] leading-relaxed">
                   A salary is a floor; an irregular source is the mean of the last three months and
@@ -442,7 +471,7 @@ export default function Money() {
             {out.rows.length ? (
               <div className="mt-1">
                 {out.rows.map(r => (
-                  <CommitmentRow key={r.id} r={r} />
+                  <CommitmentRow key={r.id} r={r} onRemove={deleteCommitment} />
                 ))}
                 <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px]">
                   <span>
