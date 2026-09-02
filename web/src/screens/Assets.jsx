@@ -472,12 +472,21 @@ export default function Assets() {
           valueClass={total.earnedRM ? 'text-gain' : ''}
           sub="distributions, hibah and dividends"
         />
+        {/* NOT "return on contributed", which is what this said and could not
+            deliver. An opening balance is entered as one DEPOSIT, so the
+            58k that started EPF Akaun Persaraan carries years of dividends
+            inside it — earnings sitting in the denominator, counted as though
+            they were money paid in. The ratio would understate the real return
+            for as long as those entries exist, and no restatement fixes it
+            without splitting every opening balance by hand.
+            So the label claims only what the ledger can support: what has come
+            back since these accounts were first entered here. */}
         <Stat
-          label="Return on contributed"
+          label="Return since tracking began"
           value={total.returnPct == null ? '—' : pct1(total.returnPct)}
           valueClass={total.returnPct ? 'text-gain' : ''}
           sub={
-            total.earnedRM
+            total.declared
               ? 'cumulative — not annualised'
               : 'nothing declared yet, so nothing realised'
           }

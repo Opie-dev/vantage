@@ -1898,6 +1898,11 @@ export function assetRows(S, { includeArchived = false } = {}) {
         capPct: a.unit_cap ? Math.min((balance / a.unit_cap) * 100, 100) : null,
         headroom: a.unit_cap ? a.unit_cap - balance : null,
         entries,
+        // Counted, not inferred from `earned` being non-zero. A distribution
+        // exactly cancelled by a fee nets to zero, and a screen reading the
+        // total would announce that nothing had ever been declared over a
+        // ledger that says otherwise.
+        declared: entries.filter(e => e.type === 'DISTRIBUTION').length,
         lastEntry: entries[0] || null,
       }
     })
@@ -1918,6 +1923,7 @@ export function assetsTotal(S) {
     valueRM,
     contributedRM,
     earnedRM,
+    declared: rows.reduce((n, r) => n + r.declared, 0),
     returnPct: contributedRM > 0 ? (earnedRM / contributedRM) * 100 : null,
   }
 }

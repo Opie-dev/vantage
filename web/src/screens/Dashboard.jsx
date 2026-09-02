@@ -1601,6 +1601,13 @@ function DashboardBody() {
 }
 
 /**
+ * Below this share of the strip an account draws as a sliver a pixel or two
+ * wide. Four such accounts cost four legend rows and four palette colours for
+ * something the eye cannot locate on the bar at all, so they fold together.
+ */
+const TINY_SHARE = 0.005
+
+/**
  * Net worth: everything you own, less everything you owe.
  *
  * It is the ONLY figure on this screen that adds the two worlds together —
@@ -1631,24 +1638,54 @@ function OwnedStrip({ owned }) {
   // width means the same thing wherever it sits and the legend's percentages
   // add to a hundred across the whole strip rather than within each half.
   const scale = owned.totalRM + owned.owedRM || 1
+
+  // Two rules on what may fold. The broker never does, however small — it is the
+  // thing the strip exists to weigh everything else against. And it takes two to
+  // make a bucket: "Other RM 162" says strictly less than "EPF Akaun Fleksibel
+  // RM 162" while costing the same row, so a lone small account keeps its name.
+  const tiny = owned.parts.filter(p => p.key !== 'broker' && p.value / scale < TINY_SHARE)
+  const folded = tiny.length > 1 ? tiny : []
+  const foldedRM = folded.reduce((sum, p) => sum + p.value, 0)
+
+  // Debts share one colour because they are one thing; the fade only separates
+  // them from each other, largest first. The step shrinks past three because a
+  // fixed 0.25 hit opacity 0 on the fifth debt and drew it as nothing at all.
+  const fade = Math.min(0.25, 0.6 / Math.max(owned.liabilities.length - 1, 1))
+
   const segments = [
-    ...owned.parts.map(p => ({
-      key: `own:${p.key}`,
-      name: p.name,
-      value: p.value,
-      color: p.color,
-      dim: 1,
-      owed: false,
-      share: p.value / scale,
-    })),
+    ...owned.parts
+      .filter(p => !folded.includes(p))
+      .map(p => ({
+        key: `own:${p.key}`,
+        name: p.name,
+        value: p.value,
+        color: p.color,
+        dim: 1,
+        owed: false,
+        share: p.value / scale,
+      })),
+    ...(folded.length
+      ? [
+          {
+            key: 'own:other',
+            name: `Other · ${folded.length} accounts`,
+            value: foldedRM,
+            // Grey on purpose. A bucket is not an account and should not wear an
+            // account's colour — and this way the fold spends no palette slot.
+            color: 'var(--faint)',
+            dim: 1,
+            owed: false,
+            share: foldedRM / scale,
+            detail: folded.map(p => p.name).join(', '),
+          },
+        ]
+      : []),
     ...owned.liabilities.map((l, i) => ({
       key: `owe:${l.key}`,
       name: l.name,
       value: l.value,
       color: 'var(--loss)',
-      // Debts share one colour because they are one thing; the fade only
-      // separates them from each other, largest first.
-      dim: 1 - i * 0.25,
+      dim: 1 - i * fade,
       owed: true,
       share: l.value / scale,
     })),
@@ -1711,7 +1748,7 @@ function OwnedStrip({ owned }) {
                   background: seg.color,
                   opacity: seg.dim,
                 }}
-                title={`${seg.name} ${fmtCompact(seg.value, 'MYR')}`}
+                title={`${seg.name} ${fmtCompact(seg.value, 'MYR')}${seg.detail ? ` — ${seg.detail}` : ''}`}
               />
             ))}
           </div>
