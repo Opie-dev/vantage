@@ -90,6 +90,9 @@ export const INSTITUTIONS = [
     label: 'ASNB',
     hint: 'Amanah Saham Nasional Berhad',
     shariah: 'FATWA',
+    // ASNB is the only one here that limits what you may hold: ASB and ASB 2 stop
+    // at 300,000 units. Asking the question at all only makes sense for these.
+    hasCap: true,
     products: [
       {
         // ASB can declare THREE things, and only two of them are here.
@@ -203,6 +206,10 @@ export const INSTITUTIONS = [
     label: 'EPF',
     hint: 'Kumpulan Wang Simpanan Pekerja (KWSP)',
     shariah: 'ELECTION',
+    // No ceiling on an EPF balance. There are limits on what you may CONTRIBUTE
+    // in a year, which is a different thing and not what unit_cap measures — it
+    // draws a progress bar towards a maximum holding, and EPF has none.
+    hasCap: false,
     // The 2024 restructuring split the old two accounts into three. New
     // contributions go 75 / 15 / 10, and all three earn the same declared
     // dividend on the same MADB basis — they differ in what you may withdraw,
@@ -245,6 +252,7 @@ export const INSTITUTIONS = [
     label: 'Tabung Haji',
     hint: 'Lembaga Tabung Haji',
     shariah: 'COMPLIANT',
+    hasCap: false,
     products: [
       {
         id: 'TH_SAVINGS',

@@ -649,13 +649,19 @@ function AssetDialog() {
 
   // Changing institution clears the fund, because "ASB 2" under EPF would be a
   // nonsense the rest of the form would then happily prefill from.
-  const pickInstitution = id =>
+  const pickInstitution = id => {
+    const next = institutionOf(id)
     setF(p => ({
       ...p,
       institution_id: id,
       product_id: '',
-      institution: id === OTHER ? '' : institutionOf(id)?.label || '',
+      institution: id === OTHER ? '' : next?.label || '',
+      // Switching from ASB to EPF must not carry ASB's 300,000 across. The cap
+      // is a property of the fund, and the new one either has its own or has
+      // none at all.
+      unit_cap: next && next.hasCap === false ? '' : p.unit_cap,
     }))
+  }
 
   // The point of the catalogue: the basis, the financial year and the cap are
   // facts about the product, so picking one fills them in. They stay editable —
@@ -942,17 +948,24 @@ function AssetDialog() {
             </p>
           </div>
         ) : null}
-        <Field label="Holding cap" htmlFor="as-cap" hint="A progress bar, never a limit — optional.">
-          <Input
-            id="as-cap"
-            className="num"
-            type="number"
-            step="1000"
-            placeholder="300000"
-            value={f.unit_cap}
-            onChange={e => set('unit_cap', e.target.value)}
-          />
-        </Field>
+        {/* Only where an account can actually fill up. ASNB caps ASB and ASB 2 at
+            300,000 units; an EPF or Tabung Haji balance has no ceiling, so the
+            field would be a question with no answer — and a progress bar towards
+            a number the user invented is worse than no progress bar. Kept for an
+            institution typed in by hand, where the app cannot know. */}
+        {!inst || inst.hasCap !== false ? (
+          <Field label="Holding cap" htmlFor="as-cap" hint="A progress bar, never a limit — optional.">
+            <Input
+              id="as-cap"
+              className="num"
+              type="number"
+              step="1000"
+              placeholder="300000"
+              value={f.unit_cap}
+              onChange={e => set('unit_cap', e.target.value)}
+            />
+          </Field>
+        ) : null}
         <Field
           label="Financial year ends"
           htmlFor="as-fy"
