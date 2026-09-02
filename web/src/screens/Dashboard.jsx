@@ -1626,8 +1626,33 @@ function DashboardBody() {
  */
 function OwnedStrip({ owned }) {
   const owes = owned.owedRM > 0
-  // Both bars are measured against the larger side, so their lengths compare.
-  const scale = Math.max(owned.totalRM, owned.owedRM) || 1
+
+  // Everything on one scale: each segment's share is of owned PLUS owed, so a
+  // width means the same thing wherever it sits and the legend's percentages
+  // add to a hundred across the whole strip rather than within each half.
+  const scale = owned.totalRM + owned.owedRM || 1
+  const segments = [
+    ...owned.parts.map(p => ({
+      key: `own:${p.key}`,
+      name: p.name,
+      value: p.value,
+      color: p.color,
+      dim: 1,
+      owed: false,
+      share: p.value / scale,
+    })),
+    ...owned.liabilities.map((l, i) => ({
+      key: `owe:${l.key}`,
+      name: l.name,
+      value: l.value,
+      color: 'var(--loss)',
+      // Debts share one colour because they are one thing; the fade only
+      // separates them from each other, largest first.
+      dim: 1 - i * 0.25,
+      owed: true,
+      share: l.value / scale,
+    })),
+  ]
   return (
     <div className="border-hairline -mx-[clamp(14px,2.4vw,28px)] -mt-5 mb-5 border-b px-[clamp(14px,2.4vw,28px)] pt-5 pb-4">
       <div className="flex flex-wrap items-start justify-between gap-x-10 gap-y-4">
@@ -1666,53 +1691,52 @@ function OwnedStrip({ owned }) {
           </p>
         </div>
 
+        {/* One track, not two.
+            The bars used to be drawn separately and each scaled against the
+            larger side, which meant moomoo filled its bar and read "100%" while
+            sitting beside a longer red one — 100% of what you own, printed next
+            to nearly twice as much debt. Two scales, two legends, and the reader
+            left to hold them against each other.
+            Now everything shares a denominator: owned and owed on the same
+            track, so a length is a length wherever it appears, and every
+            percentage is a share of the same whole. */}
         <div className="min-w-[280px] flex-1">
-          <div className="flex h-3 overflow-hidden rounded-full" style={{ width: `${(owned.totalRM / scale) * 100}%` }}>
-            {owned.parts.map(p => (
-              <div key={p.key} style={{ width: `${p.share * 100}%`, background: p.color }} />
+          <div className="flex h-3 gap-[3px] overflow-hidden rounded-full">
+            {segments.map(seg => (
+              <div
+                key={seg.key}
+                className="h-3 first:rounded-l-full last:rounded-r-full"
+                style={{
+                  width: `${seg.share * 100}%`,
+                  background: seg.color,
+                  opacity: seg.dim,
+                }}
+                title={`${seg.name} ${fmtCompact(seg.value, 'MYR')}`}
+              />
             ))}
           </div>
+
           <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
-            {owned.parts.map(p => (
-              <div key={p.key} className="flex items-baseline gap-2 text-[12.5px]">
+            {segments.map(seg => (
+              <div key={seg.key} className="flex items-baseline gap-2 text-[12.5px]">
                 <span
                   className="size-[9px] shrink-0 translate-y-px rounded-full"
-                  style={{ background: p.color }}
+                  style={{ background: seg.color, opacity: seg.dim }}
                 />
-                <span className="truncate">{p.name}</span>
-                <span className="num text-muted-foreground">{fmtCompact(p.value, 'MYR')}</span>
-                <span className="num text-faint text-[11px]">{pct0(p.share * 100)}</span>
+                <span className="truncate">{seg.name}</span>
+                <span className={`num ${seg.owed ? 'text-loss' : 'text-muted-foreground'}`}>
+                  {seg.owed ? '−' : ''}
+                  {fmtCompact(seg.value, 'MYR')}
+                </span>
+                <span className="num text-faint text-[11px]">{pct0(seg.share * 100)}</span>
               </div>
             ))}
           </div>
 
           {owes ? (
-            <>
-              <div
-                className="bg-loss mt-3 flex h-3 overflow-hidden rounded-full"
-                style={{ width: `${(owned.owedRM / scale) * 100}%` }}
-              >
-                {owned.liabilities.map((l, i) => (
-                  <div
-                    key={l.key}
-                    className="bg-loss h-3"
-                    style={{ width: `${(l.value / owned.owedRM) * 100}%`, opacity: 1 - i * 0.25 }}
-                  />
-                ))}
-              </div>
-              <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5">
-                {owned.liabilities.map((l, i) => (
-                  <div key={l.key} className="flex items-baseline gap-2 text-[12.5px]">
-                    <span
-                      className="bg-loss size-[9px] shrink-0 translate-y-px rounded-full"
-                      style={{ opacity: 1 - i * 0.25 }}
-                    />
-                    <span className="truncate">{l.name}</span>
-                    <span className="num text-muted-foreground">{fmtCompact(l.value, 'MYR')}</span>
-                  </div>
-                ))}
-              </div>
-            </>
+            <p className="text-faint mt-2.5 text-[11.5px]">
+              Owned and owed share one scale, so the lengths compare directly.
+            </p>
           ) : null}
         </div>
       </div>
