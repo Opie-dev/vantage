@@ -272,9 +272,18 @@ function TopBar() {
 
 /* ── dialogs ──────────────────────────────────────────────────────────────── */
 
+/**
+ * A labelled control, one cell of the two-column form grid.
+ *
+ * `content-start` is load-bearing. Grid cells stretch to the tallest in the row,
+ * and a stretched grid container spreads its own rows through the extra height —
+ * so a field beside one with a two-line hint had its label and input drifting
+ * down the cell, out of line with the field it sat next to. Packing the rows to
+ * the top keeps every label on the same baseline whatever its neighbour does.
+ */
 function Field({ label, htmlFor, hint, children, className = '' }) {
   return (
-    <div className={`grid gap-1.5 ${className}`}>
+    <div className={`grid content-start gap-1.5 ${className}`}>
       <Label htmlFor={htmlFor} className="eyebrow">
         {label}
       </Label>

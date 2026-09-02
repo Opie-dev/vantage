@@ -472,7 +472,9 @@ function RatesCard() {
       </CardHeader>
       <CardContent className="grid gap-3 px-4">
         <div className="grid grid-cols-2 gap-3">
-          <div className="grid gap-1.5">
+          {/* content-start for the same reason Field uses it: a stretched grid
+              cell otherwise spreads its rows and drops the control down. */}
+          <div className="grid content-start gap-1.5">
             <Label htmlFor="rc-inst" className="eyebrow">
               Institution
             </Label>
@@ -489,7 +491,7 @@ function RatesCard() {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid content-start gap-1.5">
             <Label htmlFor="rc-prod" className="eyebrow">
               Fund
             </Label>
