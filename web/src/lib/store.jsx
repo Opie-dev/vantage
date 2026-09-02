@@ -48,7 +48,7 @@ const VantageContext = createContext(null)
  *   deleteAsset: (id: number) => Promise<boolean>,
  *   addAssetEntry: (assetId: number, body: object) => Promise<boolean>,
  *   deleteAssetEntry: (assetId: number, entryId: number) => Promise<boolean>,
- *   openAsset: () => void,
+ *   openAsset: (prefill?: object) => void,
  *   openAssetEntry: (prefill?: object) => void,
  *   openCommitment: (prefill?: object) => void,
  *   openIncome: (prefill?: object) => void,
@@ -343,7 +343,8 @@ export function VantageProvider({ children }) {
       openInstrument: () => setModal({ kind: 'instrument', prefill: {} }),
       openTransaction,
       openCash: (prefill = {}) => setModal({ kind: 'cash', prefill }),
-      openAsset: () => setModal({ kind: 'asset', prefill: {} }),
+      // With a row, the form edits it; without, it adds one.
+      openAsset: (prefill = {}) => setModal({ kind: 'asset', prefill }),
       // With a row, the form edits it; without, it adds one.
       openCommitment: (prefill = {}) => setModal({ kind: 'commitment', prefill }),
       // With a row, the form edits it; without, it adds one.
@@ -373,7 +374,7 @@ export function VantageProvider({ children }) {
       updateCommitment: (id, body) =>
         mutate(() => api.updateCommitment(id, body), `${body.name} updated`),
       deleteCommitment: id => mutate(() => api.deleteCommitment(id), 'Commitment removed'),
-      updateAsset: (id, body) => mutate(() => api.updateAsset(id, body), null),
+      updateAsset: (id, body) => mutate(() => api.updateAsset(id, body), `${body.name} updated`),
       deleteAsset: id => mutate(() => api.deleteAsset(id), 'Account removed'),
       addAssetEntry: (assetId, body) => mutate(() => api.addAssetEntry(assetId, body), 'Entry saved'),
       deleteAssetEntry: (assetId, entryId) =>

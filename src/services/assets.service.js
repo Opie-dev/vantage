@@ -18,8 +18,20 @@ const { badRequest, notFound } = require('../middleware/errorHandler');
 /** Mirrors the assets_kind_check constraint in the migration. COMMODITY and ITEM
  *  are designed but not yet permitted — nothing can write their columns. */
 const KINDS = ['SAVINGS'];
-/** Mirrors assets_rate_basis_check. MIN_MONTHLY is ASB and Tabung Haji; MADB is EPF. */
-const RATE_BASES = ['MIN_MONTHLY', 'MADB'];
+/**
+ * Mirrors assets_rate_basis_check.
+ *
+ *   MIN_MONTHLY  ASB, ASM and Tabung Haji — the average of your monthly lows
+ *   MADB         EPF — earning from the last day of the contributing month
+ *   NONE         a cash pot that declares no annual rate at all
+ *
+ * NONE exists because the first two are both descriptions of how an annual
+ * DISTRIBUTION is computed, and a bank savings account has none to compute. It
+ * was still being asked, so a MAE Tabung had to claim a basis it does not have —
+ * harmless while the rate stayed blank, and a lie the moment anyone filled one
+ * in.
+ */
+const RATE_BASES = ['MIN_MONTHLY', 'MADB', 'NONE'];
 /** Mirrors assets_rate_quote_check. Display only — it decides "5.75 sen" vs "3.50%". */
 const RATE_QUOTES = ['PERCENT', 'SEN_PER_UNIT'];
 /** Mirrors asset_entries_type_check. */

@@ -1971,6 +1971,9 @@ const MONTH_LABEL = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
  * a screen can show the split.
  */
 export function assetRate(a) {
+  // A cash pot declares nothing, so there is no rate to report even if a number
+  // was typed into one before the basis was changed.
+  if (a.rate_basis === 'NONE') return null
   if (a.last_rate == null) return null
   return (a.last_rate + (a.last_bonus || 0)) / 100
 }
