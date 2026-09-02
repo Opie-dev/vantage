@@ -280,6 +280,11 @@ try {
           throw new Error(`${p.id}: unit_cap must be a positive number or null`)
         }
         if (!p.name || !p.label) throw new Error(`${p.id}: needs both a name and a label`)
+        // An institution that caps nothing must carry no caps, or the form hides
+        // a field that is holding a real value and saves it invisibly.
+        if (inst.hasCap === false && p.unit_cap != null) {
+          throw new Error(`${p.id}: has a unit_cap, but ${inst.id} caps nothing`)
+        }
 
         // Declared rates are the part that feeds the estimator, so they get the
         // strictest checks. The year test is the one that matters most: it
