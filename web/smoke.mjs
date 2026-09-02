@@ -327,6 +327,30 @@ try {
         if (rateIsStale(p)) behind.push(`${p.id} (newest ${latestRate(p).year}, ${complete} has closed)`)
       }
     }
+    // The EPF shares exist twice: here in the catalogue for display, and in
+    // EPF_SPLIT server-side where a contribution is actually divided. Two copies
+    // of one fact drift, and the failure is silent — a payslip would be split by
+    // one set of numbers and explained by the other. Read the server's constant
+    // as text rather than importing it, since that module opens a database.
+    {
+      const { readFileSync } = await import('node:fs')
+      const src = readFileSync(new URL('../src/services/income.service.js', import.meta.url), 'utf8')
+      const server = {}
+      for (const m of src.matchAll(/productId: '(\w+)', share: ([\d.]+)/g)) server[m[1]] = Number(m[2])
+      let sum = 0
+      for (const p of INSTITUTIONS.find(i => i.id === 'EPF').products) {
+        if (typeof p.share !== 'number') throw new Error(`${p.id}: EPF account has no share`)
+        sum += p.share
+        if (server[p.id] !== p.share) {
+          throw new Error(
+            `${p.id}: catalogue says ${p.share}, income.service.js EPF_SPLIT says ${server[p.id]}`,
+          )
+        }
+      }
+      if (Math.abs(sum - 1) > 1e-9) throw new Error(`EPF shares sum to ${sum}, not 1`)
+      console.log('  epf split   catalogue and income.service.js agree, shares sum to 1')
+    }
+
     console.log(`  catalogue   ${INSTITUTIONS.length} institutions, ${n} accounts, all match the DB constraints`)
     console.log(`  rates       ${rated}/${n} accounts carry a declared-rate history`)
     console.log(`  estimates   ${estimated}/${n} accounts are mid-year, carrying last year forward`)

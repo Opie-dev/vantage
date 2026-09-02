@@ -1483,10 +1483,15 @@ function IncomeDialog() {
           <div className="border-hairline col-span-2 grid gap-2 rounded-md border border-dashed p-3">
             <span className="eyebrow">EPF accounts</span>
             <p className="text-faint text-[11.5px] leading-relaxed">
-              Employment means EPF, and since 2024 a contribution is split three ways —{' '}
-              <span className="num">75%</span> to Akaun Persaraan, <span className="num">15%</span>{' '}
-              to Sejahtera, <span className="num">10%</span> to Fleksibel. Set them up and each
-              payslip you record books its own share into all three.
+              Employment means EPF, and since 2024 a contribution is split three ways:{' '}
+              {epfAccounts().map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 ? ', ' : ''}
+                  <span className="num">{Math.round(p.share * 100)}%</span> to{' '}
+                  {p.name.replace('EPF ', '')}
+                </span>
+              ))}
+              . Set them up and each payslip you record books its own share into all three.
             </p>
             <div>
               <Button size="sm" variant="outline" onClick={createEpfAccounts}>
@@ -1497,15 +1502,35 @@ function IncomeDialog() {
           </div>
         ) : null}
 
-        {f.kind === 'EMPLOYMENT' && savings.length ? (
+        {/* Once all three exist there is nothing to choose: a contribution is
+            split across every one of them, so a select naming a single account
+            would describe something the app does not do. It becomes a statement
+            of where the money goes. epf_asset_id is still set behind this, as
+            the fallback if one of the three is ever removed. */}
+        {f.kind === 'EMPLOYMENT' && !epfMissing.length ? (
+          <div className="col-span-2 grid gap-1.5">
+            <span className="eyebrow">EPF lands in</span>
+            <div className="grid gap-1">
+              {epfAccounts().map(p => (
+                <div key={p.id} className="flex items-baseline gap-2 text-[12.5px]">
+                  <span className="num text-primary w-[38px] font-semibold">
+                    {Math.round(p.share * 100)}%
+                  </span>
+                  <span>{p.name.replace('EPF ', '')}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-faint text-[11px]">
+              Both halves — yours and your employer's — are booked across all three each time you
+              record a payslip. EPF allocates every contribution this way, so there is nothing to
+              pick.
+            </p>
+          </div>
+        ) : f.kind === 'EMPLOYMENT' && savings.length ? (
           <Field
             label="EPF lands in"
             htmlFor="in-epf"
-            hint={
-              persaraan
-                ? 'Split 75/15/10 across your three EPF accounts, whichever is named here.'
-                : "Both halves — yours and your employer's — get booked there automatically."
-            }
+            hint="Both halves — yours and your employer's — get booked there. Set up all three EPF accounts above and it is split 75/15/10 across them instead."
           >
             <Select value={f.epf_asset_id} onValueChange={v => set('epf_asset_id', v)}>
               <SelectTrigger id="in-epf" className="w-full">
