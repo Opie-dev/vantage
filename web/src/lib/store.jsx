@@ -11,7 +11,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from 'sonner'
 import * as api from './api'
 import { EMPTY_STATE, incomeOutlook } from './calc'
-import { epfAccounts, latestRate, withRates } from './institutions'
 
 export const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -57,7 +56,6 @@ const VantageContext = createContext(null)
  *   openIncomeEvent: (prefill?: object) => void,
  *   addIncomeSource: (body: object) => Promise<boolean>,
  *   deleteIncomeSource: (id: number) => Promise<boolean>,
- *   createEpfAccounts: () => Promise<boolean>,
  *   addIncomeEvent: (sourceId: number, body: object) => Promise<boolean>,
  *   addCommitment: (body: object) => Promise<boolean>,
  *   updateCommitment: (id: number, body: object) => Promise<boolean>,
@@ -364,35 +362,6 @@ export function VantageProvider({ children }) {
       addCommitment: body => mutate(() => api.addCommitment(body), `${body.name} added`),
       addIncomeSource: body => mutate(() => api.addIncomeSource(body), `${body.name} added`),
       deleteIncomeSource: id => mutate(() => api.deleteIncomeSource(id), 'Income source removed'),
-
-      /**
-       * Create the three EPF accounts, skipping any already there.
-       *
-       * One mutate rather than three, so this reloads once and says one thing.
-       * Each carries its catalogue product_id, which is what lets the server
-       * split a payroll contribution across them afterwards — created without
-       * it they would look like three unrelated savings accounts.
-       */
-      createEpfAccounts: () =>
-        mutate(async () => {
-          const have = new Set(latest.current.assets.map(a => a.product_id).filter(Boolean))
-          for (const p of epfAccounts()) {
-            if (have.has(p.id)) continue
-            const r = latestRate(withRates(p, latest.current.declaredRates))
-            await api.addAsset({
-              name: p.name,
-              slug: p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''),
-              institution: 'EPF',
-              rate_basis: p.rate_basis,
-              rate_quote: p.rate_quote,
-              unit_label: '',
-              last_rate: r ? r.rate : null,
-              unit_cap: null,
-              fiscal_year: p.fiscal_year,
-              product_id: p.id,
-            })
-          }
-        }, 'EPF accounts added'),
       addIncomeEvent: (sourceId, body) => mutate(() => api.addIncomeEvent(sourceId, body), 'Payment recorded'),
       deleteIncomeEvent: (sourceId, eventId) =>
         mutate(() => api.deleteIncomeEvent(sourceId, eventId), 'Payment removed'),

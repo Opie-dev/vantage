@@ -66,18 +66,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
-import { GOAL_KIND, GOAL_NEEDS_INSTRUMENT, epfFromGross, goalIncomeIsNet } from '@/lib/calc'
+import { GOAL_KIND, GOAL_NEEDS_INSTRUMENT, goalIncomeIsNet } from '@/lib/calc'
 import {
   FISCAL_YEARS,
   INSTITUTIONS,
   OTHER,
   SHARIAH,
   estimatedRate,
-  epfAccounts,
   institutionOf,
   latestRate,
   productOf,
@@ -709,8 +707,9 @@ function AssetDialog() {
       last_bonus: f.last_bonus === '' ? null : Number(f.last_bonus),
       unit_cap: f.unit_cap === '' ? null : Number(f.unit_cap),
       fiscal_year: f.fiscal_year,
-      // Which catalogue entry this is, so code that needs to know WHAT an account
-      // is — the payroll EPF split, above all — does not have to read its name.
+      // Which catalogue entry this is. Nothing reads it today — the EPF split
+      // that needed it was reverted — but the column is applied and an account
+      // that records what it IS costs nothing and is not recoverable later.
       product_id: f.product_id || null,
     })
     setBusy(false)
@@ -1352,8 +1351,21 @@ function CommitmentDialog() {
  * average and is drawn faded everywhere. Storing a pay day for an irregular
  * source would invent a certainty it does not have, and the API refuses it.
  */
+/*
+ * An income source records what arrives. It does NOT touch the savings side.
+ *
+ * There was a field here linking an employment source to an EPF account, and
+ * a payslip recorded against it booked the contribution as a deposit. That is
+ * gone by choice: a contribution entered as an EPF entry on the Assets screen
+ * is one the owner has actually seen on a statement, where one generated from
+ * a payslip is a figure the app inferred and then had to be trusted about.
+ *
+ * The payslip's own EPF columns stay — they are part of what the payslip says
+ * and are what net pay is computed from. They simply no longer write anywhere
+ * else.
+ */
 function IncomeDialog() {
-  const { state, closeModal, addIncomeSource, createEpfAccounts } = useVantage()
+  const { closeModal, addIncomeSource } = useVantage()
   const [f, setF] = useState({
     kind: 'EMPLOYMENT',
     name: '',
@@ -1361,33 +1373,10 @@ function IncomeDialog() {
     cadence: 'MONTHLY',
     pay_day: '25',
     gross_default: '',
-    epf_asset_id: '',
   })
   const [busy, setBusy] = useState(false)
-  // Whether this job contributes to EPF. Kept apart from epf_asset_id because
-  // the two answer different questions: this one is "does EPF apply", which the
-  // owner decides, and that one is "to which account", which by now the app
-  // works out. Employment means EPF for almost everyone, so it starts on.
-  const [applyEpf, setApplyEpf] = useState(true)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const monthly = f.cadence === 'MONTHLY'
-  const savings = state.assets.filter(a => !a.archived)
-
-  // EPF is one membership split across three accounts, so the question is not
-  // "which account?" but "are they set up?". Anything missing is offered rather
-  // than created behind the reader's back — an account appearing on the Assets
-  // screen that nobody asked for is exactly what was wrong before.
-  const held = new Set(savings.map(a => a.product_id).filter(Boolean))
-  const epfMissing = epfAccounts().filter(p => !held.has(p.id))
-  const persaraan = savings.find(a => a.product_id === 'EPF_PERSARAAN')
-
-  // Once they exist there is one right answer, so it is filled in rather than
-  // asked. The split reaches all three regardless of which is named here.
-  useEffect(() => {
-    if (f.kind === 'EMPLOYMENT' && applyEpf && !f.epf_asset_id && persaraan) {
-      set('epf_asset_id', String(persaraan.id))
-    }
-  }, [f.kind, f.epf_asset_id, persaraan, applyEpf])
 
   const save = async () => {
     if (!f.name.trim()) return
@@ -1399,12 +1388,6 @@ function IncomeDialog() {
       cadence: f.cadence,
       pay_day: monthly ? Number(f.pay_day) : null,
       gross_default: f.gross_default === '' ? null : Number(f.gross_default),
-      // Switched off, or not an employment source, means no EPF is booked at
-      // all — the column is the flag the server reads.
-      epf_asset_id:
-        f.kind === 'EMPLOYMENT' && applyEpf && f.epf_asset_id !== ''
-          ? Number(f.epf_asset_id)
-          : null,
     })
     setBusy(false)
     if (ok) closeModal()
@@ -1490,61 +1473,6 @@ function IncomeDialog() {
           <Input id="in-payer" value={f.payer} onChange={e => set('payer', e.target.value)} />
         </Field>
 
-        {f.kind === 'EMPLOYMENT' ? (
-          <div className="border-hairline col-span-2 grid gap-2.5 rounded-md border p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <span className="eyebrow">Apply EPF</span>
-                <p className="text-faint mt-0.5 text-[11.5px] leading-relaxed">
-                  Every payslip you record books its contribution into your EPF accounts. Rates live
-                  in Settings.
-                </p>
-              </div>
-              <Switch
-                checked={applyEpf}
-                onCheckedChange={setApplyEpf}
-                aria-label="Apply EPF to this job"
-              />
-            </div>
-
-            {applyEpf && epfMissing.length ? (
-              <div className="border-hairline grid gap-2 border-t pt-2.5">
-                <p className="text-faint text-[11.5px] leading-relaxed">
-                  Since 2024 a contribution is split three ways:{' '}
-                  {epfAccounts().map((p, i) => (
-                    <span key={p.id}>
-                      {i > 0 ? ', ' : ''}
-                      <span className="num">{Math.round(p.share * 100)}%</span> to{' '}
-                      {p.name.replace('EPF ', '')}
-                    </span>
-                  ))}
-                  . Set them up and each payslip books its own share into all three.
-                </p>
-                <div>
-                  <Button size="sm" variant="outline" onClick={createEpfAccounts}>
-                    <PlusIcon />
-                    Create{' '}
-                    {epfMissing.length === 3 ? 'my EPF accounts' : `the missing ${epfMissing.length}`}
-                  </Button>
-                </div>
-              </div>
-            ) : applyEpf ? (
-              <div className="border-hairline grid gap-1 border-t pt-2.5">
-                {epfAccounts().map(p => (
-                  <div key={p.id} className="flex items-baseline gap-2 text-[12.5px]">
-                    <span className="num text-primary w-[38px] font-semibold">
-                      {Math.round(p.share * 100)}%
-                    </span>
-                    <span>{p.name.replace('EPF ', '')}</span>
-                  </div>
-                ))}
-                <p className="text-faint mt-0.5 text-[11px]">
-                  Both halves — yours and your employer's — split across all three.
-                </p>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={closeModal}>
@@ -1593,33 +1521,6 @@ function IncomeEventDialog({ prefill }) {
 
   const source = state.incomeSources.find(s => String(s.id) === f.source_id)
   const employment = source && source.kind === 'EMPLOYMENT'
-  // EPF applies to this job when it was linked to an account — the same flag the
-  // server reads to decide whether to book anything.
-  const epfApplies = Boolean(employment && source.epf_asset_id != null)
-
-  // Suggest EPF from gross, and stop as soon as the figures are edited.
-  //
-  // The suggestion is remembered rather than compared against a percentage, so a
-  // typed figure that happens to equal 11% is still treated as typed. That
-  // matters because the payslip is the authority: below RM20,000 EPF comes from
-  // the Third Schedule's bands, not a percentage, so the real number is usually
-  // a few ringgit off and must survive the next keystroke in the gross field.
-  const [epfHint, setEpfHint] = useState(null)
-  useEffect(() => {
-    if (!epfApplies) return
-    const owned = k => f[k] !== '' && f[k] !== (epfHint ? epfHint[k] : null)
-    if (owned('epf_employee') || owned('epf_employer')) return
-    const g = Number(f.gross)
-    if (!Number.isFinite(g) || g <= 0) return
-    const sug = epfFromGross(g, state.preferences)
-    const next = { epf_employee: sug.employee.toFixed(2), epf_employer: sug.employer.toFixed(2) }
-    if (epfHint && next.epf_employee === epfHint.epf_employee && next.epf_employer === epfHint.epf_employer) {
-      return
-    }
-    setEpfHint(next)
-    setF(p => ({ ...p, ...next }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.gross, epfApplies])
   const deducted =
     n(f.epf_employee) + n(f.socso_employee) + n(f.eis_employee) + n(f.skbbk) + n(f.pcb) + n(f.zakat) + n(f.other_deducted)
   const onTop = n(f.epf_employer) + n(f.socso_employer) + n(f.eis_employer)
@@ -1701,13 +1602,6 @@ function IncomeEventDialog({ prefill }) {
         <>
           <div>
             <p className="eyebrow">Deducted from your pay</p>
-            {epfApplies ? (
-              <p className="text-faint mt-1 text-[11px] leading-relaxed">
-                EPF is suggested from gross at your Settings rates. Below RM 20,000 a month the real
-                figure comes from the Third Schedule's wage bands, not a percentage, so expect a few
-                ringgit of difference — type what the payslip says and the suggestion stops.
-              </p>
-            ) : null}
             <div className="mt-2 grid grid-cols-3 gap-3">
               {money('EPF', 'epf_employee')}
               {money('SOCSO', 'socso_employee')}
@@ -1721,8 +1615,8 @@ function IncomeEventDialog({ prefill }) {
           <div>
             <p className="eyebrow">Paid on top by your employer</p>
             <p className="text-faint mt-1 text-[11px]">
-              Never subtracted from net. EPF from both groups is booked into your EPF accounts in
-              the same write, split 75/15/10.
+              Never subtracted from net. EPF from both groups is booked into your EPF account in the
+              same write.
             </p>
             <div className="mt-2 grid grid-cols-3 gap-3">
               {money('EPF', 'epf_employer')}
