@@ -237,6 +237,43 @@ try {
   const { default: App } = await server.ssrLoadModule('/src/App.jsx')
   const { VantageProvider } = await server.ssrLoadModule('/src/lib/store.jsx')
 
+  // The institution catalogue is data the form writes straight into the assets
+  // table, so it has to satisfy the same CHECK constraints the database does.
+  // A typo like '08-30' or 'MIN_MONTLY' would otherwise pass every render and
+  // only fail at save, on the one account nobody adds twice.
+  {
+    const { FISCAL_YEARS, INSTITUTIONS, OTHER } = await server.ssrLoadModule('/src/lib/institutions.js')
+    const years = new Set(FISCAL_YEARS.map(y => y.value))
+    const seen = new Set()
+    let n = 0
+    for (const inst of INSTITUTIONS) {
+      if (inst.id === OTHER) throw new Error(`institution "${inst.id}" collides with the OTHER sentinel`)
+      if (!inst.products.length) throw new Error(`institution "${inst.id}" has no products`)
+      for (const p of inst.products) {
+        n++
+        if (seen.has(p.id)) throw new Error(`duplicate product id "${p.id}"`)
+        seen.add(p.id)
+        if (!/^[0-9]{2}-[0-9]{2}$/.test(p.fiscal_year)) {
+          throw new Error(`${p.id}: fiscal_year "${p.fiscal_year}" fails the assets_fiscal_year_check pattern`)
+        }
+        if (!years.has(p.fiscal_year)) {
+          throw new Error(`${p.id}: fiscal_year "${p.fiscal_year}" is not offered by FISCAL_YEARS, so the form cannot show it`)
+        }
+        if (!['MIN_MONTHLY', 'MADB'].includes(p.rate_basis)) {
+          throw new Error(`${p.id}: rate_basis "${p.rate_basis}" fails assets_rate_basis_check`)
+        }
+        if (!['PERCENT', 'SEN_PER_UNIT'].includes(p.rate_quote)) {
+          throw new Error(`${p.id}: rate_quote "${p.rate_quote}" fails assets_rate_quote_check`)
+        }
+        if (p.unit_cap != null && !(p.unit_cap > 0)) {
+          throw new Error(`${p.id}: unit_cap must be a positive number or null`)
+        }
+        if (!p.name || !p.label) throw new Error(`${p.id}: needs both a name and a label`)
+      }
+    }
+    console.log(`  catalogue   ${INSTITUTIONS.length} institutions, ${n} accounts, all match the DB constraints`)
+  }
+
   const root = createRoot(document.getElementById('root'))
   await act(async () => {
     root.render(
