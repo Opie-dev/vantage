@@ -53,7 +53,15 @@ function checkDueDay(v) {
  */
 function checkShape(kind, f) {
   if (kind === 'LOAN') {
-    if (!positive(f.principal)) throw badRequest('principal must be a positive number — the amount financed, not the purchase price');
+    // Either will do, because each gives the other. A hire-purchase statement
+    // shows the instalment and never the amount financed, so demanding the
+    // principal made people work it backwards by hand — or invent it.
+    if (f.principal == null && f.instalment == null) {
+      throw badRequest(
+        'give either principal (the amount financed) or instalment — each can be worked out from ' +
+        'the other, but not from nothing');
+    }
+    if (f.principal != null && !positive(f.principal)) throw badRequest('principal must be a positive number — the amount financed, not the purchase price');
     if (!nonNegative(f.rate)) throw badRequest('rate must be a number of zero or more');
     if (!RATE_TYPES.includes(f.rate_type)) {
       throw badRequest(
