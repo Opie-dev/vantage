@@ -440,7 +440,6 @@ function RatesCard() {
     setDraft({ year: '', rate: '', bonus: '', shariah: '' })
   }
 
-  const hasShariah = rows.some(r => r.shariah != null)
   const num = v => (v === '' ? null : Number(v))
   const ready = draft.year !== '' && draft.rate !== '' && Number(draft.rate) >= 0
 
@@ -588,7 +587,7 @@ function RatesCard() {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="rc-rate" className="text-faint text-[11px]">
-                Rate ({unit})
+                Conventional ({unit})
               </Label>
               <Input
                 id="rc-rate"
@@ -614,22 +613,20 @@ function RatesCard() {
                 onChange={e => setD('bonus', e.target.value)}
               />
             </div>
-            {hasShariah ? (
-              <div className="grid gap-1.5">
-                <Label htmlFor="rc-shariah" className="text-faint text-[11px]">
-                  Shariah
-                </Label>
-                <Input
-                  id="rc-shariah"
-                  className="num h-8 w-[86px]"
-                  type="number"
-                  step="0.01"
-                  placeholder="optional"
-                  value={draft.shariah}
-                  onChange={e => setD('shariah', e.target.value)}
-                />
-              </div>
-            ) : null}
+            <div className="grid gap-1.5">
+              <Label htmlFor="rc-shariah" className="text-faint text-[11px]">
+                Shariah ({unit})
+              </Label>
+              <Input
+                id="rc-shariah"
+                className="num h-8 w-[86px]"
+                type="number"
+                step="0.01"
+                placeholder={inst.shariah === 'ELECTION' ? '6.15' : 'none'}
+                value={draft.shariah}
+                onChange={e => setD('shariah', e.target.value)}
+              />
+            </div>
             <Button size="sm" onClick={save} disabled={!ready || busy}>
               Save
             </Button>
@@ -637,6 +634,11 @@ function RatesCard() {
           <p className="text-faint text-[11px]">
             The year the money was earned, not the year it was announced &mdash; ASB 2&rsquo;s 2026
             is the year to 31 March 2026. Saving a year already listed corrects it.
+          </p>
+          <p className="text-faint text-[11px]">
+            {inst.shariah === 'ELECTION'
+              ? 'EPF announces both series in one release, so both belong on the same year. Whichever you elected is the one an EPF account will use.'
+              : `${inst.label} declares a single rate, so Shariah is normally left blank here — fill it only if that changes and two figures are published.`}
           </p>
         </div>
       </CardContent>
