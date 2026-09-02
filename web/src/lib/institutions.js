@@ -219,6 +219,10 @@ export const INSTITUTIONS = [
         id: 'EPF_PERSARAAN',
         name: 'EPF Akaun Persaraan',
         label: 'Akaun Persaraan — was Account 1 · 75%',
+        // Share of every contribution. EPF_SPLIT in income.service.js divides by
+        // the same three numbers server-side and the two must agree — the same
+        // mirroring the services already do for the database CHECK constraints.
+        share: 0.75,
         rate_basis: 'MADB',
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
@@ -229,6 +233,7 @@ export const INSTITUTIONS = [
         id: 'EPF_SEJAHTERA',
         name: 'EPF Akaun Sejahtera',
         label: 'Akaun Sejahtera — was Account 2 · 15%',
+        share: 0.15,
         rate_basis: 'MADB',
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
@@ -239,6 +244,7 @@ export const INSTITUTIONS = [
         id: 'EPF_FLEKSIBEL',
         name: 'EPF Akaun Fleksibel',
         label: 'Akaun Fleksibel — Account 3 · 10%',
+        share: 0.10,
         rate_basis: 'MADB',
         rate_quote: 'PERCENT',
         fiscal_year: '12-31',
