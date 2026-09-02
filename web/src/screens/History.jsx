@@ -15,7 +15,8 @@
  * screen sums MYR and USD together, so nothing here needs toRM().
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronLeftIcon, ChevronRightIcon, Columns3Icon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,12 +43,54 @@ import {
   slotOf,
 } from '@/lib/calc'
 import { dfmt, dfmtLong, fmt, fmtS, fq, monthLabel, toneClass } from '@/lib/format'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useVantage } from '@/lib/store'
 
 // Radix Select has no concept of "no selection", so the neutral options carry
 // sentinel values rather than '' (which it treats as a placeholder).
 const ALL = '__all__'
 const CASH_ONLY = '__cash__'
+
+/**
+ * The table's columns, and which of them can be hidden.
+ *
+ * Date and What stay: a row with neither is not a shorter row, it is an
+ * anonymous one. Everything else is only meaningful to some of the feed — Qty
+ * and Price are empty on every savings, salary and loan row — so hiding them is
+ * how a reader who does not hold shares gets a table about their own money.
+ */
+const COLUMNS = [
+  { key: 'date', label: 'Date', fixed: true },
+  { key: 'type', label: 'Type' },
+  { key: 'what', label: 'What', fixed: true, grow: true },
+  { key: 'qty', label: 'Qty', right: true },
+  { key: 'price', label: 'Price', right: true },
+  { key: 'amount', label: 'Amount', right: true },
+  { key: 'source', label: 'Source', right: true },
+]
+
+/**
+ * The type chips, in two groups.
+ *
+ * They were one undifferentiated row of nine, which read as nine alternatives
+ * when they are really two questions: WHERE a row came from, and WHAT it was.
+ * The distinction is not cosmetic — a row is in exactly one domain, and its kind
+ * is a separate fact — so the labels say which question each answers.
+ */
+const FILTER_GROUPS = [
+  { label: 'Where from', keys: ['MOOMOO', 'SAVINGS', 'INCOME', 'OWED'] },
+  { label: 'What happened', keys: ['BUY', 'SELL', 'DIV', 'CASH'] },
+]
+
+const PAGE_SIZES = [25, 50, 100, 0]
+const pageSizeLabel = n => (n === 0 ? 'All' : String(n))
 
 const THIS_YEAR = new Date().getFullYear()
 
@@ -175,7 +218,25 @@ function SourceTag({ source }) {
 // withholding tax is both a cash movement and attributable to a holding.
 const CASH_KINDS = new Set(['DEPOSIT', 'WITHDRAW', 'FEE'])
 
-function HistoryRow({ row, state }) {
+/** One type filter, with how many rows it would leave. */
+function Chip({ f, filter, counts, onPick }) {
+  const on = f === filter
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={on ? 'default' : 'outline'}
+      aria-pressed={on}
+      onClick={() => onPick(f)}
+      className="h-7 gap-1.5 rounded-full px-3 text-[12px] font-semibold"
+    >
+      {HISTORY_FILTER_LABELS[f]}
+      <span className={`num text-[11px] ${on ? 'opacity-70' : 'text-faint'}`}>{counts[f]}</span>
+    </Button>
+  )
+}
+
+function HistoryRow({ row, state, show }) {
   const isCash = CASH_KINDS.has(row.kind)
   const signed = row.direction * row.amount
 
@@ -185,6 +246,7 @@ function HistoryRow({ row, state }) {
         <DateCell date={row.date} />
       </TableCell>
 
+      {show.type ? (
       <TableCell className={TD}>
         <Badge
           variant={KIND_VARIANT[row.kind] || 'neutral'}
@@ -193,6 +255,7 @@ function HistoryRow({ row, state }) {
           {row.kind}
         </Badge>
       </TableCell>
+      ) : null}
 
       <TableCell className={TD}>
         {row.domain !== HISTORY_DOMAIN.MOOMOO ? (
@@ -223,22 +286,30 @@ function HistoryRow({ row, state }) {
         )}
       </TableCell>
 
-      <TableCell className={`${TD} num text-right`}>{row.qty ? fq(row.qty) : <Dash />}</TableCell>
+      {show.qty ? (
+        <TableCell className={`${TD} num text-right`}>{row.qty ? fq(row.qty) : <Dash />}</TableCell>
+      ) : null}
 
-      <TableCell className={`${TD} num text-right`}>
-        {row.price ? fmt(row.price, row.currency) : <Dash />}
-      </TableCell>
+      {show.price ? (
+        <TableCell className={`${TD} num text-right`}>
+          {row.price ? fmt(row.price, row.currency) : <Dash />}
+        </TableCell>
+      ) : null}
 
-      <TableCell className={`${TD} num text-right ${toneClass(signed)}`}>
-        {fmtS(signed, row.currency)}
-      </TableCell>
+      {show.amount ? (
+        <TableCell className={`${TD} num text-right ${toneClass(signed)}`}>
+          {fmtS(signed, row.currency)}
+        </TableCell>
+      ) : null}
 
-      <TableCell className={`${TD} text-right`}>
-        <span className="inline-flex items-center justify-end gap-1.5">
-          <DomainTag domain={row.domain} />
-          <SourceTag source={row.source} />
-        </span>
-      </TableCell>
+      {show.source ? (
+        <TableCell className={`${TD} text-right`}>
+          <span className="inline-flex items-center justify-end gap-1.5">
+            <DomainTag domain={row.domain} />
+            <SourceTag source={row.source} />
+          </span>
+        </TableCell>
+      ) : null}
     </TableRow>
   )
 }
@@ -248,6 +319,15 @@ export default function History() {
   const [filter, setFilter] = useState('ALL')
   const [ticker, setTicker] = useState(ALL)
   const [month, setMonth] = useState(ALL)
+  const [hidden, setHidden] = useState(() => new Set())
+  const [pageSize, setPageSize] = useState(50)
+  const [page, setPage] = useState(0)
+
+  const show = useMemo(
+    () => Object.fromEntries(COLUMNS.map(c => [c.key, c.fixed || !hidden.has(c.key)])),
+    [hidden],
+  )
+  const shownColumns = COLUMNS.filter(c => show[c.key])
 
   // Declared-but-unbooked payments sit at the top, marked. Without them History
   // reads as stale on the exact day the owner most wants to look at it — see
@@ -295,6 +375,22 @@ export default function History() {
   const hasFees = useMemo(() => rows.some(r => r.kind === 'FEE'), [rows])
   const narrowed = filter !== 'ALL' || ticker !== ALL || month !== ALL
 
+  const pageCount = pageSize === 0 ? 1 : Math.max(1, Math.ceil(shown.length / pageSize))
+  // Narrowing the feed can leave the current page past the end of it. Clamping
+  // during render would fight the click that caused it, so it is corrected after.
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(0)
+  }, [page, pageCount])
+  const safePage = Math.min(page, pageCount - 1)
+  const from = pageSize === 0 ? 0 : safePage * pageSize
+  const paged = useMemo(
+    () => (pageSize === 0 ? shown : shown.slice(from, from + pageSize)),
+    [shown, from, pageSize],
+  )
+
+  // A filter change should show its first result, not page seven of it.
+  useEffect(() => setPage(0), [filter, ticker, month, pageSize])
+
   const newest = shown.length ? shown[0].date : null
   const oldest = shown.length ? shown[shown.length - 1].date : null
 
@@ -339,25 +435,22 @@ export default function History() {
 
         <span className="bg-border mx-0.5 h-5 w-px" aria-hidden="true" />
 
-        {HISTORY_FILTERS.map(f => {
-          const on = f === filter
-          return (
-            <Button
-              key={f}
-              type="button"
-              size="sm"
-              variant={on ? 'default' : 'outline'}
-              aria-pressed={on}
-              onClick={() => setFilter(f)}
-              className="h-7 gap-1.5 rounded-full px-3 text-[12px] font-semibold"
-            >
-              {HISTORY_FILTER_LABELS[f]}
-              <span className={`num text-[11px] ${on ? 'opacity-70' : 'text-faint'}`}>
-                {counts[f]}
-              </span>
-            </Button>
-          )
-        })}
+        <Chip f="ALL" filter={filter} counts={counts} onPick={setFilter} />
+
+        {/* Two questions, not nine alternatives: where a row came from, and what
+            it was. They were one flat row, which made a domain look like a
+            sibling of a transaction kind. */}
+        {FILTER_GROUPS.map(g => (
+          <div key={g.label} className="flex items-center gap-1.5">
+            <span className="bg-border mx-0.5 h-5 w-px" aria-hidden="true" />
+            <span className="text-faint text-[10px] tracking-[0.08em] uppercase">{g.label}</span>
+            {g.keys
+              .filter(k => HISTORY_FILTERS.includes(k))
+              .map(k => (
+                <Chip key={k} f={k} filter={filter} counts={counts} onPick={setFilter} />
+              ))}
+          </div>
+        ))}
         {narrowed ? (
           <Button
             type="button"
@@ -374,9 +467,42 @@ export default function History() {
           </Button>
         ) : null}
         <div className="flex-1" />
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="h-7 gap-1.5 px-2.5 text-[12px]">
+              <Columns3Icon />
+              Columns
+              {hidden.size ? <span className="num text-faint">{shownColumns.length}</span> : null}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[190px]">
+            <DropdownMenuLabel className="text-[11px]">Show columns</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {COLUMNS.map(c => (
+              <DropdownMenuCheckboxItem
+                key={c.key}
+                checked={show[c.key]}
+                disabled={c.fixed}
+                onSelect={e => e.preventDefault()}
+                onCheckedChange={on =>
+                  setHidden(prev => {
+                    const next = new Set(prev)
+                    if (on) next.delete(c.key)
+                    else next.add(c.key)
+                    return next
+                  })
+                }
+              >
+                {c.label}
+                {c.fixed ? <span className="text-faint ml-auto text-[10.5px]">always</span> : null}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {shown.length ? (
           <span className="text-faint text-[11.5px]">
-            <span className="num">{shown.length}</span> row{shown.length === 1 ? '' : 's'} ·{' '}
             <span className="num">{dfmtLong(oldest)}</span>
             {oldest === newest ? null : (
               <>
@@ -390,36 +516,24 @@ export default function History() {
 
       <Card className="gap-0 overflow-hidden py-0">
         {shown.length ? (
-          <div className="max-h-[calc(100svh-16rem)] overflow-auto overscroll-contain">
+          <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
                 <tr>
-                  <th scope="col" className={TH}>
-                    Date
-                  </th>
-                  <th scope="col" className={TH}>
-                    Type
-                  </th>
-                  <th scope="col" className={`${TH} w-full`}>
-                    What
-                  </th>
-                  <th scope="col" className={`${TH} text-right`}>
-                    Qty
-                  </th>
-                  <th scope="col" className={`${TH} text-right`}>
-                    Price
-                  </th>
-                  <th scope="col" className={`${TH} text-right`}>
-                    Amount
-                  </th>
-                  <th scope="col" className={`${TH} text-right`}>
-                    Source
-                  </th>
+                  {shownColumns.map(c => (
+                    <th
+                      key={c.key}
+                      scope="col"
+                      className={`${TH}${c.grow ? ' w-full' : ''}${c.right ? ' text-right' : ''}`}
+                    >
+                      {c.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <TableBody>
-                {shown.map(row => (
-                  <HistoryRow key={row.key} row={row} state={state} />
+                {paged.map(row => (
+                  <HistoryRow key={row.key} row={row} state={state} show={show} />
                 ))}
               </TableBody>
             </table>
@@ -455,6 +569,63 @@ export default function History() {
           </div>
         )}
       </Card>
+
+      {shown.length ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span className="text-muted-foreground text-[12px]">
+            Showing <span className="num">{from + 1}</span>–
+            <span className="num">{from + paged.length}</span> of{' '}
+            <span className="num">{shown.length}</span> row{shown.length === 1 ? '' : 's'}
+          </span>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-faint text-[11.5px]">Per page</span>
+            {PAGE_SIZES.map(n => (
+              <Button
+                key={n}
+                type="button"
+                size="sm"
+                variant={pageSize === n ? 'default' : 'outline'}
+                aria-pressed={pageSize === n}
+                onClick={() => setPageSize(n)}
+                className="num h-7 rounded-full px-2.5 text-[12px]"
+              >
+                {pageSizeLabel(n)}
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex-1" />
+
+          {pageCount > 1 ? (
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                aria-label="Previous page"
+                disabled={safePage === 0}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <span className="text-muted-foreground num text-[12px]">
+                {safePage + 1} / {pageCount}
+              </span>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="outline"
+                aria-label="Next page"
+                disabled={safePage >= pageCount - 1}
+                onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+              >
+                <ChevronRightIcon />
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {shown.length ? (
         <p className="text-faint text-[11.5px] leading-relaxed">
