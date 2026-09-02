@@ -242,12 +242,20 @@ try {
   // A typo like '08-30' or 'MIN_MONTLY' would otherwise pass every render and
   // only fail at save, on the one account nobody adds twice.
   {
-    const { FISCAL_YEARS, INSTITUTIONS, OTHER, lastCompleteYear, latestRate, rateIsStale } =
-      await server.ssrLoadModule('/src/lib/institutions.js')
+    const {
+      FISCAL_YEARS,
+      INSTITUTIONS,
+      OTHER,
+      estimatedRate,
+      lastCompleteYear,
+      latestRate,
+      rateIsStale,
+    } = await server.ssrLoadModule('/src/lib/institutions.js')
     const years = new Set(FISCAL_YEARS.map(y => y.value))
     const seen = new Set()
     let n = 0
     let rated = 0
+    let estimated = 0
     const behind = []
     for (const inst of INSTITUTIONS) {
       if (inst.id === OTHER) throw new Error(`institution "${inst.id}" collides with the OTHER sentinel`)
@@ -296,12 +304,27 @@ try {
             )
           }
         }
+        // The estimate is synthetic, so it gets its own guard: it must sit on a
+        // year that has NOT been declared, or it would present a made-up number
+        // over a real announcement.
+        const est = estimatedRate(p)
+        if (est) {
+          if ((p.rates || []).some(r => r.year === est.year)) {
+            throw new Error(`${p.id}: estimated ${est.year} collides with a declared year`)
+          }
+          if (est.year !== complete + 1) {
+            throw new Error(`${p.id}: estimate is for ${est.year}, expected ${complete + 1}`)
+          }
+          if (!est.estimated || !est.basedOn) throw new Error(`${p.id}: estimate is not marked`)
+          estimated++
+        }
         if (p.rates?.length) rated++
         if (rateIsStale(p)) behind.push(`${p.id} (newest ${latestRate(p).year}, ${complete} has closed)`)
       }
     }
     console.log(`  catalogue   ${INSTITUTIONS.length} institutions, ${n} accounts, all match the DB constraints`)
     console.log(`  rates       ${rated}/${n} accounts carry a declared-rate history`)
+    console.log(`  estimates   ${estimated}/${n} accounts are mid-year, carrying last year forward`)
     // Not a failure: a year closing is normal and the form says so in the UI.
     // Printing it is the nudge to refresh the file.
     if (behind.length) console.log(`  NOTE        rate history is behind for: ${behind.join(', ')}`)
