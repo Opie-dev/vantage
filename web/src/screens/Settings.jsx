@@ -17,11 +17,24 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckIcon, LaptopIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { CheckIcon, LaptopIcon, MoonIcon, SunIcon, TrashIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
+import { INSTITUTIONS, totalRate, withRates } from '@/lib/institutions'
 
 import { useVantage } from '@/lib/store'
 import {
@@ -389,6 +402,248 @@ function DataCard() {
  * They stack on narrow screens, and `items-start` keeps each column its own
  * height instead of stretching the shorter one's last card to match.
  */
+/**
+ * The rates each institution declared, and a way to keep them current.
+ *
+ * The app ships a catalogue of these, which is accurate the day it is written
+ * and rots on a published schedule: ASNB declares ASB every December, EPF every
+ * February, Tabung Haji in the first quarter. Before this screen the only way to
+ * record a new declaration was to change a source file and redeploy, which meant
+ * the estimator quietly projected last year's figure until someone did.
+ *
+ * So a row saved here wins over the shipped one for that fund and year. Removing
+ * it falls back to the built-in figure rather than to nothing, which is why the
+ * two are labelled differently — knowing whether a number came from the app or
+ * from you is the difference between checking it and trusting it.
+ */
+function RatesCard() {
+  const { state, saveDeclaredRate, deleteDeclaredRate } = useVantage()
+  const [instId, setInstId] = useState(INSTITUTIONS[0].id)
+  const inst = INSTITUTIONS.find(i => i.id === instId) || INSTITUTIONS[0]
+  const [prodId, setProdId] = useState(inst.products[0].id)
+
+  const product = inst.products.find(p => p.id === prodId) || inst.products[0]
+  const merged = useMemo(
+    () => withRates(product, state.declaredRates),
+    [product, state.declaredRates],
+  )
+  const rows = merged.rates || []
+
+  const [draft, setDraft] = useState({ year: '', rate: '', bonus: '', shariah: '' })
+  const [busy, setBusy] = useState(false)
+  const setD = (k, v) => setDraft(p => ({ ...p, [k]: v }))
+
+  const pickInstitution = id => {
+    const next = INSTITUTIONS.find(i => i.id === id)
+    setInstId(id)
+    setProdId(next.products[0].id)
+    setDraft({ year: '', rate: '', bonus: '', shariah: '' })
+  }
+
+  const hasShariah = rows.some(r => r.shariah != null)
+  const num = v => (v === '' ? null : Number(v))
+  const ready = draft.year !== '' && draft.rate !== '' && Number(draft.rate) >= 0
+
+  const save = async () => {
+    if (!ready || busy) return
+    setBusy(true)
+    const ok = await saveDeclaredRate({
+      institution_id: inst.id,
+      product_id: product.id,
+      year: Number(draft.year),
+      rate: Number(draft.rate),
+      bonus: num(draft.bonus),
+      shariah: num(draft.shariah),
+    })
+    setBusy(false)
+    if (ok) setDraft({ year: '', rate: '', bonus: '', shariah: '' })
+  }
+
+  const unit = product.rate_quote === 'SEN_PER_UNIT' ? 'sen' : '%'
+
+  return (
+    <Card className="gap-3">
+      <CardHeader className="px-4">
+        <span className="eyebrow">Declared rates</span>
+        <p className="text-muted-foreground mt-1 text-[12.5px]">
+          What each fund actually paid, by financial year. The app ships the figures it knew at
+          release; anything you save here replaces them, so a fresh declaration can go in without
+          waiting for an update.
+        </p>
+      </CardHeader>
+      <CardContent className="grid gap-3 px-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="rc-inst" className="eyebrow">
+              Institution
+            </Label>
+            <Select value={instId} onValueChange={pickInstitution}>
+              <SelectTrigger id="rc-inst" size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INSTITUTIONS.map(i => (
+                  <SelectItem key={i.id} value={i.id}>
+                    {i.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="rc-prod" className="eyebrow">
+              Fund
+            </Label>
+            <Select value={prodId} onValueChange={setProdId}>
+              <SelectTrigger id="rc-prod" size="sm" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {inst.products.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="border-hairline grid gap-0.5 border-t pt-2">
+          {rows.length ? (
+            rows.map(r => (
+              <div key={r.year} className="flex items-center gap-2 py-1">
+                <span className="num w-[46px] text-[12.5px] font-semibold">{r.year}</span>
+                <span className="num w-[92px] text-[12.5px]">
+                  {totalRate(r).toFixed(2)} {unit}
+                  {r.bonus ? <span className="text-faint"> incl {r.bonus.toFixed(2)}</span> : null}
+                </span>
+                {r.shariah != null ? (
+                  <span className="text-faint num w-[86px] text-[11.5px]">
+                    shariah {r.shariah.toFixed(2)}
+                  </span>
+                ) : null}
+                <span
+                  className={cn(
+                    'text-[10.5px] tracking-[0.05em] uppercase',
+                    r.mine ? 'text-primary' : 'text-faint',
+                  )}
+                >
+                  {r.mine ? 'yours' : 'built in'}
+                </span>
+                <span className="flex-1" />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 px-2 text-[11.5px]"
+                  onClick={() =>
+                    setDraft({
+                      year: String(r.year),
+                      rate: String(r.rate),
+                      bonus: r.bonus == null ? '' : String(r.bonus),
+                      shariah: r.shariah == null ? '' : String(r.shariah),
+                    })
+                  }
+                >
+                  Edit
+                </Button>
+                {r.mine ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Remove your ${r.year} rate`}
+                        onClick={() => deleteDeclaredRate(r.rowId)}
+                      >
+                        <TrashIcon />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Revert to the figure built into the app</TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="text-faint text-[12px]">Nothing on file for this fund yet.</p>
+          )}
+        </div>
+
+        <div className="border-hairline grid gap-2 border-t pt-3">
+          <span className="eyebrow">Record a year</span>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="rc-year" className="text-faint text-[11px]">
+                Financial year
+              </Label>
+              <Input
+                id="rc-year"
+                className="num h-8 w-[92px]"
+                type="number"
+                step="1"
+                placeholder="2026"
+                value={draft.year}
+                onChange={e => setD('year', e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="rc-rate" className="text-faint text-[11px]">
+                Rate ({unit})
+              </Label>
+              <Input
+                id="rc-rate"
+                className="num h-8 w-[86px]"
+                type="number"
+                step="0.01"
+                placeholder="5.20"
+                value={draft.rate}
+                onChange={e => setD('rate', e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="rc-bonus" className="text-faint text-[11px]">
+                Bonus
+              </Label>
+              <Input
+                id="rc-bonus"
+                className="num h-8 w-[86px]"
+                type="number"
+                step="0.01"
+                placeholder="optional"
+                value={draft.bonus}
+                onChange={e => setD('bonus', e.target.value)}
+              />
+            </div>
+            {hasShariah ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor="rc-shariah" className="text-faint text-[11px]">
+                  Shariah
+                </Label>
+                <Input
+                  id="rc-shariah"
+                  className="num h-8 w-[86px]"
+                  type="number"
+                  step="0.01"
+                  placeholder="optional"
+                  value={draft.shariah}
+                  onChange={e => setD('shariah', e.target.value)}
+                />
+              </div>
+            ) : null}
+            <Button size="sm" onClick={save} disabled={!ready || busy}>
+              Save
+            </Button>
+          </div>
+          <p className="text-faint text-[11px]">
+            The year the money was earned, not the year it was announced &mdash; ASB 2&rsquo;s 2026
+            is the year to 31 March 2026. Saving a year already listed corrects it.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Settings() {
   return (
     <div className="mx-auto grid max-w-[1180px] gap-3.5 lg:grid-cols-2 lg:items-start">
@@ -399,6 +654,7 @@ export default function Settings() {
       </div>
       <div className="grid gap-3.5">
         <TaxCard />
+        <RatesCard />
         <DataCard />
       </div>
     </div>

@@ -33,6 +33,8 @@
  *   POST   /api/prices/manual
  *   POST   /api/prices/refresh
  *   POST   /api/ingest/moomoo      from sync/moomoo_sync.py
+ *   POST   /api/declared-rates    record an institution's rate for one financial year
+ *   DELETE /api/declared-rates/:id  drop it, falling back to the shipped catalogue
  *   POST   /api/sync              ask the host's sync agent to pull from moomoo
  *   POST   /api/snapshot           one row, or an array from sync/backfill_equity.py
  *   GET    /api/health             container healthcheck
@@ -51,6 +53,7 @@ router.use('/goals', require('./goals.routes'));
 router.use('/assets', require('./assets.routes'));
 router.use('/commitments', require('./commitments.routes'));
 router.use('/income', require('./income.routes'));
+router.use('/declared-rates', require('./declaredRates.routes'));
 router.use('/prices', require('./prices.routes'));
 router.use('/ingest', require('./ingest.routes'));
 router.use('/sync', require('./sync.routes'));

@@ -248,6 +248,37 @@ export const INSTITUTIONS = [
   },
 ]
 
+/**
+ * A product with the user's own recorded rates layered over the shipped ones.
+ *
+ * The catalogue above is a DEFAULT, not the truth. It is accurate the day it is
+ * written and rots on a schedule — ASNB declares ASB every December — so a row
+ * the user has recorded for the same fund and year wins, and a year the
+ * catalogue has never heard of is simply added.
+ *
+ * Everything downstream (latestRate, estimatedRate, rateIsStale) takes a product
+ * and needs no knowledge of where its rates came from, which is why this returns
+ * a product rather than a list.
+ */
+export function withRates(product, rows = []) {
+  if (!product) return product
+  const byYear = new Map((product.rates || []).map(r => [r.year, r]))
+  for (const r of rows) {
+    if (r.product_id !== product.id) continue
+    byYear.set(r.year, {
+      year: r.year,
+      rate: r.rate,
+      bonus: r.bonus == null ? undefined : r.bonus,
+      shariah: r.shariah == null ? undefined : r.shariah,
+      // Marks the row as the user's, so the UI can say so and offer to remove it
+      // — deleting falls back to the shipped figure rather than to nothing.
+      mine: true,
+      rowId: r.id,
+    })
+  }
+  return { ...product, rates: [...byYear.values()].sort((a, b) => b.year - a.year) }
+}
+
 /** The newest declared rate on file for a product, or null. */
 export function latestRate(product) {
   const rates = product?.rates
