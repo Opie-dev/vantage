@@ -273,14 +273,19 @@ function AccountCard({ row, onAdd, onEdit }) {
               {rate ? <> · last declared <span className="num">{rate}</span></> : null}
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => onAdd(a.id)}>
-            <PlusIcon />
-            Entry
-          </Button>
-          {/* The rate basis, financial year and cap all live behind this, and
-              all three change what the estimator says — a wrong one was
-              uncorrectable once the account was saved. */}
-          <CardAction icon={PencilIcon} label={`Edit ${a.name}`} onClick={() => onEdit(a)} />
+          {/* One group, so justify-between has two children to separate rather
+              than three to spread — otherwise Entry lands in the middle of the
+              card, adrift from the pencil it belongs beside. */}
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" onClick={() => onAdd(a.id)}>
+              <PlusIcon />
+              Entry
+            </Button>
+            {/* The rate basis, financial year and cap all live behind this, and
+                all three change what the estimator says — a wrong one was
+                uncorrectable once the account was saved. */}
+            <CardAction icon={PencilIcon} label={`Edit ${a.name}`} onClick={() => onEdit(a)} />
+          </div>
         </div>
 
         <div className="stat mt-3">{fmt(row.balance, row.cur)}</div>
