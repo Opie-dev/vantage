@@ -69,6 +69,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
 import { GOAL_KIND, GOAL_NEEDS_INSTRUMENT, goalIncomeIsNet } from '@/lib/calc'
+import {
+  FISCAL_YEARS,
+  INSTITUTIONS,
+  OTHER,
+  institutionOf,
+  productOf,
+} from '@/lib/institutions'
 import LockScreen from '@/components/LockScreen'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -572,6 +579,8 @@ function CashDialog({ prefill }) {
 function AssetDialog() {
   const { closeModal, addAsset } = useVantage()
   const [f, setF] = useState({
+    institution_id: '',
+    product_id: '',
     name: '',
     institution: '',
     rate_basis: 'MIN_MONTHLY',
@@ -582,6 +591,35 @@ function AssetDialog() {
   })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  const inst = institutionOf(f.institution_id)
+
+  // Changing institution clears the fund, because "ASB 2" under EPF would be a
+  // nonsense the rest of the form would then happily prefill from.
+  const pickInstitution = id =>
+    setF(p => ({
+      ...p,
+      institution_id: id,
+      product_id: '',
+      institution: id === OTHER ? '' : institutionOf(id)?.label || '',
+    }))
+
+  // The point of the catalogue: the basis, the financial year and the cap are
+  // facts about the product, so picking one fills them in. They stay editable —
+  // a fund can change its terms, and this file would not know.
+  const pickProduct = id => {
+    const prod = productOf(f.institution_id, id)
+    if (!prod) return
+    setF(p => ({
+      ...p,
+      product_id: id,
+      name: prod.name,
+      rate_basis: prod.rate_basis,
+      rate_quote: prod.rate_quote,
+      fiscal_year: prod.fiscal_year,
+      unit_cap: prod.unit_cap == null ? '' : String(prod.unit_cap),
+    }))
+  }
 
   const slug = f.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 
@@ -614,21 +652,65 @@ function AssetDialog() {
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Name" htmlFor="as-name">
+        <Field label="Institution" htmlFor="as-inst" hint={inst?.hint}>
+          <Select value={f.institution_id} onValueChange={pickInstitution}>
+            <SelectTrigger id="as-inst" className="w-full">
+              <SelectValue placeholder="Choose one" />
+            </SelectTrigger>
+            <SelectContent>
+              {INSTITUTIONS.map(i => (
+                <SelectItem key={i.id} value={i.id}>
+                  {i.label}
+                </SelectItem>
+              ))}
+              <SelectItem value={OTHER}>Something else</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+
+        {inst ? (
+          <Field
+            label="Account or fund"
+            htmlFor="as-product"
+            hint="Fills in how it pays, the financial year and any cap."
+          >
+            <Select value={f.product_id} onValueChange={pickProduct}>
+              <SelectTrigger id="as-product" className="w-full">
+                <SelectValue placeholder="Choose one" />
+              </SelectTrigger>
+              <SelectContent>
+                {inst.products.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : f.institution_id === OTHER ? (
+          <Field label="Institution name" htmlFor="as-inst-other">
+            <Input
+              id="as-inst-other"
+              placeholder="Bank Rakyat"
+              value={f.institution}
+              onChange={e => set('institution', e.target.value)}
+            />
+          </Field>
+        ) : (
+          <div aria-hidden />
+        )}
+
+        <Field
+          label="Name"
+          htmlFor="as-name"
+          className="col-span-2"
+          hint="What you will see on the Assets screen — rename it if you hold more than one."
+        >
           <Input
             id="as-name"
-            autoFocus
             placeholder="ASB"
             value={f.name}
             onChange={e => set('name', e.target.value)}
-          />
-        </Field>
-        <Field label="Institution" htmlFor="as-inst">
-          <Input
-            id="as-inst"
-            placeholder="ASNB"
-            value={f.institution}
-            onChange={e => set('institution', e.target.value)}
           />
         </Field>
         <Field
@@ -688,16 +770,18 @@ function AssetDialog() {
           label="Financial year ends"
           htmlFor="as-fy"
           className="col-span-2"
-          hint="ASB, EPF and Tabung Haji run to December. ASB 2 and ASM end in March, ASB 3 Didik in June — a calendar year would be a month out at both ends for those."
+          hint="Of the ASNB funds only ASB runs to December; the rest end in March, June, August or September. EPF and Tabung Haji are calendar years."
         >
           <Select value={f.fiscal_year} onValueChange={v => set('fiscal_year', v)}>
             <SelectTrigger id="as-fy" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="12-31">31 December</SelectItem>
-              <SelectItem value="03-31">31 March</SelectItem>
-              <SelectItem value="06-30">30 June</SelectItem>
+              {FISCAL_YEARS.map(y => (
+                <SelectItem key={y.value} value={y.value}>
+                  {y.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Field>
