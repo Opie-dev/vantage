@@ -81,6 +81,7 @@ import {
   productOf,
   rateIsStale,
   totalRate,
+  withRates,
 } from '@/lib/institutions'
 import LockScreen from '@/components/LockScreen'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -583,7 +584,7 @@ function CashDialog({ prefill }) {
  * decide about it.
  */
 function AssetDialog() {
-  const { closeModal, addAsset } = useVantage()
+  const { state, closeModal, addAsset } = useVantage()
   const [f, setF] = useState({
     institution_id: '',
     product_id: '',
@@ -605,7 +606,9 @@ function AssetDialog() {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
 
   const inst = institutionOf(f.institution_id)
-  const prod = productOf(f.institution_id, f.product_id)
+  // The user's own recorded rates win over the shipped catalogue, so the form
+  // shows a rate declared last week the same as one that shipped with the app.
+  const prod = withRates(productOf(f.institution_id, f.product_id), state.declaredRates)
   const declared = prod?.rates || []
   // The year in progress, carried forward from the last declared one. It leads
   // the list because it is the year an account opened today will actually earn.
@@ -655,7 +658,7 @@ function AssetDialog() {
   // facts about the product, so picking one fills them in. They stay editable —
   // a fund can change its terms, and this file would not know.
   const pickProduct = id => {
-    const picked = productOf(f.institution_id, id)
+    const picked = withRates(productOf(f.institution_id, id), state.declaredRates)
     if (!picked) return
     const latest = latestRate(picked)
     setF(p => ({

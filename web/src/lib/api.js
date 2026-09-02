@@ -131,6 +131,10 @@ export const updateAsset = (id, body) => send('PATCH', `/api/assets/${id}`, body
 /** Refused once the asset has entries — archive it instead. @param {number} id */
 export const deleteAsset = id => send('DELETE', `/api/assets/${id}`)
 
+// One row per fund per financial year; posting the same year again corrects it.
+export const saveDeclaredRate = body => send('POST', '/api/declared-rates', body)
+export const deleteDeclaredRate = id => send('DELETE', `/api/declared-rates/${id}`)
+
 /**
  * @param {number} assetId
  * @param {{type:'DEPOSIT'|'WITHDRAW'|'DISTRIBUTION'|'FEE', date:string,
@@ -266,6 +270,8 @@ export default {
   addAsset,
   updateAsset,
   deleteAsset,
+  saveDeclaredRate,
+  deleteDeclaredRate,
   addAssetEntry,
   deleteAssetEntry,
   addCommitment,

@@ -8,6 +8,7 @@ const prices = require('../models/prices.model');
 const goals = require('../models/goals.model');
 const assets = require('../models/assets.model');
 const assetEntries = require('../models/assetEntries.model');
+const declaredRates = require('../models/declaredRates.model');
 const commitments = require('../models/commitments.model');
 const commitmentPayments = require('../models/commitmentPayments.model');
 const income = require('../models/income.model');
@@ -28,6 +29,9 @@ async function getState() {
     // from assetEntries, as it derives positions from transactions.
     assets: await assets.listAll(),
     assetEntries: await assetEntries.listAll(),
+    // The user's own record of what each fund declared. Overrides the
+    // catalogue shipped in the frontend, per fund and financial year.
+    declaredRates: await declaredRates.listAll(),
     // What you owe. The repayment schedule is NOT here — it is derived on the
     // client from each loan's terms; payments carry only the deviations.
     commitments: await commitments.listAll(),

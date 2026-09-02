@@ -39,7 +39,7 @@ export const EMPTY_STATE = {
   fundMetrics: [],
   distributions: [],
   assets: [],
-  assetEntries: [],
+  assetEntries: [], declaredRates: [],
   commitments: [],
   commitmentPayments: [],
   incomeSources: [],
