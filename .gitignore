@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Real credentials and machine-specific connection strings.
+# .env.example is committed instead — copy it to .env and edit.
+.env
+.env.local
+.env.*.local
+
+# Build output. Vite's outDir (web/vite.config.js) writes the bundle here, and
+# the Dockerfile rebuilds it inside the image, so a committed copy could only
+# ever be stale. Run `npm run build` after cloning to serve without Docker.
+/public/
+
+# The sync worker's runtime logs. These are not just noise: they carry moomoo
+# session ids, order ids and account movements, which have no business in a
+# public repository.
+*.log
+sync/*.log
+
+# Python bytecode from the sync worker
+__pycache__/
+*.py[cod]
+
+# Local database dumps and backups
+*.sql.bak
+vantage-backup.sql
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

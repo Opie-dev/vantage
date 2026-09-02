@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+    .card { background: #151b21; border: 1px solid #243039; border-radius: 6px; padding: 16px 18px; }
+    .opt { border: 1px solid #1c262e; border-radius: 6px; padding: 12px 14px; }
+    th { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+         color: #5c6a76; text-align: right; padding: 6px 0; border-bottom: 1px solid #1c262e; }
+    th.l { text-align: left; }
+    td { padding: 7px 0; text-align: right; border-bottom: 1px solid #1c262e; font-size: 12.5px;
+         font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    td.l { text-align: left; font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; max-width: 760px">
+
+  <div class="card">
+    <div class="eyebrow">P&amp;L basis</div>
+    <p style="font-size: 12.5px; color: #8b98a5; margin: 6px 0 0 0; line-height: 1.55">
+      How every P&amp;L figure in the app is computed — the Positions table, the Dashboard cards, and the
+      percentages beside them.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 14px">
+      <div class="opt">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 14px">
+          <span style="font-size: 13.5px; font-weight: 600">Price only</span>
+          <span class="num" style="font-size: 12.5px; color: #e5534b">−RM 11,148.00 <span style="color: #5c6a76">−21.6%</span></span>
+        </div>
+        <p style="font-size: 12px; color: #8b98a5; margin: 5px 0 0 0; line-height: 1.55">
+          Market value less what you paid. Trading fees are inside cost, so they count; dividends and tax do not.
+          The conventional unrealised P&amp;L.
+        </p>
+      </div>
+
+      <div class="opt" style="border-color: rgba(232,163,61,0.5); background: rgba(232,163,61,0.05)">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 14px">
+          <span style="font-size: 13.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e8a33d" stroke-width="3"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+            Include income, after tax
+          </span>
+          <span class="num" style="font-size: 12.5px; color: #e5534b">−RM 6,114.49 <span style="color: #5c6a76">−11.8%</span></span>
+        </div>
+        <p style="font-size: 12px; color: #8b98a5; margin: 5px 0 0 0; line-height: 1.55">
+          Adds the dividends that actually reached your wallet — gross distributions less the tax withheld from
+          them. What the holding has really returned.
+        </p>
+      </div>
+
+      <div class="opt">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 14px">
+          <span style="font-size: 13.5px; font-weight: 600">Include income, before tax</span>
+          <span class="num" style="font-size: 12.5px; color: #e5534b">−RM 3,955.33 <span style="color: #5c6a76">−7.7%</span></span>
+        </div>
+        <p style="font-size: 12px; color: #8b98a5; margin: 5px 0 0 0; line-height: 1.55">
+          Adds dividends as declared, ignoring withholding. Pre-tax performance — useful for judging the fund
+          rather than your net outcome.
+        </p>
+      </div>
+    </div>
+
+    <p style="font-size: 11.5px; color: #5c6a76; margin: 12px 0 0 0; line-height: 1.55">
+      Income is realised cash that already sits in your wallet balance. Including it here shows how a holding has
+      performed; it does not add to portfolio value, which counts that cash once already.
+    </p>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <div class="eyebrow">Withholding tax</div>
+      <span class="num" style="font-size: 10px; letter-spacing: 0.06em; color: #8b98a5; border: 1px solid #243039; border-radius: 999px; padding: 1px 7px">+30.0% effective</span>
+    </div>
+    <p style="font-size: 12.5px; color: #8b98a5; margin: 6px 0 0 0; line-height: 1.55">
+      Taken by moomoo before the dividend reached you. Read-only — these are the amounts actually withheld, not a
+      rate this app applies.
+    </p>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px">
+      <div style="border: 1px solid #1c262e; border-radius: 6px; padding: 11px 13px">
+        <div class="eyebrow">Dividends declared</div>
+        <div class="num" style="font-size: 15px; font-weight: 600; margin-top: 5px">RM 7,192.67</div>
+      </div>
+      <div style="border: 1px solid #1c262e; border-radius: 6px; padding: 11px 13px">
+        <div class="eyebrow">Tax withheld</div>
+        <div class="num" style="font-size: 15px; font-weight: 600; margin-top: 5px; color: #e5534b">−RM 2,159.16</div>
+      </div>
+      <div style="border: 1px solid #1c262e; border-radius: 6px; padding: 11px 13px">
+        <div class="eyebrow">Reached your wallet</div>
+        <div class="num" style="font-size: 15px; font-weight: 600; margin-top: 5px; color: #3fb27f">RM 5,033.51</div>
+      </div>
+    </div>
+
+    <table style="width: 100%; border-collapse: collapse; margin-top: 14px">
+      <thead>
+        <tr><th class="l">Year</th><th>Dividends</th><th>Withheld</th><th>Net</th><th>Rate</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="l">2026</td><td>RM 7,184.51</td>
+          <td style="color: #e5534b">−RM 2,156.70</td>
+          <td style="color: #3fb27f">RM 5,027.81</td>
+          <td style="color: #5c6a76">+30.0%</td>
+        </tr>
+        <tr>
+          <td class="l">2025</td><td>RM 8.16</td>
+          <td style="color: #e5534b">−RM 2.46</td>
+          <td style="color: #3fb27f">RM 5.70</td>
+          <td style="color: #5c6a76">+30.2%</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size: 11.5px; color: #5c6a76; margin: 11px 0 0 0; line-height: 1.55">
+      Calendar years, converted at the current rate of RM 4.0364 per USD — there is no historical FX series, so
+      older years are approximate. Each year's rate is its own tax over its own dividends.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">Data</div>
+    <div style="display: flex; flex-direction: column; gap: 7px; margin-top: 10px; font-size: 12.5px">
+      <div style="display: flex; justify-content: space-between; gap: 16px">
+        <span style="color: #8b98a5">Last sync</span><span class="num">1 Sept, 09:46 am</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; gap: 16px">
+        <span style="color: #8b98a5">Exchange rate</span><span class="num">RM 4.0364 / USD</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; gap: 16px">
+        <span style="color: #8b98a5">Cash balance from</span><span class="num">broker</span>
+      </div>
+    </div>
+    <p style="font-size: 11.5px; color: #5c6a76; margin: 11px 0 0 0; line-height: 1.55">
+      The rate comes from your account valued in both currencies, so it matches moomoo rather than a third-party
+      feed. Run the sync to refresh all of this.
+    </p>
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6">
+    <b style="color: #e6edf3">One real setting, two read-only panels.</b> The basis options preview what the whole
+    portfolio reads as under each, so the choice is made by looking rather than by reasoning. The tax figures are
+    what moomoo actually withheld — nothing here is configurable, they live on this screen because this is where
+    someone comes looking for tax.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

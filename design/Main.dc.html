@@ -1,0 +1,199 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+           font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+  </style>
+</helmet>
+
+<div style="padding: 40px 44px; display: flex; flex-direction: column; gap: 34px">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div class="eyebrow">Vantage · design system</div>
+    <div style="font-size: 27px; font-weight: 700; letter-spacing: -0.02em">Tokens, type and chrome</div>
+    <div style="font-size: 13.5px; color: #8b98a5; max-width: 760px; line-height: 1.55">
+      Lifted from <span class="num" style="color: #e6edf3">web/src/index.css</span>. Dark is the app's default and
+      what every screen artboard shows; the light palette ships alongside it and must stay legible in both.
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 44px; flex-wrap: wrap">
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="eyebrow">Dark surfaces &amp; text</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #0e1216; border: 1px solid #243039"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#0e1216<br>background</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #151b21; border: 1px solid #243039"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#151b21<br>card</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #243039"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#243039<br>border</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #1c262e"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#1c262e<br>hairline</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #e6edf3"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#e6edf3<br>foreground</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #8b98a5"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#8b98a5<br>muted</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #5c6a76"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#5c6a76<br>faint</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #1a222a"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#1a222a<br>muted bg</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="eyebrow">Semantic — meaning is fixed</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #3fb27f"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#3fb27f<br>gain · income</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #e5534b"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#e5534b<br>loss · tax · fees</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px">
+          <div style="height: 46px; border-radius: 6px; background: #e8a33d"></div>
+          <div class="num" style="font-size: 10.5px; color: #8b98a5">#e8a33d<br>primary · cash</div>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: #8b98a5; max-width: 330px; line-height: 1.55; margin-top: 2px">
+        Green is money coming in, red is money leaving — including withholding tax and trading fees, which are
+        losses of different kinds. Amber is cash and the accent; it is never a gain.
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px">
+      <div class="eyebrow">Series — allocation, charts, ticker dots</div>
+      <div style="display: flex; gap: 7px">
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #3987e5"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #d95926"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #199e70"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #c98500"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #d55181"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #46a846"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #9085e9"></div>
+        <div style="width: 34px; height: 46px; border-radius: 6px; background: #e66767"></div>
+      </div>
+      <div style="font-size: 12px; color: #8b98a5; max-width: 300px; line-height: 1.55">
+        chart-1…8, assigned by an instrument's creation order and stable everywhere — the dot beside MSTY in
+        Positions is the same hue as its donut slice.
+      </div>
+    </div>
+
+  </div>
+
+  <div style="height: 1px; background: #1c262e"></div>
+
+  <div style="display: flex; gap: 44px; flex-wrap: wrap; align-items: flex-start">
+
+    <div style="display: flex; flex-direction: column; gap: 14px; min-width: 380px">
+      <div class="eyebrow">Type — two families, one rule</div>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <div>
+          <div style="font-size: 27px; font-weight: 700; letter-spacing: -0.02em">Portfolio value</div>
+          <div class="num" style="font-size: 10.5px; color: #5c6a76">Plex Sans 700 · 27px · −0.02em</div>
+        </div>
+        <div>
+          <div class="num" style="font-size: 24.8px; font-weight: 600; letter-spacing: -0.02em">RM 41,398.09</div>
+          <div class="num" style="font-size: 10.5px; color: #5c6a76">.stat — Plex Mono 600 · 1.55rem · tabular</div>
+        </div>
+        <div>
+          <div style="font-size: 13.5px">Every synced row carries its moomoo id.</div>
+          <div class="num" style="font-size: 10.5px; color: #5c6a76">body · Plex Sans 400 · 13.5px</div>
+        </div>
+        <div>
+          <div class="eyebrow">Unrealized P&amp;L</div>
+          <div class="num" style="font-size: 10.5px; color: #5c6a76">.eyebrow · 10.5px · 600 · 0.09em · upper</div>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: #8b98a5; max-width: 380px; line-height: 1.55">
+        <b style="color: #e6edf3">Every figure compared down a column is Plex Mono with tabular numerals.</b>
+        Ringgit and dollars never share a total without converting at the stored rate.
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 14px; min-width: 420px">
+      <div class="eyebrow">Chrome — header and tabs, 1440 wide</div>
+      <div style="border: 1px solid #243039; border-radius: 6px; overflow: hidden; background: #0e1216">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 16px; border-bottom: 1px solid #1c262e">
+          <div style="display: flex; align-items: baseline; gap: 9px">
+            <span style="font-size: 15px; font-weight: 700; letter-spacing: -0.01em">Vantage</span>
+            <span class="num" style="font-size: 11px; color: #5c6a76">synced 1 Sept, 09:46 am</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px">
+            <div style="border: 1px solid #243039; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #8b98a5">↻ Prices</div>
+            <div style="border: 1px solid #243039; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #8b98a5">+ Instrument</div>
+            <div style="border: 1px solid #243039; border-radius: 6px; padding: 4px 8px; font-size: 12px; color: #8b98a5">◐</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 2px; padding: 7px 12px">
+          <div style="padding: 5px 11px; border-radius: 6px; background: #1a222a; color: #e6edf3; font-size: 12.5px; font-weight: 600">Dashboard</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">Positions</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">Instruments</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">History</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">Wallet</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">Calendar</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">Goals</div>
+          <div style="padding: 5px 11px; font-size: 12.5px; color: #8b98a5">Settings</div>
+        </div>
+      </div>
+      <div style="font-size: 12px; color: #8b98a5; max-width: 420px; line-height: 1.55">
+        Content is capped at 1180px and centred. Cards are <span class="num" style="color: #e6edf3">#151b21</span>
+        on <span class="num" style="color: #e6edf3">#0e1216</span> with a 1px
+        <span class="num" style="color: #e6edf3">#243039</span> border and 6px radius — no shadows anywhere.
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; min-width: 260px">
+      <div class="eyebrow">Light palette</div>
+      <div style="border-radius: 6px; border: 1px solid #dfe4e9; background: #f7f8fa; padding: 14px; display: flex; flex-direction: column; gap: 10px">
+        <div style="background: #ffffff; border: 1px solid #dfe4e9; border-radius: 6px; padding: 10px 12px">
+          <div style="font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: #5c6a76">Portfolio value</div>
+          <div class="num" style="font-size: 20px; font-weight: 600; color: #10161c; margin-top: 4px">RM 41,398.09</div>
+          <div class="num" style="font-size: 11px; color: #8b98a5; margin-top: 3px">≈ combined at 1 USD = RM 4.04</div>
+        </div>
+        <div style="display: flex; gap: 7px">
+          <div style="flex: 1; height: 26px; border-radius: 5px; background: #17805a"></div>
+          <div style="flex: 1; height: 26px; border-radius: 5px; background: #c3352d"></div>
+          <div style="flex: 1; height: 26px; border-radius: 5px; background: #a8710f"></div>
+        </div>
+        <div class="num" style="font-size: 10.5px; color: #5c6a76">#17805a · #c3352d · #a8710f — darkened for contrast on white</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

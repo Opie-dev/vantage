@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+    .card { background: #151b21; border: 1px solid #243039; border-radius: 6px; }
+    .dow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+           color: #5c6a76; text-align: center; padding-bottom: 6px; }
+    .day { border: 1px solid #1c262e; border-radius: 6px; min-height: 74px; padding: 6px 7px;
+           display: flex; flex-direction: column; gap: 4px; }
+    .dn { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11.5px; color: #8b98a5; }
+    .marks { display: flex; gap: 3px; }
+    .marks i { width: 6px; height: 6px; border-radius: 999px; display: block; }
+    .amt { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10.5px; color: #e5534b;
+           margin-top: auto; }
+    .chip { border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 600;
+            letter-spacing: 0.08em; text-transform: uppercase; }
+  </style>
+</helmet>
+
+<div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+
+  <div class="card" style="padding: 14px 16px">
+    <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+      <div style="border: 1px solid #243039; border-radius: 6px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #8b98a5; font-size: 14px">‹</div>
+      <div style="font-size: 16px; font-weight: 600; letter-spacing: -0.01em; min-width: 150px">August 2026</div>
+      <div style="border: 1px solid #243039; border-radius: 6px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: #8b98a5; font-size: 14px">›</div>
+      <div style="border: 1px solid #243039; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #5c6a76">Today</div>
+      <div style="flex: 1"></div>
+      <div style="display: flex; align-items: center; gap: 14px; font-size: 11.5px; color: #5c6a76">
+        <span style="display: inline-flex; align-items: center; gap: 5px"><i style="width: 7px; height: 7px; border-radius: 999px; background: #3fb27f; display: block"></i>buy</span>
+        <span style="display: inline-flex; align-items: center; gap: 5px"><i style="width: 7px; height: 7px; border-radius: 999px; background: #e5534b; display: block"></i>sell</span>
+        <span style="display: inline-flex; align-items: center; gap: 5px"><i style="width: 7px; height: 7px; border-radius: 999px; background: #e8a33d; display: block"></i>dividend / cash</span>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 14px">
+      <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div><div class="dow">Thu</div>
+      <div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
+
+      <div class="day" style="opacity: 0.35"></div><div class="day" style="opacity: 0.35"></div>
+      <div class="day" style="opacity: 0.35"></div><div class="day" style="opacity: 0.35"></div>
+      <div class="day"><span class="dn">1</span></div>
+      <div class="day"><span class="dn">2</span></div>
+      <div class="day"><span class="dn">3</span></div>
+
+      <div class="day"><span class="dn">4</span></div>
+      <div class="day"><span class="dn">5</span></div>
+      <div class="day"><span class="dn">6</span></div>
+      <div class="day"><span class="dn">7</span>
+        <div class="marks"><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i></div>
+      </div>
+      <div class="day"><span class="dn">8</span></div>
+      <div class="day"><span class="dn">9</span>
+        <div class="marks"><i style="background: #3fb27f"></i><i style="background: #3fb27f"></i></div>
+        <span class="amt">−RM 161</span>
+      </div>
+      <div class="day"><span class="dn">10</span>
+        <div class="marks"><i style="background: #e8a33d"></i></div>
+      </div>
+
+      <div class="day"><span class="dn">11</span></div>
+      <div class="day"><span class="dn">12</span></div>
+      <div class="day"><span class="dn">13</span></div>
+      <div class="day" style="border-color: #e8a33d; background: rgba(232,163,61,0.06)">
+        <span class="dn" style="color: #e6edf3; font-weight: 600">14</span>
+        <div class="marks"><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i></div>
+      </div>
+      <div class="day"><span class="dn">15</span></div>
+      <div class="day"><span class="dn">16</span></div>
+      <div class="day"><span class="dn">17</span></div>
+
+      <div class="day"><span class="dn">18</span></div>
+      <div class="day"><span class="dn">19</span></div>
+      <div class="day"><span class="dn">20</span></div>
+      <div class="day"><span class="dn">21</span>
+        <div class="marks"><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i><i style="background: #e8a33d"></i></div>
+      </div>
+      <div class="day"><span class="dn">22</span></div>
+      <div class="day"><span class="dn">23</span></div>
+      <div class="day"><span class="dn">24</span></div>
+
+      <div class="day"><span class="dn">25</span></div>
+      <div class="day"><span class="dn">26</span></div>
+      <div class="day"><span class="dn">27</span></div>
+      <div class="day"><span class="dn">28</span></div>
+      <div class="day"><span class="dn">29</span></div>
+      <div class="day"><span class="dn">30</span></div>
+      <div class="day"><span class="dn">31</span></div>
+    </div>
+
+    <div style="font-size: 11.5px; color: #5c6a76; margin-top: 12px">
+      5 days with activity · pick one for the detail
+    </div>
+  </div>
+
+  <div class="card" style="padding: 14px 16px">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <div class="eyebrow">14 August 2026</div>
+      <div class="num" style="font-size: 11.5px; color: #5c6a76">Into the market RM 0.00</div>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-top: 10px">
+      <tbody>
+        <tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #1c262e; width: 70px">
+            <span class="chip" style="background: rgba(232,163,61,0.16); color: #e8a33d">DIV</span></td>
+          <td style="padding: 6px 0; border-bottom: 1px solid #1c262e; font-size: 13px; font-weight: 600">ETCO</td>
+          <td class="num" style="padding: 6px 0; border-bottom: 1px solid #1c262e; text-align: right; color: #8b98a5; font-size: 12.5px"></td>
+          <td class="num" style="padding: 6px 0; border-bottom: 1px solid #1c262e; text-align: right; color: #3fb27f; font-size: 13px">+$75.97</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #1c262e">
+            <span class="chip" style="background: rgba(232,163,61,0.16); color: #e8a33d">DIV</span></td>
+          <td style="padding: 6px 0; border-bottom: 1px solid #1c262e; font-size: 13px; font-weight: 600">MSTY</td>
+          <td class="num" style="padding: 6px 0; border-bottom: 1px solid #1c262e; text-align: right"></td>
+          <td class="num" style="padding: 6px 0; border-bottom: 1px solid #1c262e; text-align: right; color: #3fb27f; font-size: 13px">+$32.98</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0; border-bottom: 1px solid #1c262e">
+            <span class="chip" style="border: 1px solid #243039; color: #8b98a5">FEE</span></td>
+          <td style="padding: 6px 0; border-bottom: 1px solid #1c262e; font-size: 13px; color: #8b98a5">Wallet</td>
+          <td class="num" style="padding: 6px 0; border-bottom: 1px solid #1c262e; text-align: right"></td>
+          <td class="num" style="padding: 6px 0; border-bottom: 1px solid #1c262e; text-align: right; color: #e5534b; font-size: 13px">−$22.79</td>
+        </tr>
+        <tr>
+          <td style="padding: 6px 0"><span class="chip" style="border: 1px solid #243039; color: #8b98a5">FEE</span></td>
+          <td style="padding: 6px 0; font-size: 13px; color: #8b98a5">Wallet</td>
+          <td class="num" style="padding: 6px 0; text-align: right"></td>
+          <td class="num" style="padding: 6px 0; text-align: right; color: #e5534b; font-size: 13px">−$9.89</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6">
+    <b style="color: #e6edf3">Monday-first grid, up to four marks per day, RM only on days money went in.</b>
+    Amounts here exclude fees, unlike History — the calendar answers "what did I put in that day". Clicking a day
+    opens the detail card; changing month clears the selection.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

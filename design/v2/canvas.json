@@ -1,0 +1,26 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "Vantage — income first",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 900,
+      "expand": "fill",
+      "is_interactive": true
+    }
+  ],
+  "annotations": [
+    {
+      "id": "what-changed",
+      "x": -560,
+      "y": 0,
+      "w": 500,
+      "text": "WHAT CHANGED FROM YOUR VERSION\n\nThe design is yours — the hierarchy call (income as the hero, capital as a stat row) is right and untouched.\n\nFIXED\n· Every figure is now the live app. MSTY was 170 @ $16.30, actually 182.312 @ $15.35. AMDY was 176 @ $7.29, actually 25.607 @ $53.85 — off by 7x on price.\n· Monthly income series was invented except July. Now real: 6 / 61 / 91 / 121 / 260 / 1,087 / 1,256 / 1,521 / 631.\n· The MSTY detail card said distributions had MORE THAN COVERED the price decline. Under real numbers they have covered 68%. The verdict is now computed from the data, not typed — so it cannot go stale.\n· Positions P&L now follows the basis toggle, as it does in the app.\n\nADDED BACK\n· Instruments and Goals, the two screens the redesign dropped. Calendar folding into Income was a good call and is left alone.\n\nHONESTY EDITS\n· September was \"scheduled\" — these funds declare weekly, so the dates are known and the amounts are not. Now \"estimated\", derived from real per-share rates x shares held x each fund's cadence: RM 1,236.78.\n· Run rate is amber and says \"if per-share rates hold — they are falling\". ETCO is down 32% per share over four declarations.\n\nNOT CHANGED, BUT WORTH A THOUGHT\nThe 104px hero is money you have not been paid. \"No amounts declared yet\" is right there, but the type size argues the other way.\n\nSHIPPED\nThe income hero, the payout strip and the paid-out-against-paid-for card are now live in the app, not just here. incomeOutlook() in calc.js does the projection; the smoke test now covers all 8 screens instead of 6."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

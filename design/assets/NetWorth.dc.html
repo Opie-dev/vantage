@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-3: #199e70; --chart-6: #46a846; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--background); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1; letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center; width: fit-content;
+      border-radius: 9999px; border: 1px solid transparent; padding: 0 6px;
+      font-size: 9.5px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .legend { display: flex; align-items: center; gap: 7px; font-size: 12.5px }
+    .dot { width: 9px; height: 9px; border-radius: 9999px; flex-shrink: 0 }
+    .bar { display: flex; height: 15px; border-radius: 9999px; overflow: hidden }
+  </style>
+</helmet>
+
+<div style="min-height: 720px; background: var(--background); display: flex; flex-direction: column">
+
+  <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 28px">
+    <h1 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Dashboard</h1>
+    <div style="flex: 1"></div>
+    <span class="faint" style="font-size: 11.5px">1 USD = <span class="num">RM 4.22</span></span>
+  </header>
+
+  <div style="border-bottom: 1px solid var(--hairline); padding: 26px 28px 24px">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 44px; flex-wrap: wrap">
+
+      <div style="min-width: 370px; flex: 1">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Net worth</span>
+          <span class="badge badge-neutral">excluding property &amp; vehicle</span>
+        </div>
+        <div class="num loss" style="margin-top: 10px; font-size: 56px; line-height: 0.92; font-weight: 600; letter-spacing: -0.04em">
+          &minus;RM&nbsp;162,924<span style="opacity: 0.55">.00</span>
+        </div>
+        <div class="mut" style="margin-top: 14px; font-size: 12.5px; line-height: 1.6">
+          <span class="num" style="color: var(--foreground)">RM 276,130</span> owned less
+          <span class="num loss">RM 439,054</span> owed.
+        </div>
+
+        <div style="margin-top: 18px; border-left: 2px solid var(--cash); padding-left: 12px">
+          <div style="font-size: 12.5px; line-height: 1.6">
+            <b style="font-weight: 600">This is not your net worth, and the label says so.</b>
+            <span class="mut">The house and the car are not counted — you chose to track the loans without
+            maintaining a valuation for either. That is a defensible trade: no guesswork to keep fresh, and
+            nothing quietly flattering you. But it does mean the largest thing you own is missing from a
+            figure that subtracts the largest thing you owe, so the headline carries the caveat rather than
+            burying it.</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="min-width: 600px; flex: 1.5; padding-top: 4px">
+
+        <div class="eyebrow" style="margin-bottom: 8px">Owed &middot; RM 439,054</div>
+        <div class="bar">
+          <div style="width: 88.47%; background: var(--loss)"></div>
+          <div style="width: 11.00%; background: var(--loss); opacity: 0.62"></div>
+          <div style="width: 0.53%;  background: var(--loss); opacity: 0.35"></div>
+        </div>
+        <div style="display: flex; gap: 22px; margin-top: 11px; flex-wrap: wrap">
+          <div><div class="legend"><span class="dot" style="background: var(--loss)"></span><span>House loan</span></div><div class="num loss" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">388,432</div></div>
+          <div><div class="legend"><span class="dot" style="background: var(--loss); opacity: 0.62"></span><span>Car loan</span></div><div class="num loss" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">48,282</div></div>
+          <div><div class="legend"><span class="dot" style="background: var(--loss); opacity: 0.35"></span><span>Credit card</span></div><div class="num loss" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">2,340</div></div>
+        </div>
+
+        <div class="eyebrow" style="margin: 22px 0 8px">
+          Owned &middot; RM 276,130
+          <span class="faint" style="text-transform: none; letter-spacing: 0">&mdash; drawn to the same scale</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <div class="bar" style="width: 62.89%">
+            <div style="width: 47.95%; background: var(--chart-6)"></div>
+            <div style="width: 26.91%; background: var(--chart-3)"></div>
+            <div style="width: 14.96%; background: var(--chart-1)"></div>
+            <div style="width: 10.18%; background: var(--chart-7)"></div>
+          </div>
+          <span class="num faint" style="font-size: 11px">&larr; 62.9% of what you owe</span>
+        </div>
+        <div style="display: flex; gap: 22px; margin-top: 11px; flex-wrap: wrap">
+          <div><div class="legend"><span class="dot" style="background: var(--chart-6)"></span><span>EPF</span></div><div class="num" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">132,400</div></div>
+          <div><div class="legend"><span class="dot" style="background: var(--chart-3)"></span><span>ASB</span></div><div class="num" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">74,300</div></div>
+          <div><div class="legend"><span class="dot" style="background: var(--chart-1)"></span><span>moomoo</span></div><div class="num" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">41,310</div></div>
+          <div><div class="legend"><span class="dot" style="background: var(--chart-7)"></span><span>Tabung Haji</span></div><div class="num" style="margin-top: 4px; font-size: 13.5px; font-weight: 600">28,120</div></div>
+        </div>
+
+        <p class="faint" style="margin: 18px 0 0; font-size: 11.5px; line-height: 1.55; max-width: 640px">
+          The three US funds are the blue sliver &mdash; <span class="num">15%</span> of what you own, and
+          the only part the rest of this screen describes. EPF is the largest single asset you have and it
+          was never on this dashboard before.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; border-bottom: 1px solid var(--hairline)">
+    <div style="flex: 1; border-right: 1px solid var(--hairline); padding: 18px 28px">
+      <div class="eyebrow">Uncommitted</div>
+      <div class="num gain" style="margin-top: 8px; font-size: 25px; font-weight: 600; letter-spacing: -0.02em">RM 4,174.93</div>
+      <div class="faint" style="margin-top: 4px; font-size: 11.5px">goals claim RM 4,400 of it</div>
+    </div>
+    <div style="flex: 1; border-right: 1px solid var(--hairline); padding: 18px 28px">
+      <div class="eyebrow">Debt falling</div>
+      <div class="num gain" style="margin-top: 8px; font-size: 25px; font-weight: 600; letter-spacing: -0.02em">&minus;RM 1,568/mo</div>
+      <div class="faint" style="margin-top: 4px; font-size: 11.5px">principal repaid &mdash; only moving, not spent</div>
+    </div>
+    <div style="flex: 1; border-right: 1px solid var(--hairline); padding: 18px 28px">
+      <div class="eyebrow">Cost of borrowing</div>
+      <div class="num loss" style="margin-top: 8px; font-size: 25px; font-weight: 600; letter-spacing: -0.02em">RM 1,583/mo</div>
+      <div class="faint" style="margin-top: 4px; font-size: 11.5px">interest &mdash; the only part actually spent</div>
+    </div>
+    <div style="flex: 1; padding: 18px 28px">
+      <div class="eyebrow">Committed</div>
+      <div class="num" style="margin-top: 8px; font-size: 25px; font-weight: 600; letter-spacing: -0.02em">52%</div>
+      <div class="faint" style="margin-top: 4px; font-size: 11.5px">of net income, before any goal</div>
+    </div>
+  </div>
+
+  <div style="padding: 16px 28px 0">
+    <p class="faint" style="margin: 0; font-size: 11.5px; line-height: 1.6">
+      <b style="font-weight: 600">Debt falling is the number to watch while this headline is negative.</b>
+      In the first decade of a mortgage the fastest-growing line in a net worth is the loan balance going
+      down, not the investments going up — RM 1,568 a month here, plus RM 1,955 into EPF without you doing
+      anything. The equity curve cannot show either today; with <span class="num">liabilities_rm</span> in
+      <span class="num">snapshots</span> it becomes a net-worth curve and does.
+      <span class="faint">The car's principal/interest split is apportioned straight-line — a flat-rate hire
+      purchase has no contractual monthly split, and its settlement rebate is computed differently again.</span>
+    </p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

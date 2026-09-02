@@ -1,0 +1,229 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --backdrop: #090c0f; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e; --input: #243039;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-2: #d95926; --chart-3: #199e70;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--backdrop); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1; letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .dialog {
+      width: 460px; border-radius: 6px; border: 1px solid var(--border); background: var(--card);
+      padding: 24px; box-shadow: 0 10px 38px rgba(0,0,0,0.55);
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px }
+    .input {
+      height: 36px; border-radius: 4px; border: 1px solid var(--input);
+      background: rgba(36,48,57,0.3); padding: 0 12px;
+      display: flex; align-items: center; font-size: 13.5px; color: var(--foreground);
+    }
+    .select { justify-content: space-between }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; height: 34px; padding: 0 16px;
+      border-radius: 4px; font-size: 13.5px; font-weight: 500;
+      border: 1px solid var(--border); color: var(--foreground); background: transparent;
+    }
+    .btn-primary { background: var(--primary); color: #10151a; border-color: var(--primary); font-weight: 600 }
+    .seg { display: flex; border: 1px solid var(--input); border-radius: 4px; overflow: hidden; height: 36px }
+    .seg > div {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 12.5px; color: var(--muted-foreground); border-right: 1px solid var(--input);
+    }
+    .seg > div:last-child { border-right: 0 }
+    .seg .on { background: var(--muted); color: var(--foreground); font-weight: 600 }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center; width: fit-content;
+      border-radius: 9999px; border: 1px solid transparent; padding: 0 6px;
+      font-size: 9.5px; line-height: 16px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash) }
+    .faint { color: var(--faint) } .mut { color: var(--muted-foreground) }
+    .chev { opacity: 0.55 }
+  </style>
+</helmet>
+
+<div style="padding: 30px; display: flex; gap: 30px; align-items: flex-start; background: var(--backdrop)">
+
+  <!-- ── a savings entry ─────────────────────────────────────────────────── -->
+  <div style="display: flex; flex-direction: column; gap: 12px">
+    <div class="eyebrow" style="color: var(--faint)">Asset entry &middot; kind: savings</div>
+
+    <div class="dialog">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 16px; font-weight: 600; line-height: 1">Add entry</div>
+        <div class="mut" style="font-size: 13px; line-height: 1.45">
+          A contribution, a withdrawal, or the annual distribution when it is credited.
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div class="field">
+          <label class="eyebrow">Asset</label>
+          <div class="input select">
+            <span style="display: inline-flex; align-items: center; gap: 8px">
+              <span style="width: 8px; height: 8px; border-radius: 9999px; background: var(--chart-3)"></span>ASB
+            </span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Type</label>
+          <div class="input select">
+            <span>Deposit</span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Amount (RM)</label>
+          <div class="input num">1,000.00</div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Date</label>
+          <div class="input num">2026-09-28</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="eyebrow">Note</label>
+        <div class="input faint" style="font-size: 13px">Optional</div>
+      </div>
+
+      <div style="border-left: 2px solid var(--cash); padding-left: 11px">
+        <div style="font-size: 12.5px; line-height: 1.5">
+          Dated <b style="font-weight: 600">28 September</b>, this lifts the minimum balance for
+          <b class="num" style="font-weight: 600">October, November and December</b> &mdash; about
+          <b class="num" style="color: var(--cash); font-weight: 600">RM 14.38</b> of this year&rsquo;s
+          distribution at the 2025 rate.
+          <span class="mut">Dated 1 October, about RM 9.58. 2026&rsquo;s rate is declared in late December.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 2px">
+        <div class="btn">Cancel</div>
+        <div class="btn btn-primary">Save</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── a loan ──────────────────────────────────────────────────────────── -->
+  <div style="display: flex; flex-direction: column; gap: 12px">
+    <div class="eyebrow" style="color: var(--faint)">Commitment &middot; kind: loan</div>
+
+    <div class="dialog">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 16px; font-weight: 600; line-height: 1">Add commitment</div>
+        <div class="mut" style="font-size: 13px; line-height: 1.45">
+          Five fields off the agreement, and every future instalment follows. You will never type a payment.
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+        <div class="field">
+          <label class="eyebrow">Name</label>
+          <div class="input">Myvi</div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Kind</label>
+          <div class="input select">
+            <span>Loan</span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Amount financed (RM)</label>
+          <div class="input num">78,000.00</div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Rate (% p.a.)</label>
+          <div class="input num">3.40</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="eyebrow">Interest is charged on&hellip;</label>
+        <div class="seg">
+          <div class="on">the original amount</div>
+          <div>the balance remaining</div>
+        </div>
+      </div>
+
+      <div style="border-left: 2px solid var(--loss); padding-left: 11px">
+        <div style="font-size: 12.5px; line-height: 1.55">
+          <b style="font-weight: 600">Not &ldquo;is it a fixed rate?&rdquo;</b>
+          <span class="mut">Bank Negara defines <i>flat</i> as interest on the original amount and
+          <i>fixed</i> as an unchanging rate on the reducing balance &mdash; but Malaysian marketing routinely
+          says &ldquo;fixed&rdquo; when it means flat. Asking what the interest is charged <i>on</i> is the
+          only phrasing that cannot be answered wrongly in good faith.</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+        <div class="field">
+          <label class="eyebrow">Term</label>
+          <div class="input num">84 mo</div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">First payment</label>
+          <div class="input num">2023-03-05</div>
+        </div>
+        <div class="field">
+          <label class="eyebrow">Instalment</label>
+          <div class="input num">1,149.57</div>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--hairline); padding-top: 13px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="eyebrow">Derived from those five</span>
+          <span class="badge badge-cash">pre-reform terms</span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 9px; font-size: 12.5px">
+          <span class="mut">Effective <b class="num" style="color: var(--loss); font-weight: 600">6.27%</b></span>
+          <span class="mut">Paid <b class="num" style="color: var(--foreground); font-weight: 600">42 of 84</b></span>
+          <span class="mut">Left <b class="num" style="color: var(--foreground); font-weight: 600">RM 48,282</b></span>
+          <span class="mut">Ends <b class="num" style="color: var(--foreground); font-weight: 600">Feb 2030</b></span>
+        </div>
+        <div class="faint" style="margin-top: 9px; font-size: 11.5px; line-height: 1.5">
+          Signed March 2023, so it keeps flat rate and Rule of 78 &mdash; the June 2026 reform applies only
+          to new agreements. A car loan signed today would use the other setting.
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 2px">
+        <div class="btn">Cancel</div>
+        <div class="btn btn-primary">Save</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

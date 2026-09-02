@@ -1,0 +1,143 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    th { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+         color: #8b98a5; text-align: right; padding: 8px 10px; border-bottom: 1px solid #243039;
+         background: #151b21; }
+    th.l { text-align: left; }
+    td { padding: 6px 10px; text-align: right; border-bottom: 1px solid #1c262e; font-size: 13px; }
+    td.l { text-align: left; }
+    .chip { border-radius: 999px; padding: 1px 7px; font-size: 10px; font-weight: 600;
+            letter-spacing: 0.08em; text-transform: uppercase; }
+    .pill { border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600;
+            display: inline-flex; align-items: baseline; gap: 6px; }
+  </style>
+</helmet>
+
+<div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+
+  <div style="display: flex; align-items: center; gap: 9px; flex-wrap: wrap">
+    <div style="border: 1px solid #243039; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #e6edf3; display: flex; align-items: center; gap: 22px">
+      <span>All instruments</span><span style="color: #5c6a76">▾</span>
+    </div>
+    <div style="border: 1px solid #243039; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #e6edf3; display: flex; align-items: center; gap: 22px">
+      <span>All time</span><span style="color: #5c6a76">▾</span>
+    </div>
+    <span style="width: 1px; height: 20px; background: #243039; margin: 0 2px"></span>
+
+    <span class="pill" style="background: #e8a33d; color: #10151a">All <span class="num" style="opacity: 0.7">364</span></span>
+    <span class="pill" style="border: 1px solid #243039; color: #e6edf3">Buys <span class="num" style="color: #5c6a76">120</span></span>
+    <span class="pill" style="border: 1px solid #243039; color: #e6edf3">Sells <span class="num" style="color: #5c6a76">4</span></span>
+    <span class="pill" style="border: 1px solid #243039; color: #e6edf3">Dividends <span class="num" style="color: #5c6a76">79</span></span>
+    <span class="pill" style="border: 1px solid #243039; color: #e6edf3">Cash <span class="num" style="color: #5c6a76">161</span></span>
+
+    <div style="flex: 1"></div>
+    <span class="num" style="font-size: 11.5px; color: #5c6a76">364 rows · 28 Nov 2025 – 21 Aug 2026</span>
+  </div>
+
+  <div style="background: #151b21; border: 1px solid #243039; border-radius: 6px; overflow: hidden">
+    <table style="width: 100%; border-collapse: collapse">
+      <thead>
+        <tr>
+          <th class="l">Date</th><th class="l">Type</th><th class="l" style="width: 100%">Instrument</th>
+          <th>Qty</th><th>Price</th><th>Amount</th><th>Src</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="l num" style="color: #8b98a5">21 Aug</td>
+          <td class="l"><span class="chip" style="background: rgba(232,163,61,0.16); color: #e8a33d">DIV</span></td>
+          <td class="l"><span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 999px; background: #d95926"></span><span style="font-weight: 600">AMDY</span></span></td>
+          <td class="num" style="color: #5c6a76">—</td><td class="num" style="color: #5c6a76">—</td>
+          <td class="num" style="color: #3fb27f">+$15.60</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">21 Aug</td>
+          <td class="l"><span class="chip" style="background: rgba(232,163,61,0.16); color: #e8a33d">DIV</span></td>
+          <td class="l"><span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3987e5"></span><span style="font-weight: 600">MSTY</span></span></td>
+          <td class="num" style="color: #5c6a76">—</td><td class="num" style="color: #5c6a76">—</td>
+          <td class="num" style="color: #3fb27f">+$29.53</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">21 Aug</td>
+          <td class="l"><span class="chip" style="border: 1px solid #243039; color: #8b98a5">FEE</span></td>
+          <td class="l"><span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3987e5"></span><span style="font-weight: 600">MSTY</span><span style="font-size: 11.5px; color: #5c6a76">· withholding tax</span></span></td>
+          <td class="num" style="color: #5c6a76">—</td><td class="num" style="color: #5c6a76">—</td>
+          <td class="num" style="color: #e5534b">−$8.86</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">14 Aug</td>
+          <td class="l"><span class="chip" style="background: rgba(232,163,61,0.16); color: #e8a33d">DIV</span></td>
+          <td class="l"><span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 999px; background: #199e70"></span><span style="font-weight: 600">ETCO</span></span></td>
+          <td class="num" style="color: #5c6a76">—</td><td class="num" style="color: #5c6a76">—</td>
+          <td class="num" style="color: #3fb27f">+$75.97</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">10 Aug</td>
+          <td class="l"><span class="chip" style="border: 1px solid #243039; color: #8b98a5">DEPOSIT</span></td>
+          <td class="l"><span style="color: #8b98a5">Wallet <span style="color: #5c6a76">· MYR</span></span></td>
+          <td class="num" style="color: #5c6a76">—</td><td class="num" style="color: #5c6a76">—</td>
+          <td class="num" style="color: #3fb27f">+RM 200.00</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">9 Aug</td>
+          <td class="l"><span class="chip" style="background: rgba(63,178,127,0.16); color: #3fb27f">BUY</span></td>
+          <td class="l"><span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 999px; background: #3987e5"></span><span style="font-weight: 600">MSTY</span></span></td>
+          <td class="num">2.0499</td><td class="num">$12.82</td>
+          <td class="num" style="color: #e5534b">−$27.53</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">5 May</td>
+          <td class="l"><span class="chip" style="background: rgba(229,83,75,0.16); color: #e5534b">SELL</span></td>
+          <td class="l"><span style="display: inline-flex; align-items: center; gap: 7px"><span style="width: 7px; height: 7px; border-radius: 999px; background: #d55181"></span><span style="font-weight: 600">MAXI</span></span></td>
+          <td class="num">2.5</td><td class="num">$21.99</td>
+          <td class="num" style="color: #3fb27f">+$54.62</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+        <tr>
+          <td class="l num" style="color: #8b98a5">29 Jun <span style="color: #5c6a76">’26</span></td>
+          <td class="l"><span class="chip" style="border: 1px solid #243039; color: #8b98a5">WITHDRAW</span></td>
+          <td class="l"><span style="color: #8b98a5">Wallet <span style="color: #5c6a76">· MYR</span></span></td>
+          <td class="num" style="color: #5c6a76">—</td><td class="num" style="color: #5c6a76">—</td>
+          <td class="num" style="color: #e5534b">−RM 500.00</td>
+          <td><span class="chip" style="border: 1px solid #243039; color: #8b98a5">API</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="font-size: 11.5px; color: #5c6a76; line-height: 1.6">
+    Buy amounts include fees, sells are net, and a dividend appears once as a DIV row. FEE rows are 30% FATCA
+    withholding on US dividends and are attributed to the holding that generated them.
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6">
+    <b style="color: #e6edf3">364 rows over nine months, sticky header, scrolls inside the card.</b>
+    The two selects narrow the feed first and the type chips count what survives — a chip reading 12 means twelve
+    rows are one click away. Filtering to MSTY returns 85 rows: its buys, its dividends and the tax withheld from
+    them.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

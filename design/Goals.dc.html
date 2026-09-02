@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+    .card { background: #151b21; border: 1px solid #243039; border-radius: 6px; padding: 16px 18px; }
+    .bar { height: 8px; border-radius: 999px; background: #1a222a; overflow: hidden; }
+    .bar > i { display: block; height: 100%; background: #e8a33d; }
+    .facts { display: flex; flex-wrap: wrap; gap: 6px 24px; font-size: 13px; color: #8b98a5; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .input { border: 1px solid #243039; background: #0e1216; border-radius: 6px; height: 32px;
+             display: flex; align-items: center; padding: 0 10px;
+             font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13px; }
+    .badge { border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600;
+             font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+    .hr { height: 1px; background: #1c262e; }
+  </style>
+</helmet>
+
+<div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px">
+      <div>
+        <div class="num" style="font-size: 16px; font-weight: 600">1,000 shares of ETCO</div>
+        <div style="font-size: 12px; color: #8b98a5; margin-top: 3px">Grayscale Ethereum Covered Call ETF · US · priced in USD</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="badge" style="background: rgba(232,163,61,0.16); color: #e8a33d">69% there</span>
+        <span style="color: #5c6a76; font-size: 15px">✕</span>
+      </div>
+    </div>
+    <div class="bar" style="margin-top: 13px"><i style="width: 69%"></i></div>
+    <div class="facts" style="margin-top: 12px">
+      <span>You hold <b class="num" style="color: #e6edf3">691</b></span>
+      <span>Still need <b class="num" style="color: #e6edf3">309</b></span>
+      <span>@ <span class="num" style="color: #e6edf3">$8.91</span> → capital <b class="num" style="color: #e6edf3">$2,752.42</b>
+        <span class="num" style="color: #5c6a76">≈ RM 11,110.27</span></span>
+    </div>
+    <div class="hr" style="margin: 14px 0"></div>
+    <div style="display: flex; gap: 14px; flex-wrap: wrap">
+      <div class="field"><span class="eyebrow">Target shares</span><div class="input" style="width: 110px">1000</div></div>
+      <div class="field"><span class="eyebrow">Monthly budget (RM)</span><div class="input" style="width: 140px; color: #5c6a76">—</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px">
+      <div>
+        <div class="num" style="font-size: 16px; font-weight: 600">1,000 shares of MSTY</div>
+        <div style="font-size: 12px; color: #8b98a5; margin-top: 3px">YieldMax MSTR Option Income Strategy ETF · US · priced in USD</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="badge" style="background: rgba(232,163,61,0.16); color: #e8a33d">18% there</span>
+        <span style="color: #5c6a76; font-size: 15px">✕</span>
+      </div>
+    </div>
+    <div class="bar" style="margin-top: 13px"><i style="width: 18%"></i></div>
+    <div class="facts" style="margin-top: 12px">
+      <span>You hold <b class="num" style="color: #e6edf3">182.312</b></span>
+      <span>Still need <b class="num" style="color: #e6edf3">817.688</b></span>
+      <span>@ <span class="num" style="color: #e6edf3">$15.35</span> → capital <b class="num" style="color: #e6edf3">$12,551.51</b>
+        <span class="num" style="color: #5c6a76">≈ RM 50,662.90</span></span>
+    </div>
+  </div>
+
+  <div class="card" style="border-color: #e8a33d">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px">
+      <div>
+        <div class="num" style="font-size: 16px; font-weight: 600">RM 200.00 per payment</div>
+        <div style="font-size: 12px; color: #8b98a5; margin-top: 3px">
+          From MSTY · after withholding tax · averaged over the last 3 payments
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="badge" style="background: rgba(232,163,61,0.16); color: #e8a33d">47% there</span>
+        <span style="color: #5c6a76; font-size: 15px">✕</span>
+      </div>
+    </div>
+    <div class="bar" style="margin-top: 13px"><i style="width: 47%"></i></div>
+    <div class="facts" style="margin-top: 12px">
+      <span>Averaging <b class="num" style="color: #3fb27f">RM 94.32</b></span>
+      <span>Still need <b class="num" style="color: #e6edf3">RM 105.68</b> per payment</span>
+      <span>Buy <b class="num" style="color: #e6edf3">205</b> more → capital <b class="num" style="color: #e6edf3">$3,141.96</b>
+        <span class="num" style="color: #5c6a76">≈ RM 12,683.28</span></span>
+    </div>
+    <div class="hr" style="margin: 14px 0"></div>
+    <div class="field"><span class="eyebrow">Target per payment (RM)</span><div class="input" style="width: 150px">200</div></div>
+    <div style="font-size: 12px; color: #5c6a76; margin-top: 12px; line-height: 1.6">
+      Your last 3 MSTY payments averaged <b style="color: #8b98a5">RM 94.32</b> on 182.312 shares — about
+      <span class="num">RM 0.52</span> per share each time. Reaching RM 200.00 needs roughly
+      <b style="color: #8b98a5">205</b> more shares. That assumes the fund keeps paying at the same rate per
+      share, which is the shaky part — MSTY's payout has been moving, so treat this as a direction, not a promise.
+    </div>
+  </div>
+
+  <div style="font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin-top: 6px">New goal</div>
+  <div class="card">
+    <div style="display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap">
+      <div class="field"><span class="eyebrow">Goal type</span>
+        <div class="input" style="width: 190px; font-family: 'IBM Plex Sans', sans-serif; justify-content: space-between">
+          <span>Per dividend payment</span><span style="color: #5c6a76">▾</span></div></div>
+      <div class="field"><span class="eyebrow">Scope</span>
+        <div class="input" style="width: 190px; font-family: 'IBM Plex Sans', sans-serif; justify-content: space-between">
+          <span>MSTY <span style="color: #5c6a76">USD</span></span><span style="color: #5c6a76">▾</span></div></div>
+      <div class="field"><span class="eyebrow">Target per payment (RM)</span>
+        <div class="input" style="width: 160px">1000</div></div>
+      <div style="background: #e8a33d; color: #10151a; border-radius: 6px; padding: 7px 13px; font-size: 12.5px; font-weight: 600">+ Add goal</div>
+    </div>
+    <div style="font-size: 12px; color: #5c6a76; margin-top: 12px; line-height: 1.55">
+      Income targets are in RM so every goal is comparable, and count what reached your wallet after tax — set by
+      the P&amp;L basis in Settings.
+    </div>
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6">
+    <b style="color: #e6edf3">Five goal kinds, two shapes.</b> Share goals ask "how many more and what does that
+    cost"; the four income kinds (total, this year, monthly rate, per payment) ask "how much is it paying me".
+    Share targets are in the instrument's currency, income targets always in RM so they compare. Fields commit on
+    blur, not per keystroke.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

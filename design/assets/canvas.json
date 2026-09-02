@@ -1,0 +1,54 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",     "title": "Assets — ASB, Tabung Haji, EPF",   "x": 0,    "y": 0,    "w": 1440, "h": 1400 },
+    { "file": "NetWorth.dc.html", "title": "Dashboard — net worth, debt only", "x": 1620, "y": 0,    "w": 1440, "h": 760 },
+    { "file": "Money.dc.html",    "title": "Money — income and commitments",   "x": 0,    "y": 1580, "w": 1440, "h": 1440 },
+    { "file": "Goals.dc.html",    "title": "Goals — claimed against available","x": 1620, "y": 1580, "w": 1440, "h": 1040 },
+    { "file": "AddEntry.dc.html", "title": "Forms — an entry and a loan",      "x": 1620, "y": 2760, "w": 1060, "h": 700 }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -360,
+      "w": 1440,
+      "text": "VANTAGE — BEYOND THE BROKER\n\nRedrawn against what you actually hold: ASB, Tabung Haji, EPF, a house and car loan, and freelance income beside a salary. No gold, and property and vehicles tracked as debts only. Drawn with the real tokens — IBM Plex, #0e1216 / #151b21, 6px radius, the same .num / .eyebrow / .stat scale — so this reads as the app, not as a proposal about it.\n\nTHE STRUCTURAL DECISION: none of this goes in `instruments` or `cash_movements`. Those are the moomoo world, and putting anything else in them breaks the broker math silently — cashBal() would subtract an ASB contribution from the wallet, monthlyIncomeRate() would average an annual distribution into a 3-month run rate, and a month with a bonus in it would read as a spectacular month for the ETFs. So: parallel tables the broker code never reads, joined at exactly two derived figures — net worth, and the uncommitted cash every goal is measured against.\n\nEPF EARNS ITS PLACE HERE. It is the SAVINGS kind unchanged — a balance earning an annual dividend — but funded by payroll rather than by you, so an employment income event writes the matching asset entry in the same transaction. It is also the largest single thing you own, and it has never been on this dashboard.\n\nHoldings are invented; the MECHANICS are researched from primary sources. See personal-assets-plan.md and commitments-and-income-plan.md."
+    },
+    {
+      "id": "estimator",
+      "x": -600,
+      "y": 260,
+      "w": 520,
+      "text": "THREE ACCOUNTS, TWO RULES\n\nASB and Tabung Haji pay on the mean of twelve monthly MINIMA — confirmed in both providers' own wording. ASNB: 'Total Monthly Minimum Balance for the Year / 12 Months x Income Distribution Rate'.\n\nSo a deposit never lifts the month it lands in, only the months after it. RM 1,000 paid in by 30 September earns RM 14.38 this year; on 1 October, RM 9.58. One day of waiting costs a third of it.\n\nEPF DOES NOT FOLLOW THAT RULE. It uses a modified aggregate daily balance, where each month's contribution earns from the last day of that month to 31 December — so a January contribution earns nearly a full year and a December one almost none. Same timing lesson, different arithmetic, which is exactly why rate_basis is a column rather than a constant.\n\nThe bars are zero-based: eight solid for months already fixed, four hatched from September on, the same declared-vs-projected grammar the Calendar already uses. The chart looks flat because the balance genuinely is.\n\nASB's 5.75 sen is two numbers — 5.20 income plus a 0.55 bonus PNB pays at its own discretion. Store them apart; the additional bonus, when declared, applies only to the first 30,000 units."
+    },
+    {
+      "id": "networth",
+      "x": 3180,
+      "y": 0,
+      "w": 480,
+      "text": "DEBT ONLY, AND THE LABEL SAYS SO\n\nYou chose to track the loans without maintaining a valuation for the house or the car. That is a defensible trade — no guesswork to keep fresh, nothing quietly flattering you — but it means the largest thing you own is missing from a figure that subtracts the largest thing you owe.\n\nSo the headline carries the caveat rather than burying it, and the number is negative. Counting both would read about +RM 310,714 on a RM 550,000 house and a RM 42,000 car. Neither figure is dishonest; only an unlabelled one would be.\n\nThe debt bar is drawn first and at full width because it is the bigger number — you own 62.9% of what you owe. Reversing that to flatter the assets would be a chart lying about which way round the situation is.\n\nDEBT FALLING is what to watch while this is negative: RM 1,568 a month of principal, plus RM 1,955 into EPF without you doing anything. The equity curve cannot show either today."
+    },
+    {
+      "id": "waterfall",
+      "x": -600,
+      "y": 1580,
+      "w": 520,
+      "text": "COMMITMENTS, NOT SPENDING\n\nThe scope line, and the most important product decision here. Rent, instalments, insurance and subscriptions are KNOWN IN ADVANCE — enter each once and it is right for years. Groceries and petrol are not, and an app that asks for them becomes a chore abandoned in three weeks.\n\nSo the waterfall ends at UNCLAIMED, never at 'surplus'. Calling it anything else would be the app's first lie.\n\nTWO SUBTRACTIONS, TWO MEANINGS — and this draw shows why that matters. Uncommitted is healthy at RM 4,174.93; unclaimed is NEGATIVE at −RM 225.07. The obligations are fine; it is the goals that do not fit. One is a fact about what you owe, the other about what you intend, and merging them would hide which is which.\n\nTHE FLAT-RATE CONVERSION. Malaysian hire purchase charges interest on the ORIGINAL principal for the whole term, so 3.40% flat is 6.27% effective — above ASB, not below it. The conversion is the Hire-Purchase Act's own Seventh Schedule closed form, which reproduces the effective rates banks publish beside their flat rates to the basis point.\n\nLOANS ARE DERIVED, NOT LOGGED. Principal, rate, rate type, term, start date — and today's date gives the balance and every remaining payment. Only deviations get recorded. The card is the exception, because nothing about a revolving balance is derivable."
+    },
+    {
+      "id": "goals",
+      "x": 3180,
+      "y": 1580,
+      "w": 480,
+      "text": "THIS IS WHY THE OTHER SCREENS EXIST\n\nBefore income and commitments, goals.monthly_budget was a number typed into a box with nothing behind it. Nothing checked it against what you earn, what you already owe, or what the other goals had claimed.\n\nNow it is a claim on a finite, known pool — and here the claims do not fit. Three goals want RM 4,400 against RM 4,174.93 uncommitted.\n\nTHE SHORTFALL LANDS ON ONE GOAL, NOT SPREAD ACROSS ALL THREE. A plan that quietly shaves every target is worse than one that names the goal it cannot keep: the ETCO goal reprojects from 19 months to 21, and says so. Reorder the list and the squeeze moves.\n\nTwo months is not a crisis. The point is that the app noticed — before this, the screen would have shown 19 months and been quietly wrong for as long as the plan lasted.\n\nNote also the ASB projection: 12 years 7 months on deposits alone, about 8 years 2 months once its own distributions are reinvested. That four-and-a-half-year gap is the strongest argument the app can make for filling ASB first, and it is arithmetic rather than advice."
+    },
+    {
+      "id": "forms",
+      "x": 2760,
+      "y": 2760,
+      "w": 420,
+      "text": "THE FORM FOLLOWS THE KIND\n\nA savings entry is amount and date, and it previews what the dated deposit is worth before you save it — the estimator doing useful work at the moment the decision is being made, badged as an estimate at last year's rate.\n\nA loan is five fields off the agreement, and every future instalment follows. You never type a payment.\n\nTHE ONE QUESTION THAT CANNOT BE ASKED CASUALLY: the form asks what interest is charged ON, not 'is this a fixed rate?'. Bank Negara defines flat as interest on the original amount and fixed as an unchanging rate on the reducing balance — but Malaysian marketing routinely says 'fixed' when it means flat. Only the first phrasing cannot be answered wrongly in good faith, and getting it wrong misstates both the balance and the true cost in the flattering direction.\n\nThe March 2023 date is why this loan keeps flat rate and Rule of 78: the June 2026 reform binds new agreements only. A car loan signed today would use the other setting — which is why rate_type cannot be inferred from a start date."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

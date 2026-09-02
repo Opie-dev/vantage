@@ -1,0 +1,386 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+      --chart-5: #d55181; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--background); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1;
+      letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 12px;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: var(--card); padding: 16px 0;
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+    }
+    .card > * { padding-inline: 16px; }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 0 6px; font-size: 9.5px; line-height: 16px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-gain { background: rgba(63,178,127,0.12); color: var(--gain); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--hairline);
+    }
+    .row:last-child { border-bottom: 0; }
+    .dot { width: 8px; height: 8px; border-radius: 9999px; flex-shrink: 0 }
+    .track { height: 5px; border-radius: 9999px; background: var(--muted); overflow: hidden }
+    .fill { height: 100%; }
+    th {
+      border-bottom: 1px solid var(--hairline); padding: 0 0 7px 12px;
+      text-align: right; font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); white-space: nowrap;
+    }
+    td { border-bottom: 1px solid var(--hairline); padding: 8px 0 8px 12px; text-align: right; font-size: 12.5px; }
+    th:first-child, td:first-child { text-align: left; padding-left: 0; }
+    tr:last-child td { border-bottom: 0 }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="min-height: 1400px; background: var(--background); display: flex; flex-direction: column">
+
+  <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 28px">
+    <h1 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Money</h1>
+    <div style="flex: 1"></div>
+    <span class="faint" style="font-size: 11.5px">September 2026</span>
+  </header>
+
+  <!-- ── the waterfall ────────────────────────────────────────────────────── -->
+  <div style="border-bottom: 1px solid var(--hairline); padding: 26px 28px 24px">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; flex-wrap: wrap">
+
+      <div style="min-width: 400px; flex: 1">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Unclaimed this month</span>
+          <span class="badge badge-loss">goals over by RM 225.07</span>
+        </div>
+        <div class="num loss" style="margin-top: 10px; font-size: 62px; line-height: 0.92; font-weight: 600; letter-spacing: -0.045em">
+          &minus;RM&nbsp;225<span class="faint">.07</span>
+        </div>
+        <p class="mut" style="margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; max-width: 480px">
+          Your obligations are comfortable — <b class="num" style="font-weight: 600">RM 4,174.93</b> is
+          uncommitted. It is the <b style="font-weight: 600">goals</b> that do not fit: they claim
+          RM 4,400.00 between them. Two different facts, and the screen keeps them apart because one is
+          about what you owe and the other about what you intend.
+          <span class="faint">Fix it on Goals, not here.</span>
+        </p>
+      </div>
+
+      <div style="min-width: 560px; flex: 1.3; padding-top: 2px">
+        <div class="eyebrow" style="margin-bottom: 9px">Where net income goes · RM 8,719.50</div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <div style="flex: 1; display: flex; height: 15px; border-radius: 9999px; overflow: hidden">
+            <div style="width: 52.12%; background: var(--loss); opacity: 0.85"></div>
+            <div style="width: 47.88%; background: var(--chart-4)"></div>
+          </div>
+          <div style="width: 34px; height: 15px; border-radius: 9999px; background: repeating-linear-gradient(115deg, var(--loss) 0 5px, transparent 5px 10px)"></div>
+        </div>
+        <div class="num faint" style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase">
+          <span>4,544.57 committed</span><span>4,174.93 to goals</span><span class="loss">225.07 short</span>
+        </div>
+
+        <div style="margin-top: 20px; display: grid; gap: 7px; max-width: 560px">
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 190px; flex-shrink: 0">Net income</span>
+            <span class="num" style="flex: 1; text-align: right; font-weight: 600">RM 8,719.50</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 190px; flex-shrink: 0">− Loan instalments</span>
+            <span class="num loss" style="flex: 1; text-align: right">3,034.57</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 190px; flex-shrink: 0">− Rent &amp; recurring</span>
+            <span class="num loss" style="flex: 1; text-align: right">1,393.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 190px; flex-shrink: 0">− Card minimum</span>
+            <span class="num loss" style="flex: 1; text-align: right">117.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px; border-top: 1px solid var(--hairline); padding-top: 8px">
+            <span style="width: 190px; flex-shrink: 0; font-weight: 600">= Uncommitted</span>
+            <span class="num" style="flex: 1; text-align: right; font-weight: 600">RM 4,174.93</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 190px; flex-shrink: 0">− Goal budgets claimed</span>
+            <span class="num" style="flex: 1; text-align: right; color: var(--chart-4)">4,400.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px; border-top: 1px solid var(--hairline); padding-top: 8px">
+            <span style="width: 190px; flex-shrink: 0; font-weight: 600">= Unclaimed</span>
+            <span class="num loss" style="flex: 1; text-align: right; font-weight: 600">−RM 225.07</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 20px 28px 0; display: grid; gap: 14px">
+
+    <div style="display: grid; gap: 14px; grid-template-columns: minmax(0,1fr) minmax(0,1fr)">
+
+      <!-- ── coming in ──────────────────────────────────────────────────── -->
+      <div class="card">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Coming in</span>
+          <span class="badge badge-gain">RM 8,719.50 net</span>
+        </div>
+
+        <div>
+          <div class="row">
+            <span class="dot" style="background: var(--gain)"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600">Day job</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">Monthly · 25th · gross RM 8,500.00</div>
+            </div>
+            <div style="text-align: right">
+              <div class="num" style="font-weight: 600">RM 6,869.50</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">net</div>
+            </div>
+          </div>
+
+          <div style="padding: 10px 0 12px 20px; border-bottom: 1px solid var(--hairline)">
+            <div class="eyebrow" style="font-size: 9.5px">Deducted from your pay</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 7px; font-size: 12px">
+              <span class="mut">EPF 11% <span class="num" style="color: var(--foreground)">935.00</span></span>
+              <span class="mut">SOCSO <span class="num" style="color: var(--foreground)">29.75</span></span>
+              <span class="mut">EIS <span class="num" style="color: var(--foreground)">11.90</span></span>
+              <span class="mut">SKBBK <span class="num" style="color: var(--foreground)">44.65</span>
+                <span class="badge badge-cash" style="margin-left: 4px">new</span></span>
+              <span class="mut">PCB <span class="num" style="color: var(--foreground)">609.20</span></span>
+            </div>
+            <div class="eyebrow" style="font-size: 9.5px; margin-top: 11px">Paid on top by your employer</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 7px; font-size: 12px">
+              <span class="mut">EPF 12% <span class="num" style="color: var(--foreground)">1,020.00</span></span>
+              <span class="mut">SOCSO <span class="num" style="color: var(--foreground)">104.15</span></span>
+              <span class="mut">EIS <span class="num" style="color: var(--foreground)">11.90</span></span>
+            </div>
+            <p class="faint" style="margin: 10px 0 0; font-size: 11.5px; line-height: 1.5">
+              The second group never passes through your pay, so it is not subtracted from net —
+              but <span class="num">RM 1,955.00</span> of EPF lands in your account this month
+              either way, and Vantage books it there automatically.
+              <b style="font-weight: 600; color: var(--cash)">SKBBK is new since 1 June 2026</b> —
+              0.75% of wages, employee-borne with no employer share, and enrolled by default unless
+              you filed to opt out before 31 August. A payslip model written last year does not have
+              this line.
+            </p>
+          </div>
+
+          <div class="row">
+            <span class="dot" style="background: var(--gain); opacity: 0.5"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600; display: flex; align-items: center; gap: 7px">
+                Design work
+                <span class="badge badge-cash">variable</span>
+              </div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">Irregular · 3-month average · last RM 2,400 on 14 Aug</div>
+            </div>
+            <div style="text-align: right">
+              <div class="num" style="font-weight: 600">≈ RM 1,850.00</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">estimate</div>
+            </div>
+          </div>
+        </div>
+
+        <p class="faint" style="margin: 0; font-size: 11.5px; line-height: 1.55">
+          Salary is a floor; freelance is an average of the last three months, drawn hatched wherever
+          it appears — the same way a projected dividend is never drawn like a declared one. A good
+          quarter must not quietly become the baseline you plan against.
+        </p>
+      </div>
+
+      <!-- ── going out ──────────────────────────────────────────────────── -->
+      <div class="card">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Going out</span>
+          <span class="badge badge-loss">RM 4,544.57 a month</span>
+        </div>
+
+        <div>
+          <div class="row">
+            <span class="dot" style="background: var(--chart-1)"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600">House · Maybank</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">
+                <span class="num">4.10%</span> reducing · due 1st · <span class="num">63</span> of <span class="num">420</span> paid
+              </div>
+              <div class="track" style="margin-top: 6px; max-width: 190px"><div class="fill" style="width: 15%; background: var(--chart-1)"></div></div>
+            </div>
+            <div style="text-align: right">
+              <div class="num" style="font-weight: 600">RM 1,885.00</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">RM 388,432 left</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="dot" style="background: var(--chart-2)"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600; display: flex; align-items: center; gap: 7px">
+                Myvi · hire purchase
+                <span class="badge badge-cash">3.40% flat = 6.27% effective</span>
+              </div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">
+                due 5th · <span class="num">42</span> of <span class="num">84</span> paid
+              </div>
+              <div class="track" style="margin-top: 6px; max-width: 190px"><div class="fill" style="width: 50%; background: var(--chart-2)"></div></div>
+            </div>
+            <div style="text-align: right">
+              <div class="num" style="font-weight: 600">RM 1,149.57</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">RM 48,282 of instalments</div>
+            </div>
+          </div>
+
+          <div class="row">
+            <span class="dot" style="background: var(--chart-5)"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600">Rent · room, KL</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">Monthly · due 1st · no balance, pure expense</div>
+            </div>
+            <div class="num" style="font-weight: 600">RM 900.00</div>
+          </div>
+
+          <div class="row">
+            <span class="dot" style="background: var(--chart-5); opacity: 0.6"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600">Takaful, phone, internet, streaming</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">4 recurring charges</div>
+            </div>
+            <div class="num" style="font-weight: 600">RM 493.00</div>
+          </div>
+
+          <div class="row">
+            <span class="dot" style="background: var(--loss)"></span>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-weight: 600; display: flex; align-items: center; gap: 7px">
+                CIMB Visa
+                <span class="badge badge-neutral">as of 29 Aug</span>
+              </div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">
+                <span class="num">RM 2,340</span> of <span class="num">RM 15,000</span> · 15.6% used · <span class="num">18%</span> if carried &mdash; <span class="num">15%</span> after 12 prompt payments
+              </div>
+              <div class="track" style="margin-top: 6px; max-width: 190px"><div class="fill" style="width: 15.6%; background: var(--loss)"></div></div>
+            </div>
+            <div style="text-align: right">
+              <div class="num" style="font-weight: 600">RM 117.00</div>
+              <div class="faint" style="font-size: 11.5px; margin-top: 2px">minimum</div>
+            </div>
+          </div>
+        </div>
+
+        <p class="faint" style="margin: 0; font-size: 11.5px; line-height: 1.55">
+          The two loans are derived from their terms — principal, rate, type, start — so nothing here
+          needed 126 payments typed in. Only deviations get recorded. The card is the exception: its
+          balance is a snapshot you update, which is why it says when.
+        </p>
+      </div>
+    </div>
+
+    <!-- ── the rate comparison ────────────────────────────────────────────── -->
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="eyebrow">Every rate you hold, in one unit</span>
+      </div>
+      <div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 100%">&nbsp;</th>
+              <th>As quoted</th>
+              <th>Effective</th>
+              <th>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="dot" style="background: var(--loss)"></span>Credit card, if carried</span></td>
+              <td class="num mut">18.00%</td>
+              <td class="num loss" style="font-weight: 600">18.00%</td>
+              <td class="num mut">RM 2,340</td>
+            </tr>
+            <tr>
+              <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="dot" style="background: var(--chart-2)"></span>Car loan <span class="faint">flat rate</span></span></td>
+              <td class="num mut">3.40%</td>
+              <td class="num loss" style="font-weight: 600">6.27%</td>
+              <td class="num mut">RM 48,282</td>
+            </tr>
+            <tr>
+              <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="dot" style="background: var(--chart-3)"></span>ASB</span></td>
+              <td class="num mut">5.75 sen</td>
+              <td class="num gain" style="font-weight: 600">5.75%</td>
+              <td class="num mut">RM 74,300</td>
+            </tr>
+            <tr>
+              <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="dot" style="background: var(--chart-1)"></span>Home loan</span></td>
+              <td class="num mut">4.10%</td>
+              <td class="num loss" style="font-weight: 600">4.10%</td>
+              <td class="num mut">RM 388,432</td>
+            </tr>
+            <tr>
+              <td><span style="display: inline-flex; align-items: center; gap: 8px"><span class="dot" style="background: var(--chart-7)"></span>Tabung Haji</span></td>
+              <td class="num mut">3.50%</td>
+              <td class="num gain" style="font-weight: 600">3.50%</td>
+              <td class="num mut">RM 28,120</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="faint" style="margin: 0; font-size: 11.5px; line-height: 1.6">
+        The conversion is the whole reason this table exists. A car loan quoted at
+        <span class="num">3.40% flat</span> charges interest on the original amount for the entire
+        term, so its true cost is <b style="font-weight: 600">1.8&times;</b> the number on the contract — and it sits
+        <b style="font-weight: 600">above</b> ASB, not below it. Malaysian car loans are quoted flat
+        and savings are quoted effective; putting them in one column without converting would be the
+        exact mistake this feature exists to prevent. Vantage states the rates in one unit and stops
+        there — what to do about them is not its call. The conversion is an IRR solved against the
+        payment schedule, not a shortcut formula: it reproduces the effective rates Malaysian banks
+        publish beside their own flat rates to the basis point.
+      </p>
+    </div>
+
+    <p class="faint" style="margin: 4px 0 0; font-size: 11.5px; line-height: 1.6">
+      Nothing on this screen touches the moomoo wallet. Salary is not a
+      <span class="num">DEPOSIT</span>, rent is not a <span class="num">WITHDRAW</span>, and
+      <span class="num">income()</span> still means dividends alone — a month with a bonus in it
+      must never read as a spectacular month for the ETFs. Two figures cross the line and no others:
+      net worth, and the unclaimed cash that every goal is measured against.
+    </p>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

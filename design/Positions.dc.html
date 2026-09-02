@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    th { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+         color: #8b98a5; text-align: right; padding: 9px 10px; border-bottom: 1px solid #243039; }
+    th.l { text-align: left; }
+    td { padding: 11px 10px; text-align: right; border-bottom: 1px solid #1c262e; font-size: 13px; }
+    td.l { text-align: left; }
+    tr:last-child td { border-bottom: 0; }
+  </style>
+</helmet>
+
+<div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 12px">
+
+  <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+    <span style="font-size: 11.5px; color: #5c6a76">
+      P&amp;L basis: <span style="color: #8b98a5">Include income, after tax</span> — change in Settings
+    </span>
+    <div style="flex: 1"></div>
+    <div style="background: #e8a33d; color: #10151a; border-radius: 6px; padding: 5px 11px; font-size: 12.5px; font-weight: 600">
+      + Add transaction
+    </div>
+  </div>
+
+  <div style="background: #151b21; border: 1px solid #243039; border-radius: 6px; overflow: hidden">
+    <table style="width: 100%; border-collapse: collapse">
+      <thead>
+        <tr>
+          <th class="l">Instrument</th>
+          <th>Qty</th>
+          <th>Avg cost</th>
+          <th>Price</th>
+          <th>Value</th>
+          <th>P&amp;L</th>
+          <th>P&amp;L %</th>
+          <th>Dividends</th>
+          <th>Fees paid</th>
+          <th>Withholding</th>
+          <th style="border-left: 1px solid #1c262e">Net income</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="l">
+            <div style="display: flex; align-items: baseline; gap: 8px">
+              <span style="width: 9px; height: 9px; border-radius: 999px; background: #199e70"></span>
+              <span style="font-weight: 700">ETCO</span>
+              <span style="font-size: 10.5px; letter-spacing: 0.05em; color: #5c6a76">US</span>
+            </div>
+            <div style="font-size: 12px; color: #8b98a5; margin: 3px 0 0 17px">Grayscale Ethereum Covered Call ETF</div>
+          </td>
+          <td class="num">691</td>
+          <td class="num">$11.87</td>
+          <td class="num">$8.91</td>
+          <td class="num">$6,155.08</td>
+          <td class="num" style="color: #e5534b">−$1,312.69</td>
+          <td class="num" style="color: #e5534b">−16.0%</td>
+          <td class="num">
+            <div style="color: #e8a33d">$1,048.22</div>
+            <div style="font-size: 11px; color: #5c6a76">13% returned</div>
+          </td>
+          <td class="num">
+            <div style="color: #e5534b">$45.13</div>
+            <div style="font-size: 11px; color: #5c6a76">0.6% of cost</div>
+          </td>
+          <td class="num">
+            <div style="color: #e5534b">−$314.47</div>
+            <div style="font-size: 11px; color: #5c6a76">30% of dividends</div>
+          </td>
+          <td class="num" style="border-left: 1px solid #1c262e">
+            <div style="color: #3fb27f; font-weight: 600">$733.75</div>
+            <div style="font-size: 11px; color: #5c6a76">9% after tax</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">
+            <div style="display: flex; align-items: baseline; gap: 8px">
+              <span style="width: 9px; height: 9px; border-radius: 999px; background: #3987e5"></span>
+              <span style="font-weight: 700">MSTY</span>
+              <span style="font-size: 10.5px; letter-spacing: 0.05em; color: #5c6a76">US</span>
+            </div>
+            <div style="font-size: 12px; color: #8b98a5; margin: 3px 0 0 17px">YieldMax MSTR Option Income Strategy ETF</div>
+          </td>
+          <td class="num">182.312</td>
+          <td class="num">$17.68</td>
+          <td class="num">$15.35</td>
+          <td class="num">$2,798.49</td>
+          <td class="num" style="color: #e5534b">−$134.12</td>
+          <td class="num" style="color: #e5534b">−4.2%</td>
+          <td class="num">
+            <div style="color: #e8a33d">$415.45</div>
+            <div style="font-size: 11px; color: #5c6a76">13% returned</div>
+          </td>
+          <td class="num">
+            <div style="color: #e5534b">$31.99</div>
+            <div style="font-size: 11px; color: #5c6a76">1.0% of cost</div>
+          </td>
+          <td class="num">
+            <div style="color: #e5534b">−$124.63</div>
+            <div style="font-size: 11px; color: #5c6a76">30% of dividends</div>
+          </td>
+          <td class="num" style="border-left: 1px solid #1c262e">
+            <div style="color: #3fb27f; font-weight: 600">$290.82</div>
+            <div style="font-size: 11px; color: #5c6a76">9% after tax</div>
+          </td>
+        </tr>
+        <tr>
+          <td class="l">
+            <div style="display: flex; align-items: baseline; gap: 8px">
+              <span style="width: 9px; height: 9px; border-radius: 999px; background: #d95926"></span>
+              <span style="font-weight: 700">AMDY</span>
+              <span style="font-size: 10.5px; letter-spacing: 0.05em; color: #5c6a76">US</span>
+            </div>
+            <div style="font-size: 12px; color: #8b98a5; margin: 3px 0 0 17px">YieldMax AMD Option Income Strategy ETF</div>
+          </td>
+          <td class="num">25.607</td>
+          <td class="num">$53.85</td>
+          <td class="num">$42.51</td>
+          <td class="num">$1,088.55</td>
+          <td class="num" style="color: #e5534b">−$152.18</td>
+          <td class="num" style="color: #e5534b">−11.0%</td>
+          <td class="num">
+            <div style="color: #e8a33d">$197.57</div>
+            <div style="font-size: 11px; color: #5c6a76">14% returned</div>
+          </td>
+          <td class="num">
+            <div style="color: #e5534b">$12.51</div>
+            <div style="font-size: 11px; color: #5c6a76">0.9% of cost</div>
+          </td>
+          <td class="num">
+            <div style="color: #e5534b">−$59.27</div>
+            <div style="font-size: 11px; color: #5c6a76">30% of dividends</div>
+          </td>
+          <td class="num" style="border-left: 1px solid #1c262e">
+            <div style="color: #3fb27f; font-weight: 600">$138.30</div>
+            <div style="font-size: 11px; color: #5c6a76">10% after tax</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="border-top: 1px solid #1c262e; padding: 11px 12px; font-size: 12px; color: #5c6a76; line-height: 1.55">
+      Prices: OpenD sync when running, ↻ Prices (Yahoo) otherwise. Avg cost includes fees. Dividends are gross of
+      withholding tax, which moomoo books separately and does not attribute to a holding; the percentage is
+      cumulative income against cost since you first bought, not an annual yield. Fees are trading costs already
+      included in avg cost — shown separately, not charged twice. Net income is Dividends less Withholding.
+    </div>
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6">
+    <b style="color: #e6edf3">The redesign problem on this screen:</b> eleven columns, three of which
+    (Dividends, Fees, Withholding) each carry a second line, and two of the numbers behave differently —
+    fees are already inside Avg cost, withholding genuinely reduces Dividends. Everything is in the
+    instrument's own currency, so nothing here may be summed into a total row.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

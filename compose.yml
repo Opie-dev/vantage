@@ -1,0 +1,87 @@
+# Vantage — the app only. The database it uses is the machine's shared devdata
+# Postgres (compose project `devdata`, see semaisens/worktree-tools/compose.services.yml),
+# which is deliberately NOT declared here: a `docker compose down` on Vantage must
+# never take the shared database down with it.
+#
+#   docker compose -f ../semaisens/worktree-tools/compose.services.yml up -d   # once, if devdata is not up
+#   docker compose up -d --build                                               # → http://localhost:8123
+#
+# We join devdata_default as an external network, so the app reaches Postgres by
+# container name on its INTERNAL port (dev-postgres:5432), not the host's 5433.
+name: vantage
+
+services:
+  # One-shot. The devdata Postgres only ships with the semaisens databases, so
+  # create ours before the app boots. Idempotent — re-runs on every `up` and
+  # does nothing once the database exists.
+  createdb:
+    image: devdata-postgres:16-3.4-pgvector   # already on this machine; has psql + createdb
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-secret}
+    command:
+      - sh
+      - -c
+      - >-
+        psql -h dev-postgres -U semaisens -d postgres -tAc
+        "SELECT 1 FROM pg_database WHERE datname='vantage'" | grep -q 1 ||
+        createdb -h dev-postgres -U semaisens -O semaisens vantage
+    networks: [devdata]
+    restart: "no"
+
+  # One-shot. Applies db/migrations before the app boots — the app refuses to
+  # start against an unmigrated database, so this has to succeed first. Schema
+  # dumping is off because it is the migrations, not the dump, that are
+  # authoritative; run `npm run db:schema` on the host if you want the dump.
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2
+    environment:
+      DATABASE_URL: ${DBMATE_URL:-postgres://semaisens:secret@dev-postgres:5432/vantage?sslmode=disable}
+      DBMATE_NO_DUMP_SCHEMA: "true"
+    volumes:
+      - ./db:/db
+    command: ["--wait", "up"]
+    networks: [devdata]
+    depends_on:
+      createdb:
+        condition: service_completed_successfully
+    restart: "no"
+
+  app:
+    build: .
+    image: vantage:local
+    container_name: vantage
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://semaisens:secret@dev-postgres:5432/vantage}
+      PORT: 8123
+      # Empty = no auth, which is the right default while this is bound to
+      # loopback. Set VANTAGE_PIN in .env to lock the API behind a PIN; the sync
+      # worker then needs the same value in its environment.
+      VANTAGE_PIN: ${VANTAGE_PIN:-}
+      # The Sync button cannot reach OpenD from in here — OpenD listens on the
+      # HOST's loopback. It proxies to sync/moomoo_sync.py --serve instead, which
+      # runs on the host and owns the OpenD session. Agent down = the button says so.
+      SYNC_AGENT_URL: ${SYNC_AGENT_URL:-http://host.docker.internal:8124}
+    ports:
+      # Loopback only, matching devdata's reasoning: this is a personal tracker
+      # with no authentication in front of it.
+      - "127.0.0.1:8123:8123"
+    # Docker Desktop resolves this name already; declaring it keeps the same
+    # compose working on a plain Linux engine, where it would not.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [devdata]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8123/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+networks:
+  devdata:
+    external: true
+    name: devdata_default

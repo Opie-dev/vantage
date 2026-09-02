@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+    .frame { background: #0e1216; border: 1px solid #243039; border-radius: 6px; overflow: hidden;
+             width: 420px; height: 300px; display: flex; flex-direction: column; }
+    .skel { background: #1a222a; border-radius: 6px; }
+    .cap { font-size: 12px; color: #8b98a5; line-height: 1.55; max-width: 420px; }
+  </style>
+</helmet>
+
+<div style="padding: 28px 30px; display: flex; flex-direction: column; gap: 20px">
+
+  <div>
+    <div class="eyebrow">States — what the shell shows when there is nothing to show</div>
+    <div style="font-size: 12.5px; color: #8b98a5; margin-top: 5px; max-width: 980px; line-height: 1.55">
+      Four conditions the app resolves before any screen renders. The lock screen replaces the shell entirely; the
+      other three sit inside it.
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start">
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div class="frame" style="padding: 16px; gap: 12px">
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <div class="skel" style="height: 62px"></div><div class="skel" style="height: 62px"></div>
+          <div class="skel" style="height: 62px"></div><div class="skel" style="height: 62px"></div>
+        </div>
+        <div class="skel" style="height: 130px"></div>
+      </div>
+      <div class="cap"><b style="color: #e6edf3">Loading.</b> Skeletons matching the Dashboard's grid, so the
+        layout does not jump when data lands. No spinner.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div class="frame" style="align-items: center; justify-content: center; padding: 24px; text-align: center">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#e5534b" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 9v4"/><path d="M12 17h.01"/>
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        </svg>
+        <div style="font-size: 15px; font-weight: 600; margin-top: 12px">Can't reach the server</div>
+        <div style="font-size: 12.5px; color: #8b98a5; margin-top: 6px; line-height: 1.55">
+          connect ECONNREFUSED 127.0.0.1:5433
+        </div>
+        <div style="font-size: 11.5px; color: #5c6a76; margin-top: 8px; line-height: 1.55">
+          Is Vantage running? <span class="num">docker compose up -d</span>
+        </div>
+        <div style="border: 1px solid #243039; border-radius: 6px; padding: 6px 14px; font-size: 12.5px; margin-top: 14px">Retry</div>
+      </div>
+      <div class="cap"><b style="color: #e6edf3">Server down.</b> Shows the real error rather than a friendly
+        nothing — this is a single-user app on the owner's own machine, so the cause is usually actionable.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div class="frame" style="align-items: center; justify-content: center">
+        <div style="background: #151b21; border: 1px solid #243039; border-radius: 6px; width: 300px; padding: 22px 24px; text-align: center">
+          <div style="width: 36px; height: 36px; border-radius: 999px; background: #1a222a; margin: 0 auto; display: flex; align-items: center; justify-content: center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b98a5" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <div style="font-size: 15px; font-weight: 600; margin-top: 10px">Vantage</div>
+          <div style="font-size: 12px; color: #5c6a76; margin-top: 3px">Enter your PIN to continue</div>
+          <div class="num" style="border: 1px solid #243039; background: #0e1216; border-radius: 6px; height: 34px; margin-top: 16px; display: flex; align-items: center; justify-content: center; letter-spacing: 0.3em; color: #8b98a5">••••</div>
+          <div style="height: 16px"></div>
+          <div style="background: #e8a33d; color: #10151a; border-radius: 6px; padding: 7px 0; font-size: 12.5px; font-weight: 600">Unlock</div>
+        </div>
+      </div>
+      <div class="cap"><b style="color: #e6edf3">Locked.</b> Only when a PIN is configured. No header, no tabs,
+        nothing that hints at the data behind it. Ten wrong tries in fifteen minutes locks further attempts.</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div class="frame" style="align-items: center; justify-content: center; padding: 24px">
+        <div style="max-width: 300px">
+          <div style="font-size: 15px; font-weight: 600">Welcome to Vantage.</div>
+          <div style="font-size: 12.5px; color: #8b98a5; margin-top: 6px">Three ways to get your data in:</div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px">
+            <div style="display: flex; gap: 11px; align-items: flex-start">
+              <span class="num" style="border: 1px solid #243039; border-radius: 999px; width: 19px; height: 19px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5c6a76; flex-shrink: 0">1</span>
+              <span style="font-size: 12.5px; color: #8b98a5; line-height: 1.5">Run the OpenD sync —
+                <span class="num" style="color: #e6edf3">python sync/moomoo_sync.py</span></span>
+            </div>
+            <div style="display: flex; gap: 11px; align-items: flex-start">
+              <span class="num" style="border: 1px solid #243039; border-radius: 999px; width: 19px; height: 19px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5c6a76; flex-shrink: 0">2</span>
+              <span style="font-size: 12.5px; color: #8b98a5; line-height: 1.5">Add instruments and log trades under Positions</span>
+            </div>
+            <div style="display: flex; gap: 11px; align-items: flex-start">
+              <span class="num" style="border: 1px solid #243039; border-radius: 999px; width: 19px; height: 19px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5c6a76; flex-shrink: 0">3</span>
+              <span style="font-size: 12.5px; color: #8b98a5; line-height: 1.5">Record a deposit under Wallet</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="cap"><b style="color: #e6edf3">First run.</b> Shown on the Dashboard when there are no
+        transactions and no cash rows at all.</div>
+    </div>
+
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6; max-width: 980px">
+    <b style="color: #e6edf3">Empty states are per-screen and specific.</b> Positions says "sync from OpenD or add
+    a BUY"; History names the filter that matched nothing and offers to clear it; Instruments says nothing is held;
+    the equity curve explains it fills in as snapshots accumulate. None of them is a generic "no data".
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

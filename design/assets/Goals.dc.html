@@ -1,0 +1,256 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e; --input: #243039;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-3: #199e70; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--background); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1; letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 12px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--card); padding: 16px 0;
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+    }
+    .card > * { padding-inline: 16px; }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 2px 8px; font-size: 12px; line-height: 16px; font-weight: 500; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-gain { background: rgba(63,178,127,0.12); color: var(--gain); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .badge-mini { padding: 0 6px; font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+    .track { height: 8px; border-radius: 9999px; background: rgba(232,163,61,0.2); overflow: hidden; }
+    .fill { height: 100%; background: var(--primary); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .input {
+      height: 32px; border-radius: 4px; border: 1px solid var(--input);
+      background: rgba(36,48,57,0.3); padding: 0 10px; display: inline-flex; align-items: center;
+      font-size: 13px;
+    }
+  </style>
+</helmet>
+
+<div style="min-height: 980px; background: var(--background); display: flex; flex-direction: column">
+
+  <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 28px">
+    <h1 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Goals</h1>
+    <div style="flex: 1"></div>
+    <span class="faint" style="font-size: 11.5px">September 2026</span>
+  </header>
+
+  <!-- ── the budget check: the whole reason income and commitments exist ──── -->
+  <div style="border-bottom: 1px solid var(--hairline); padding: 24px 28px 22px">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; flex-wrap: wrap">
+
+      <div style="min-width: 380px; flex: 1">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Claimed each month</span>
+          <span class="badge badge-loss badge-mini">over by RM 225.07</span>
+        </div>
+        <div class="num" style="margin-top: 10px; font-size: 52px; line-height: 0.92; font-weight: 600; letter-spacing: -0.04em">
+          RM&nbsp;4,400<span class="faint">.00</span>
+        </div>
+        <div class="mut" style="margin-top: 12px; font-size: 12.5px; line-height: 1.6">
+          against <b class="num" style="color: var(--foreground); font-weight: 600">RM 4,174.93</b> uncommitted.
+          Three goals, and the money runs out inside the third.
+        </div>
+      </div>
+
+      <div style="min-width: 540px; flex: 1.3; padding-top: 4px">
+        <div class="eyebrow" style="margin-bottom: 9px">What each goal claims</div>
+
+        <div style="position: relative">
+          <div style="display: flex; height: 15px; border-radius: 9999px; overflow: hidden">
+            <div style="width: 34.09%; background: var(--chart-3)"></div>
+            <div style="width: 9.09%;  background: var(--chart-7)"></div>
+            <div style="width: 51.70%; background: var(--chart-1)"></div>
+            <div style="width: 5.12%;  background: repeating-linear-gradient(115deg, var(--loss) 0 5px, transparent 5px 10px); opacity: 0.85"></div>
+          </div>
+          <div style="position: absolute; left: 94.88%; top: -5px; bottom: -5px; width: 2px; background: var(--loss)"></div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 9px; font-size: 10.5px" class="num faint">
+          <span style="letter-spacing: 0.06em; text-transform: uppercase">1,500 ASB</span>
+          <span style="letter-spacing: 0.06em; text-transform: uppercase">400 TH</span>
+          <span style="letter-spacing: 0.06em; text-transform: uppercase">2,500 ETCO</span>
+          <span class="loss" style="letter-spacing: 0.06em; text-transform: uppercase">225 short</span>
+        </div>
+
+        <div style="margin-top: 18px; display: grid; gap: 6px; max-width: 540px">
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 210px; flex-shrink: 0">Net income</span>
+            <span class="num" style="flex: 1; text-align: right">8,719.50</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 210px; flex-shrink: 0">− Fixed commitments</span>
+            <span class="num loss" style="flex: 1; text-align: right">4,544.57</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px; border-top: 1px solid var(--hairline); padding-top: 7px">
+            <span style="width: 210px; flex-shrink: 0; font-weight: 600">= Uncommitted</span>
+            <span class="num" style="flex: 1; text-align: right; font-weight: 600">RM 4,174.93</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+            <span class="mut" style="width: 210px; flex-shrink: 0">− Claimed by these goals</span>
+            <span class="num" style="flex: 1; text-align: right; color: var(--cash)">4,400.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px; border-top: 1px solid var(--hairline); padding-top: 7px">
+            <span style="width: 210px; flex-shrink: 0; font-weight: 600">= Unclaimed</span>
+            <span class="num loss" style="flex: 1; text-align: right; font-weight: 600">−RM 225.07</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="faint" style="margin: 18px 0 0; font-size: 11.5px; line-height: 1.6; max-width: 940px">
+      Before income and commitments existed, every budget on this screen was a number typed into a box with
+      nothing behind it. Now each one is a claim on a finite, known pool — and the app can say when the
+      claims do not fit. Note this is <b style="font-weight: 600">before living costs</b>: Vantage tracks
+      what is known in advance and never what you spend, so a positive figure here is a ceiling, not a
+      surplus.
+    </p>
+  </div>
+
+  <div style="padding: 20px 28px 0; display: grid; gap: 14px">
+
+    <!-- ASB -->
+    <div class="card">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+        <div>
+          <div class="num" style="font-size: 16px; font-weight: 600">RM 300,000 in ASB</div>
+          <div class="mut" style="margin-top: 4px; font-size: 12px">The unit holding cap · funded first</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="badge badge-gain badge-mini">fully funded</span>
+          <span class="badge badge-cash num">24.8% there</span>
+        </div>
+      </div>
+
+      <div class="track"><div class="fill" style="width: 24.8%"></div></div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 13px">
+        <span class="mut">You hold <b class="num" style="color: var(--foreground); font-weight: 600">RM 74,300</b></span>
+        <span class="mut">Still need <b class="num" style="color: var(--foreground); font-weight: 600">RM 225,700</b></span>
+        <span class="mut">Budget <span class="input num" style="margin-left: 4px">1,500.00</span> <span class="faint">/month</span></span>
+      </div>
+
+      <div style="border-left: 2px solid var(--gain); padding-left: 12px">
+        <div style="font-size: 12.5px; line-height: 1.55">
+          <b class="num" style="font-weight: 600">12 years 7 months</b> if you only count deposits —
+          but ASB reinvests its own distributions, so realistically
+          <b class="num gain" style="font-weight: 600">about 8 years 2 months</b>.
+          <span class="mut">The 5.75 sen compounding takes four and a half years off, which is the single
+          strongest argument for filling this one first.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabung Haji -->
+    <div class="card">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+        <div>
+          <div class="num" style="font-size: 16px; font-weight: 600">RM 33,300 in Tabung Haji</div>
+          <div class="mut" style="margin-top: 4px; font-size: 12px">Full hajj cost · B40 pays RM 15,000, M40 RM 23,500</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="badge badge-gain badge-mini">fully funded</span>
+          <span class="badge badge-cash num">84.4% there</span>
+        </div>
+      </div>
+
+      <div class="track"><div class="fill" style="width: 84.4%"></div></div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 13px">
+        <span class="mut">You hold <b class="num" style="color: var(--foreground); font-weight: 600">RM 28,120</b></span>
+        <span class="mut">Still need <b class="num" style="color: var(--foreground); font-weight: 600">RM 5,180</b></span>
+        <span class="mut">Budget <span class="input num" style="margin-left: 4px">400.00</span> <span class="faint">/month</span></span>
+      </div>
+
+      <div style="border-left: 2px solid var(--gain); padding-left: 12px">
+        <div style="font-size: 12.5px; line-height: 1.55">
+          <b class="num gain" style="font-weight: 600">13 months</b> — or twelve, once March&rsquo;s hibah
+          lands. <span class="mut">You are already past the RM 15,000 that gets you an offer letter, so this
+          goal is about which band you pay in, not whether you can go.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ETCO — the one that gets squeezed -->
+    <div class="card" style="border-color: rgba(229,83,75,0.4)">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px">
+        <div>
+          <div class="num" style="font-size: 16px; font-weight: 600">1,000 shares of ETCO</div>
+          <div class="mut" style="margin-top: 4px; font-size: 12px">US · priced in USD · funded last</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="badge badge-loss badge-mini">short by RM 225.07</span>
+          <span class="badge badge-cash num">42.0% there</span>
+        </div>
+      </div>
+
+      <div class="track"><div class="fill" style="width: 42%"></div></div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 6px 26px; font-size: 13px">
+        <span class="mut">You hold <b class="num" style="color: var(--foreground); font-weight: 600">420</b></span>
+        <span class="mut">Still need <b class="num" style="color: var(--foreground); font-weight: 600">580</b></span>
+        <span class="mut">@ <span class="num" style="color: var(--foreground)">$19.51</span> → capital
+          <b class="num" style="color: var(--foreground); font-weight: 600">$11,315.80</b>
+          <span class="num faint">≈ RM 47,752.68</span></span>
+        <span class="mut">Budget <span class="input num" style="margin-left: 4px; border-color: rgba(229,83,75,0.5)">2,500.00</span> <span class="faint">/month</span></span>
+      </div>
+
+      <div style="border-left: 2px solid var(--loss); padding-left: 12px">
+        <div style="font-size: 12.5px; line-height: 1.6">
+          At the <b class="num" style="font-weight: 600">RM 2,500</b> you asked for, this finishes in
+          <b class="num" style="font-weight: 600">19 months</b>. But ASB and Tabung Haji are funded first and
+          only <b class="num loss" style="font-weight: 600">RM 2,274.93</b> is left, which makes it
+          <b class="num loss" style="font-weight: 600">21 months</b>.
+          <div class="mut" style="margin-top: 7px">
+            Two months is not a crisis — the point is that the app noticed. Before this, the screen would have
+            shown 19 months and been quietly wrong for as long as the plan lasted.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="faint" style="margin: 4px 0 0; font-size: 11.5px; line-height: 1.6">
+      Priority is goal order, and the shortfall lands entirely on the last one — no goal is silently scaled
+      down, because a plan that quietly shaves every target is worse than one that names the goal it cannot
+      keep. Reorder the list and the squeeze moves. Both projections assume price and rates stay put, which
+      they will not.
+    </p>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,194 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+   Vantage design tokens.
+
+   The palette carries over the legacy app's semantic intent — green for gains
+   and buys, red for losses and sells, amber for dividends / cash / the primary
+   action — but expresses it through shadcn theming instead of the old
+   --up/--down/--acc CSS variables. Dark is the default (it is what the owner
+   looks at daily); light is a full, first-class palette, not an inversion.
+--------------------------------------------------------------------------- */
+
+@theme inline {
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', 'Cascadia Mono', monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Vantage semantics — use these, not raw green-500/red-500. */
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --color-cash: var(--cash);
+  --color-faint: var(--faint);
+  --color-hairline: var(--hairline);
+
+  /* Series colours for charts + the per-instrument dot. 8 slots, cycled. */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.375rem;
+
+  --background: #f7f8fa;
+  --foreground: #10161c;
+  --card: #ffffff;
+  --card-foreground: #10161c;
+  --popover: #ffffff;
+  --popover-foreground: #10161c;
+  --primary: #a86f16;
+  --primary-foreground: #fffaf0;
+  --secondary: #eef1f4;
+  --secondary-foreground: #26313b;
+  --muted: #eef1f4;
+  --muted-foreground: #5c6a76;
+  --accent: #eef1f4;
+  --accent-foreground: #10161c;
+  --destructive: #c3352d;
+  --destructive-foreground: #ffffff;
+  --border: #dfe4e9;
+  --hairline: #ebeff2;
+  --input: #dfe4e9;
+  --ring: #c98500;
+
+  --gain: #17805a;
+  --loss: #c3352d;
+  --cash: #a8710f;
+  --faint: #8b98a5;
+
+  --chart-1: #2f75cc;
+  --chart-2: #c94d1f;
+  --chart-3: #17875f;
+  --chart-4: #b07500;
+  --chart-5: #c04872;
+  --chart-6: #1f7a1f;
+  --chart-7: #7266d8;
+  --chart-8: #d15757;
+}
+
+.dark {
+  --background: #0e1216;
+  --foreground: #e6edf3;
+  --card: #151b21;
+  --card-foreground: #e6edf3;
+  --popover: #151b21;
+  --popover-foreground: #e6edf3;
+  --primary: #e8a33d;
+  --primary-foreground: #10151a;
+  --secondary: #1a222a;
+  --secondary-foreground: #e6edf3;
+  --muted: #1a222a;
+  --muted-foreground: #8b98a5;
+  --accent: #1a222a;
+  --accent-foreground: #e6edf3;
+  --destructive: #e5534b;
+  --destructive-foreground: #10151a;
+  --border: #243039;
+  --hairline: #1c262e;
+  --input: #243039;
+  --ring: #e8a33d;
+
+  --gain: #3fb27f;
+  --loss: #e5534b;
+  --cash: #e8a33d;
+  --faint: #5c6a76;
+
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #46a846;
+  --chart-7: #9085e9;
+  --chart-8: #e66767;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans text-[13.5px] antialiased;
+    font-feature-settings: 'cv05' 1;
+  }
+
+  /* Figures are compared down a column everywhere in this app. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Shared utilities. Screen components should reach for these rather than
+   re-inventing the same class soup.
+--------------------------------------------------------------------------- */
+
+/* Any figure that is read or compared down a column. */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1;
+  letter-spacing: -0.01em;
+}
+
+/* The small uppercase label above a stat. */
+@utility eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* The headline figure inside a stat card. */
+@utility stat {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.55rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+
+/* Slightly tighter than the shadcn default so tables stay dense. */
+@utility cell {
+  padding: 0.5rem 0.625rem;
+}

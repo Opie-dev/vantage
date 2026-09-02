@@ -1,0 +1,146 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0e1216; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+    .card { background: #151b21; border: 1px solid #243039; border-radius: 6px; padding: 14px 16px; }
+    .v { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+         font-size: 14px; font-weight: 600; margin-top: 3px; }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+           border-bottom: 1px solid #1c262e; padding: 5px 0; font-size: 12.5px; }
+  </style>
+</helmet>
+
+<div style="padding: 20px 24px; display: flex; flex-direction: column; gap: 14px">
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <div style="display: flex; align-items: baseline; gap: 9px">
+        <span style="width: 9px; height: 9px; border-radius: 999px; background: #199e70"></span>
+        <span style="font-size: 15px; font-weight: 700">ETCO</span>
+        <span style="font-size: 10.5px; letter-spacing: 0.05em; color: #5c6a76">US</span>
+      </div>
+      <span class="num" style="font-size: 11px; color: #5c6a76">as of 1 Sept, 09:46 am</span>
+    </div>
+    <div style="font-size: 12.5px; color: #8b98a5; margin-top: 3px">Grayscale Ethereum Covered Call ETF</div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px">
+      <div><div class="eyebrow">Fund size</div><div class="v" style="color: #e8a33d">$4.2M</div></div>
+      <div><div class="eyebrow">NAV / unit</div><div class="v">$8.78</div></div>
+      <div><div class="eyebrow">Price vs NAV</div><div class="v" style="color: #e5534b">+1.4%</div></div>
+      <div><div class="eyebrow">Units in issue</div><div class="v">480,000</div></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px; border-top: 1px solid #1c262e; padding-top: 13px">
+      <div><div class="eyebrow">Quoted yield</div><div class="v" style="color: #e8a33d">144.8%</div></div>
+      <div><div class="eyebrow">Paid you (net)</div><div class="v" style="color: #3fb27f">$733.75</div></div>
+      <div><div class="eyebrow">Returned on cost</div><div class="v" style="color: #3fb27f">8.9%</div></div>
+      <div><div class="eyebrow">Payments</div><div class="v">12</div></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px; border-top: 1px solid #1c262e; padding-top: 13px">
+      <div><div class="eyebrow">You hold</div><div class="v">691</div></div>
+      <div><div class="eyebrow">Worth</div><div class="v">$6,155.08</div></div>
+      <div><div class="eyebrow">Avg cost</div><div class="v">$11.87</div></div>
+      <div><div class="eyebrow">Share of fund</div><div class="v" style="color: #e8a33d">0.144%</div></div>
+    </div>
+
+    <div style="margin-top: 14px; border-top: 1px solid #1c262e; padding-top: 13px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <div class="eyebrow">Fund distributions</div>
+        <div class="num" style="font-size: 11.5px; color: #e5534b">−32.1% per share vs the previous 4</div>
+      </div>
+      <div style="margin-top: 8px">
+        <div class="row">
+          <span class="num" style="color: #8b98a5">28 Aug 2026</span>
+          <span style="display: flex; align-items: baseline; gap: 8px">
+            <span class="num" style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #e8a33d; border: 1px solid #e8a33d; border-radius: 999px; padding: 1px 6px">pending</span>
+            <span class="num" style="font-weight: 600">$0.15</span>
+          </span>
+        </div>
+        <div class="row"><span class="num" style="color: #8b98a5">13 Aug 2026</span><span class="num" style="font-weight: 600">$0.11</span></div>
+        <div class="row"><span class="num" style="color: #8b98a5">30 Jul 2026</span><span class="num" style="font-weight: 600">$0.21</span></div>
+        <div class="row"><span class="num" style="color: #8b98a5">14 Jul 2026</span><span class="num" style="font-weight: 600">$0.19</span></div>
+        <div class="row" style="border-bottom: 0"><span class="num" style="color: #8b98a5">29 Jun 2026</span><span class="num" style="font-weight: 600">$0.20</span></div>
+      </div>
+      <div style="font-size: 11px; color: #5c6a76; margin-top: 8px; line-height: 1.55">
+        Per share, as declared by the fund — 23 on record. Pending means it is dated after your most recent
+        receipt, so it should still be on its way. This is the fund's schedule, not your account.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+      <div style="display: flex; align-items: baseline; gap: 9px">
+        <span style="width: 9px; height: 9px; border-radius: 999px; background: #3987e5"></span>
+        <span style="font-size: 15px; font-weight: 700">MSTY</span>
+        <span style="font-size: 10.5px; letter-spacing: 0.05em; color: #5c6a76">US</span>
+      </div>
+      <span class="num" style="font-size: 11px; color: #5c6a76">as of 1 Sept, 09:46 am</span>
+    </div>
+    <div style="font-size: 12.5px; color: #8b98a5; margin-top: 3px">YieldMax MSTR Option Income Strategy ETF</div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px">
+      <div><div class="eyebrow">Fund size</div><div class="v">$924.3M</div></div>
+      <div><div class="eyebrow">NAV / unit</div><div class="v">$14.80</div></div>
+      <div><div class="eyebrow">Price vs NAV</div><div class="v" style="color: #e5534b">+3.7%</div></div>
+      <div><div class="eyebrow">Units in issue</div><div class="v">62,170,113</div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px; border-top: 1px solid #1c262e; padding-top: 13px">
+      <div><div class="eyebrow">Quoted yield</div><div class="v" style="color: #e8a33d">180.4%</div></div>
+      <div><div class="eyebrow">Paid you (net)</div><div class="v" style="color: #3fb27f">$290.82</div></div>
+      <div><div class="eyebrow">Returned on cost</div><div class="v" style="color: #3fb27f">9.0%</div></div>
+      <div><div class="eyebrow">Payments</div><div class="v">29</div></div>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 14px; border-top: 1px solid #1c262e; padding-top: 13px">
+      <div><div class="eyebrow">You hold</div><div class="v">182.312</div></div>
+      <div><div class="eyebrow">Worth</div><div class="v">$2,798.49</div></div>
+      <div><div class="eyebrow">Avg cost</div><div class="v">$17.68</div></div>
+      <div><div class="eyebrow">Share of fund</div><div class="v">&lt;0.01%</div></div>
+    </div>
+    <div style="margin-top: 14px; border-top: 1px solid #1c262e; padding-top: 13px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <div class="eyebrow">Fund distributions</div>
+        <div class="num" style="font-size: 11.5px; color: #e5534b">−2.7% per share vs the previous 4</div>
+      </div>
+      <div style="margin-top: 8px">
+        <div class="row">
+          <span class="num" style="color: #8b98a5">27 Aug 2026</span>
+          <span style="display: flex; align-items: baseline; gap: 8px">
+            <span class="num" style="font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #e8a33d; border: 1px solid #e8a33d; border-radius: 999px; padding: 1px 6px">pending</span>
+            <span class="num" style="font-weight: 600">$0.28</span>
+          </span>
+        </div>
+        <div class="row"><span class="num" style="color: #8b98a5">20 Aug 2026</span><span class="num" style="font-weight: 600">$0.16</span></div>
+        <div class="row"><span class="num" style="color: #8b98a5">13 Aug 2026</span><span class="num" style="font-weight: 600">$0.18</span></div>
+        <div class="row" style="border-bottom: 0"><span class="num" style="color: #8b98a5">6 Aug 2026</span><span class="num" style="font-weight: 600">$0.21</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6">
+    <b style="color: #e6edf3">Only currently-held instruments appear</b> — three cards, not six. There is no
+    holdings breakdown because these are option-income ETFs: they hold cash and options against one underlying,
+    not a basket of stocks. The two headline tensions worth designing around: ETCO is a
+    <b style="color: #e6edf3">$4.2M fund the owner holds 0.144% of</b>, and the quoted yield (144.8%, 180.4%)
+    is an annualised projection sitting next to figures that are not.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

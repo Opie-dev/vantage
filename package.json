@@ -1,0 +1,24 @@
+{
+  "name": "vantage",
+  "version": "0.1.0",
+  "description": "Personal finance tracker — investments, savings, commitments and income",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "npm --prefix web run build",
+    "web:install": "npm --prefix web install",
+    "web:dev": "npm --prefix web run dev",
+    "db:status": "dbmate --env VANTAGE_DB_URL status",
+    "db:up": "dbmate --env VANTAGE_DB_URL up",
+    "db:new": "dbmate --env VANTAGE_DB_URL new",
+    "db:rollback": "dbmate --env VANTAGE_DB_URL rollback",
+    "db:schema": "docker exec dev-postgres pg_dump --schema-only --no-owner --no-privileges -U semaisens vantage > db/schema.sql"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "dbmate": "^2.35.1"
+  }
+}

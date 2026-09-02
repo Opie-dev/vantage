@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; background: #0b0e12; color: #e6edf3;
+           font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #e8a33d; } a:hover { color: #f0b45c; }
+    .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+           letter-spacing: -0.01em; }
+    .eyebrow { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+               text-transform: uppercase; color: #8b98a5; }
+    .dialog { background: #151b21; border: 1px solid #243039; border-radius: 6px; padding: 20px;
+              width: 380px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .input { border: 1px solid #243039; background: #0e1216; border-radius: 6px; height: 34px;
+             display: flex; align-items: center; justify-content: space-between; padding: 0 11px;
+             font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 13px; }
+    .hint { font-size: 11px; color: #5c6a76; line-height: 1.5; }
+    .btn { border-radius: 6px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="padding: 28px 30px; display: flex; flex-direction: column; gap: 20px">
+
+  <div>
+    <div class="eyebrow">Modals — all three, on the dimmed app</div>
+    <div style="font-size: 12.5px; color: #8b98a5; margin-top: 5px; max-width: 900px; line-height: 1.55">
+      Centred over a scrim, 380px wide. These are the only writes a person makes by hand; everything else arrives
+      from the sync. Every field that takes money or a quantity is Plex Mono.
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start">
+
+    <div class="dialog">
+      <div style="font-size: 15px; font-weight: 600">Add instrument</div>
+      <div class="hint" style="margin-top: 4px">Something you hold that the sync hasn't seen — a Bursa stock, or a
+        fund you track by hand.</div>
+      <div style="display: flex; flex-direction: column; gap: 13px; margin-top: 16px">
+        <div class="field"><span class="eyebrow">Ticker</span><div class="input">ETCO</div></div>
+        <div class="field"><span class="eyebrow">Name</span>
+          <div class="input" style="font-family: 'IBM Plex Sans', sans-serif; color: #5c6a76">optional</div></div>
+        <div style="display: flex; gap: 11px">
+          <div class="field" style="flex: 1"><span class="eyebrow">Market</span>
+            <div class="input" style="font-family: 'IBM Plex Sans', sans-serif"><span>US</span><span style="color: #5c6a76">▾</span></div></div>
+          <div class="field" style="flex: 1"><span class="eyebrow">Currency</span>
+            <div class="input" style="color: #5c6a76">USD</div></div>
+        </div>
+        <div class="field"><span class="eyebrow">Yahoo symbol</span>
+          <div class="input" style="color: #5c6a76">5279.KL</div>
+          <span class="hint">Bursa: stock code + .KL. US tickers as-is. Blank means no Yahoo fallback price.</span></div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px">
+        <div class="btn" style="border: 1px solid #243039; color: #8b98a5">Cancel</div>
+        <div class="btn" style="background: #e8a33d; color: #10151a">Add instrument</div>
+      </div>
+    </div>
+
+    <div class="dialog">
+      <div style="font-size: 15px; font-weight: 600">Add transaction</div>
+      <div class="hint" style="margin-top: 4px">A trade or dividend the sync did not bring in. Synced rows are
+        never overwritten by what you enter here.</div>
+      <div style="display: flex; flex-direction: column; gap: 13px; margin-top: 16px">
+        <div style="display: flex; gap: 11px">
+          <div class="field" style="flex: 1"><span class="eyebrow">Instrument</span>
+            <div class="input" style="font-family: 'IBM Plex Sans', sans-serif"><span>MSTY</span><span style="color: #5c6a76">▾</span></div></div>
+          <div class="field" style="flex: 1"><span class="eyebrow">Side</span>
+            <div class="input" style="font-family: 'IBM Plex Sans', sans-serif"><span>BUY</span><span style="color: #5c6a76">▾</span></div></div>
+        </div>
+        <div style="display: flex; gap: 11px">
+          <div class="field" style="flex: 1"><span class="eyebrow">Qty</span><div class="input">2.0499</div></div>
+          <div class="field" style="flex: 1"><span class="eyebrow">Price</span><div class="input">12.82</div></div>
+        </div>
+        <div style="display: flex; gap: 11px">
+          <div class="field" style="flex: 1"><span class="eyebrow">Fees</span><div class="input">1.25</div></div>
+          <div class="field" style="flex: 1"><span class="eyebrow">Trade date</span><div class="input">2026-08-09</div></div>
+        </div>
+        <span class="hint">On a DIV row, Price becomes the amount received and Qty is left at zero.</span>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px">
+        <div class="btn" style="border: 1px solid #243039; color: #8b98a5">Cancel</div>
+        <div class="btn" style="background: #e8a33d; color: #10151a">Save transaction</div>
+      </div>
+    </div>
+
+    <div class="dialog">
+      <div style="font-size: 15px; font-weight: 600">Add cash movement</div>
+      <div class="hint" style="margin-top: 4px">A deposit or withdrawal the broker feed missed. The wallet balance
+        itself comes from moomoo, so this affects the movement history.</div>
+      <div style="display: flex; flex-direction: column; gap: 13px; margin-top: 16px">
+        <div style="display: flex; gap: 11px">
+          <div class="field" style="flex: 1"><span class="eyebrow">Type</span>
+            <div class="input" style="font-family: 'IBM Plex Sans', sans-serif"><span>DEPOSIT</span><span style="color: #5c6a76">▾</span></div></div>
+          <div class="field" style="flex: 1"><span class="eyebrow">Currency</span>
+            <div class="input" style="font-family: 'IBM Plex Sans', sans-serif"><span>MYR</span><span style="color: #5c6a76">▾</span></div></div>
+        </div>
+        <div class="field"><span class="eyebrow">Amount</span><div class="input">200.00</div></div>
+        <div class="field"><span class="eyebrow">Date</span><div class="input">2026-08-10</div></div>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px">
+        <div class="btn" style="border: 1px solid #243039; color: #8b98a5">Cancel</div>
+        <div class="btn" style="background: #e8a33d; color: #10151a">Save movement</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="border: 1px dashed #243039; border-radius: 6px; padding: 12px 14px; font-size: 12px; color: #8b98a5; line-height: 1.6; max-width: 900px">
+    <b style="color: #e6edf3">These three are the whole manual-entry surface.</b> They exist as the escape hatch
+    for days OpenD isn't running and for anything the API misses. Validation is server-side and comes back as a
+    toast at the bottom of the screen, not inline — worth reconsidering in a redesign.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

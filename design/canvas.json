@@ -1,0 +1,75 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Screens" },
+    { "id": "page-2", "name": "Modals & states" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",        "page": "page-1", "title": "Design system",  "x": 0,    "y": 0,    "w": 1500, "h": 760 },
+    { "file": "Dashboard.dc.html",   "page": "page-1", "x": 1620, "y": 0,    "w": 1440, "h": 1020 },
+
+    { "file": "Positions.dc.html",   "page": "page-1", "x": 0,    "y": 1140, "w": 1440, "h": 520 },
+    { "file": "Instruments.dc.html", "page": "page-1", "x": 1620, "y": 1140, "w": 1440, "h": 960 },
+
+    { "file": "History.dc.html",     "page": "page-1", "x": 0,    "y": 2220, "w": 1440, "h": 620 },
+    { "file": "Wallet.dc.html",      "page": "page-1", "x": 1620, "y": 2220, "w": 1440, "h": 760 },
+
+    { "file": "Calendar.dc.html",    "page": "page-1", "x": 0,    "y": 3100, "w": 1440, "h": 980 },
+    { "file": "Goals.dc.html",       "page": "page-1", "x": 1620, "y": 3100, "w": 1440, "h": 1060 },
+
+    { "file": "Settings.dc.html",    "page": "page-1", "x": 0,    "y": 4280, "w": 860,  "h": 1140 },
+
+    { "file": "Modals.dc.html",      "page": "page-2", "x": 0,    "y": 0,    "w": 1300, "h": 780 },
+    { "file": "States.dc.html",      "page": "page-2", "x": 1420, "y": 0,    "w": 1900, "h": 780 }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "page": "page-1",
+      "x": 0,
+      "y": -190,
+      "w": 1500,
+      "text": "VANTAGE — redesign handoff\n\nA single-user moomoo portfolio tracker. Every screen below is the app as it stands today, drawn with the real tokens and the owner's real numbers, so a redesign starts from what exists rather than a description of it.\n\nWhat the app is FOR: it tracks three US option-income ETFs held from Malaysia. The distributions are the strategy — price is down 11.8% while the holdings have paid out RM 5,033 net. Any redesign that treats this as a growth portfolio will tell the wrong story.\n\nThe three constraints that shape every screen: (1) two currencies, MYR and USD, that may never be summed without converting at the stored rate; (2) figures compared down a column are always tabular mono; (3) green is money in, red is money out — including tax and fees."
+    },
+    {
+      "id": "row-holdings",
+      "page": "page-1",
+      "x": 0,
+      "y": 1010,
+      "w": 900,
+      "text": "HOLDINGS — Positions (left) and Instruments (right)\n\nPositions is the densest screen in the app and the one most in need of a rethink: eleven columns, three of them double-height. Instruments is the newest and least settled."
+    },
+    {
+      "id": "row-ledger",
+      "page": "page-1",
+      "x": 0,
+      "y": 2090,
+      "w": 900,
+      "text": "LEDGER — History (left) and Wallet (right)\n\n364 history rows over nine months. The Wallet's headline balance comes from the broker while the list below it is an incomplete ledger — they deliberately disagree, and the screen has to make that legible."
+    },
+    {
+      "id": "row-planning",
+      "page": "page-1",
+      "x": 0,
+      "y": 2970,
+      "w": 900,
+      "text": "PLANNING — Calendar (left) and Goals (right)\n\nGoals carries five kinds across two shapes: accumulate shares, or reach an income level. Both answer 'how much more and what does it cost'."
+    },
+    {
+      "id": "row-settings",
+      "page": "page-1",
+      "x": 0,
+      "y": 4150,
+      "w": 900,
+      "text": "SETTINGS\n\nOne real control — the P&L basis, which changes every P&L figure app-wide — plus read-only tax reporting. The three options preview the whole portfolio under each, so the choice is made by looking."
+    },
+    {
+      "id": "states-note",
+      "page": "page-2",
+      "x": 0,
+      "y": -150,
+      "w": 1300,
+      "text": "The manual-entry modals and the four states the shell resolves before any screen renders. Manual entry is the escape hatch for days the sync isn't running — it is not the main path, and shouldn't grow into one."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}
