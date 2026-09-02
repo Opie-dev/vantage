@@ -68,6 +68,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
+import { cn } from '@/lib/utils'
 import { GOAL_KIND, GOAL_NEEDS_INSTRUMENT, goalIncomeIsNet } from '@/lib/calc'
 import {
   FISCAL_YEARS,
