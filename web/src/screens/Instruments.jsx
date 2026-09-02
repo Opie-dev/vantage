@@ -47,6 +47,8 @@ import {
   YAxis,
 } from 'recharts'
 
+import { PlusIcon } from 'lucide-react'
+
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -408,7 +410,7 @@ function InstrumentCard({ row, state }) {
 }
 
 export default function Instruments() {
-  const { state } = useVantage()
+  const { state, openInstrument } = useVantage()
   const [showClosed, setShowClosed] = useState(false)
   const [selected, setSelected] = useState(null)
 
@@ -425,8 +427,14 @@ export default function Instruments() {
     return (
       <Card>
         <CardContent className="text-muted-foreground py-12 text-center">
-          Nothing held right now — this screen lists what you currently own. Sync from OpenD, or add a BUY under
-          Positions.
+          Nothing held right now — this screen lists what you currently own. Sync from OpenD, or
+          add one yourself and log a BUY under Positions.
+          <div>
+            <Button size="sm" className="mt-4" onClick={openInstrument}>
+              <PlusIcon />
+              Add instrument
+            </Button>
+          </div>
         </CardContent>
       </Card>
     )
@@ -434,6 +442,16 @@ export default function Instruments() {
 
   return (
     <div className="grid gap-3.5">
+      {/* Adding an instrument belongs on the screen that lists them, not in the
+          top bar where it sat beside Sync and Prices — those act on everything
+          at once from anywhere, this one adds a row to this list. */}
+      <div className="flex justify-end">
+        <Button size="sm" onClick={openInstrument}>
+          <PlusIcon />
+          Add instrument
+        </Button>
+      </div>
+
       <Compare rows={rows} state={state} selected={open ? open.ticker : null} onSelect={setSelected} />
 
       {closedCount > 0 ? (

@@ -206,7 +206,7 @@ export function VantageProvider({ children }) {
   const value = useMemo(() => {
     const openTransaction = (prefill = {}) => {
       if (!latest.current.instruments.length) {
-        toast.warning('Add an instrument first', { description: 'Use + Instrument, top right.' })
+        toast.warning('Add an instrument first', { description: 'Add one on the Instruments screen.' })
         return
       }
       setModal({ kind: 'transaction', prefill })
