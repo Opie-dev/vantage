@@ -62,6 +62,7 @@ async function create({
   kind = 'SAVINGS', name, slug, currency = 'MYR', institution = '', account_ref = '',
   unit_label = '', unit_cap = null, fiscal_year = '12-31',
   rate_basis, rate_quote = 'PERCENT', last_rate = null, last_bonus = null, sort_order = 0,
+  product_id = null,
 }) {
   if (!KINDS.includes(kind)) throw badRequest(`kind must be one of: ${KINDS.join(', ')}`);
   if (!name || !String(name).trim()) throw badRequest('name is required');
@@ -90,6 +91,7 @@ async function create({
     unitLabel: unit_label, unitCap: unit_cap, fiscalYear: fiscal_year,
     rateBasis: rate_basis, rateQuote: rate_quote,
     lastRate: last_rate, lastBonus: last_bonus, sortOrder: sort_order,
+    productId: product_id ? String(product_id).trim() : null,
   });
 }
 

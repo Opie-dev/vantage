@@ -16,14 +16,19 @@ const findBySlug = slug => one(`SELECT * FROM assets WHERE slug=$1`, norm(slug))
 
 const insert = ({
   kind, name, slug, currency, institution, accountRef, unitLabel, unitCap,
-  fiscalYear, rateBasis, rateQuote, lastRate, lastBonus, sortOrder,
+  fiscalYear, rateBasis, rateQuote, lastRate, lastBonus, sortOrder, productId,
 }) => one(
   `INSERT INTO assets
      (kind,name,slug,currency,institution,account_ref,unit_label,unit_cap,
-      fiscal_year,rate_basis,rate_quote,last_rate,last_bonus,sort_order)
-   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      fiscal_year,rate_basis,rate_quote,last_rate,last_bonus,sort_order,product_id)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
   kind, name, norm(slug), currency, institution, accountRef, unitLabel, unitCap,
-  fiscalYear, rateBasis, rateQuote, lastRate, lastBonus, sortOrder);
+  fiscalYear, rateBasis, rateQuote, lastRate, lastBonus, sortOrder, productId);
+
+/** Accounts created from one catalogue entry. Used to split a payroll EPF
+ *  contribution across the three accounts it is actually allocated to. */
+const findByProductIds = ids => get(
+  `SELECT * FROM assets WHERE product_id = ANY($1) AND NOT archived ORDER BY id`, ids);
 
 /** Every column the service lets you change. `slug` is not one of them — it is the
  *  key the UI addresses the asset by, and renaming it would orphan those links. */
@@ -41,4 +46,4 @@ const update = (id, {
 
 const remove = id => run(`DELETE FROM assets WHERE id=$1`, id);
 
-module.exports = { norm, listAll, findById, findBySlug, insert, update, remove };
+module.exports = { norm, listAll, findById, findBySlug, findByProductIds, insert, update, remove };

@@ -370,6 +370,17 @@ export function estimatedRate(product, now = new Date()) {
   return { ...latest, year, estimated: true, basedOn: latest.year }
 }
 
+/**
+ * The three accounts every EPF contribution is split across.
+ *
+ * Exported as a set rather than looked up ad hoc because two places need exactly
+ * this list and must agree on it: the button that creates them, and the server
+ * that divides a payroll contribution 75/15/10 between them.
+ */
+export function epfAccounts() {
+  return institutionOf('EPF')?.products || []
+}
+
 /** The institution record for an id, or undefined for OTHER and unknowns. */
 export function institutionOf(id) {
   return INSTITUTIONS.find(i => i.id === id)
