@@ -183,7 +183,7 @@ function SourceRow({ r, onRecord, onRemove }) {
 
 /* ── going out ────────────────────────────────────────────────────────────── */
 
-function CommitmentRow({ r, onRemove }) {
+function CommitmentRow({ r, onEdit, onRemove }) {
   const c = r.commitment
 
   return (
@@ -275,6 +275,9 @@ function CommitmentRow({ r, onRemove }) {
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-[11.5px]" onClick={() => onEdit(r.commitment)}>
+        Edit
+      </Button>
       <RemoveButton label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
     </div>
   )
@@ -471,7 +474,12 @@ export default function Money() {
             {out.rows.length ? (
               <div className="mt-1">
                 {out.rows.map(r => (
-                  <CommitmentRow key={r.id} r={r} onRemove={deleteCommitment} />
+                  <CommitmentRow
+                    key={r.id}
+                    r={r}
+                    onEdit={openCommitment}
+                    onRemove={deleteCommitment}
+                  />
                 ))}
                 <div className="text-muted-foreground mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[12.5px]">
                   <span>

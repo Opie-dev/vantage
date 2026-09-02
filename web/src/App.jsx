@@ -1136,26 +1136,39 @@ function AssetEntryDialog({ prefill }) {
  * answered wrongly in good faith, and getting it wrong misstates both the balance
  * and the true cost in the flattering direction.
  */
-function CommitmentDialog() {
-  const { closeModal, addCommitment } = useVantage()
+/**
+ * Add a commitment, or edit one.
+ *
+ * The same form does both because the fields are the same fields — a separate
+ * edit form would be this one with different defaults, and the two would drift
+ * the first time a field was added to only one of them.
+ *
+ * `prefill` carrying an id is what makes it an edit. Numbers arrive from the API
+ * as numbers and every input here is a string, so they are converted on the way
+ * in rather than each field having to cope with both.
+ */
+function CommitmentDialog({ prefill }) {
+  const { closeModal, addCommitment, updateCommitment } = useVantage()
+  const editing = prefill.id != null
   // Not saved anywhere. It only computes started_on, which is what is stored.
   const [monthsLeft, setMonthsLeft] = useState('')
+  const str = (v, fallback = '') => (v == null ? fallback : String(v))
   const [f, setF] = useState({
-    kind: 'LOAN',
-    name: '',
-    lender: '',
-    due_day: '',
-    principal: '',
-    rate: '',
-    rate_type: 'REDUCING',
-    term_months: '',
-    started_on: today(),
-    instalment: '',
-    apr: '18',
-    balance: '',
-    credit_limit: '',
-    amount: '',
-    every_months: '1',
+    kind: prefill.kind || 'LOAN',
+    name: str(prefill.name),
+    lender: str(prefill.lender),
+    due_day: str(prefill.due_day),
+    principal: str(prefill.principal),
+    rate: str(prefill.rate),
+    rate_type: prefill.rate_type || 'REDUCING',
+    term_months: str(prefill.term_months),
+    started_on: prefill.started_on || today(),
+    instalment: str(prefill.instalment),
+    apr: str(prefill.apr, '18'),
+    balance: str(prefill.balance),
+    credit_limit: str(prefill.credit_limit),
+    amount: str(prefill.amount),
+    every_months: str(prefill.every_months, '1'),
   })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -1200,7 +1213,11 @@ function CommitmentDialog() {
               balance_as_of: f.balance === '' ? null : today(),
             }
           : { ...common, amount: num(f.amount), every_months: Number(f.every_months) }
-    const ok = await addCommitment(body)
+    // kind is not sent on an edit: the shape decides which columns are
+    // meaningful, and changing it would leave a loan's fields on a card.
+    const ok = editing
+      ? await updateCommitment(prefill.id, (({ kind, ...rest }) => rest)(body))
+      : await addCommitment(body)
     setBusy(false)
     if (ok) closeModal()
   }
@@ -1208,7 +1225,7 @@ function CommitmentDialog() {
   return (
     <DialogContent className="sm:max-w-[500px]">
       <DialogHeader>
-        <DialogTitle>Add commitment</DialogTitle>
+        <DialogTitle>{editing ? `Edit ${prefill.name}` : 'Add commitment'}</DialogTitle>
         <DialogDescription>
           Something known in advance. For a loan, five fields off the agreement give every future
           instalment &mdash; you will never type a payment.
@@ -1219,14 +1236,16 @@ function CommitmentDialog() {
           label="Kind"
           htmlFor="cm-kind"
           hint={
-            f.kind === 'LOAN'
-              ? 'Car, house or personal — anything with a term.'
-              : f.kind === 'REVOLVING'
-                ? 'A balance that revolves, with no end date.'
-                : 'Rent, insurance, a subscription.'
+            editing
+              ? 'Fixed once saved — the kind decides which columns mean anything.'
+              : f.kind === 'LOAN'
+                ? 'Car, house or personal — anything with a term.'
+                : f.kind === 'REVOLVING'
+                  ? 'A balance that revolves, with no end date.'
+                  : 'Rent, insurance, a subscription.'
           }
         >
-          <Select value={f.kind} onValueChange={v => set('kind', v)}>
+          <Select value={f.kind} onValueChange={v => set('kind', v)} disabled={editing}>
             <SelectTrigger id="cm-kind" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -1886,7 +1905,7 @@ function Modals() {
       {modal?.kind === 'cash' && <CashDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'asset' && <AssetDialog />}
       {modal?.kind === 'assetEntry' && <AssetEntryDialog prefill={modal.prefill || {}} />}
-      {modal?.kind === 'commitment' && <CommitmentDialog />}
+      {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'goal' && <GoalDialog />}
