@@ -73,6 +73,19 @@ export function toRM(S, v, cur) {
 }
 
 /**
+ * How many --chart-N colours the theme defines, and how many of them a ticker
+ * may take.
+ *
+ * The two differ on purpose. Tickers keep to the first eight so no dot changes
+ * colour now that the palette is wider; 9-12 are held back for the net-worth
+ * strip, which draws the broker, every account and every debt on one bar and so
+ * needs more colours to keep apart than a donut of tickers ever does.
+ * See ownedSlots().
+ */
+const CHART_SLOTS = 12
+const TICKER_SLOTS = 8
+
+/**
  * Series slot 1..8 for a ticker — the colour identity used by the allocation
  * donut, the equity legend and the dot beside a ticker.
  *
@@ -83,12 +96,12 @@ export function toRM(S, v, cur) {
  */
 export function slotOf(S, ticker) {
   const idx = S.instruments.findIndex(i => i.ticker === ticker)
-  return (idx < 0 ? 0 : idx) % 8 + 1
+  return (idx < 0 ? 0 : idx) % TICKER_SLOTS + 1
 }
 
 /** The CSS colour for a slot, usable as a fill/stroke or a style value. */
 export function slotColor(slot) {
-  return `var(--chart-${((slot - 1) % 8) + 1})`
+  return `var(--chart-${((slot - 1) % CHART_SLOTS) + 1})`
 }
 
 /* ── positions ────────────────────────────────────────────────────────────── */
@@ -2084,6 +2097,40 @@ export function distributionOutlook(S, a, year = null, nowISO = isoOf(Date.now()
   }
 }
 
+/** moomoo's colour is fixed, so no account may take it. */
+const BROKER_SLOT = 1
+
+/**
+ * chart-8 is the debt red at another opacity. An account wearing it sits on the
+ * same bar as the loans and reads as one of them, so it is spent nowhere on the
+ * owned side.
+ */
+const DEBT_LOOKALIKE_SLOT = 8
+
+/**
+ * A distinct colour slot per account, for the net-worth strip.
+ *
+ * The old walk was `((n + i) % 8) + 1` — start past the instruments so an
+ * account keeps clear of a ticker's dot, then cycle. It cycled straight through
+ * moomoo's slot: with six instruments the third account landed on chart-1 and
+ * drew itself in the broker's blue, on the broker's own bar. The second account
+ * took chart-8 and matched the loans. Two duplicates in one strip of ten.
+ *
+ * So the free slots are collected first and handed out in order. Starting past
+ * the instruments is kept, because it still holds for the first few accounts and
+ * costs nothing; what it no longer does is override uniqueness. Ten slots for
+ * however many accounts exist — past that the walk repeats, which the palette
+ * leaves no way around, but it takes four more accounts than before to get there.
+ */
+function ownedSlots(count, after) {
+  const free = []
+  for (let step = 0; step < CHART_SLOTS; step++) {
+    const slot = ((after + step) % CHART_SLOTS) + 1
+    if (slot !== BROKER_SLOT && slot !== DEBT_LOOKALIKE_SLOT) free.push(slot)
+  }
+  return Array.from({ length: count }, (_, i) => free[i % free.length])
+}
+
 /**
  * Everything you own, in one figure — the broker plus the accounts outside it.
  *
@@ -2093,20 +2140,22 @@ export function distributionOutlook(S, a, year = null, nowISO = isoOf(Date.now()
  * When liabilities exist this becomes the `owned` half of a real net worth and
  * the name changes with it.
  *
- * Asset colours continue past the instruments' slots so a card can never take the
- * same hue as a ticker's dot, which would read as a relationship that isn't there.
+ * Asset colours continue past the instruments' slots where the palette allows,
+ * so a card avoids a ticker's dot and the relationship it would imply. That is a
+ * preference, not a guarantee — see ownedSlots(), which will reuse a ticker's
+ * hue before it repeats one inside the strip itself.
  */
 export function totalOwned(S) {
   const p = portfolio(S)
   const a = assetsTotal(S)
-  const n = S.instruments.length
+  const slots = ownedSlots(a.rows.length, S.instruments.length)
   const parts = [
-    { key: 'broker', name: 'moomoo', value: p.totalRM, color: slotColor(1) },
+    { key: 'broker', name: 'moomoo', value: p.totalRM, color: slotColor(BROKER_SLOT) },
     ...a.rows.map((r, i) => ({
       key: r.slug,
       name: r.name,
       value: r.balanceRM,
-      color: slotColor(((n + i) % 8) + 1),
+      color: slotColor(slots[i]),
     })),
   ].filter(x => x.value > 0)
 
