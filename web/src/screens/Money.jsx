@@ -25,7 +25,7 @@
  */
 
 import { useMemo } from 'react'
-import { PlusIcon, TrashIcon } from 'lucide-react'
+import { PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,19 +38,24 @@ import { dfmtLong, fmt, fmtS, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 /**
- * Remove a row.
+ * An action on a row: an icon, with the words in a tooltip and on the button's
+ * accessible name.
  *
- * The server refuses to delete an income source that has recorded payments, and
- * says why — deleting it would take the payslip history with it. That refusal
- * arrives as a toast from mutate(), so this button does not try to predict it:
- * a rule enforced in one place cannot drift from a copy of itself in another.
+ * A row already carries a name, an amount, a rate and a date, and spelling out
+ * "Edit" and "Remove" beside all of that competes with the figures the row
+ * exists to show. The label is not dropped, only moved to where it is asked for.
+ *
+ * Nothing here predicts whether the action will succeed. The server refuses to
+ * delete an income source that has recorded payments and says why, and that
+ * refusal arrives as a toast from mutate() — a rule enforced in one place cannot
+ * drift from a copy of itself in another.
  */
-function RemoveButton({ label, onClick }) {
+function RowAction({ icon: Icon, label, onClick }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
-          <TrashIcon />
+          <Icon />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
@@ -129,7 +134,7 @@ function SourceRow({ r, onRecord, onRemove }) {
           <PlusIcon />
           Record
         </Button>
-        <RemoveButton label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
+        <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
       </div>
 
       {d && d.deducted > 0 ? (
@@ -275,10 +280,8 @@ function CommitmentRow({ r, onEdit, onRemove }) {
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-[11.5px]" onClick={() => onEdit(r.commitment)}>
-        Edit
-      </Button>
-      <RemoveButton label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
+      <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
+      <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
     </div>
   )
 }

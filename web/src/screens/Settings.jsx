@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckIcon, LaptopIcon, MoonIcon, SunIcon, TrashIcon } from 'lucide-react'
+import { CheckIcon, LaptopIcon, MoonIcon, PencilIcon, SunIcon, TrashIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 
 import { Badge } from '@/components/ui/badge'
@@ -531,21 +531,26 @@ function RatesCard() {
                   {r.mine ? 'yours' : 'built in'}
                 </span>
                 <span className="flex-1" />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-2 text-[11.5px]"
-                  onClick={() =>
-                    setDraft({
-                      year: String(r.year),
-                      rate: String(r.rate),
-                      bonus: r.bonus == null ? '' : String(r.bonus),
-                      shariah: r.shariah == null ? '' : String(r.shariah),
-                    })
-                  }
-                >
-                  Edit
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Edit the ${r.year} rate`}
+                      onClick={() =>
+                        setDraft({
+                          year: String(r.year),
+                          rate: String(r.rate),
+                          bonus: r.bonus == null ? '' : String(r.bonus),
+                          shariah: r.shariah == null ? '' : String(r.shariah),
+                        })
+                      }
+                    >
+                      <PencilIcon />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Copy into the form below to change it</TooltipContent>
+                </Tooltip>
                 {r.mine ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
