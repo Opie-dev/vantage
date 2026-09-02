@@ -2178,9 +2178,63 @@ export function flatToEffective(flatPct, termMonths, perYear = MONTHS) {
  * is: since 1 July 2026 an OPR move revises the instalment rather than the tenure,
  * so the bank's own recorded figure wins over the derived one.
  */
-export function loanSchedule(c, nowISO = isoOf(Date.now()), extraPrincipal = 0) {
-  const P = c.principal
+/**
+ * The amount financed, from the instalment — the same equation loanSchedule uses
+ * to go the other way.
+ *
+ *   flat      total payable is P plus P*r*years, spread over n, so
+ *             P = instalment*n / (1 + r*years)
+ *   reducing  the instalment is an annuity on P, so P is its present value
+ *
+ * Zero when there is nothing to invert from, which keeps the arithmetic
+ * downstream finite rather than turning a missing figure into NaN spread across
+ * a screen.
+ */
+export function principalFrom(c) {
   const n = c.term_months
+  const pay = c.instalment
+  if (!pay || !n) return 0
+  if (c.rate_type === 'FLAT') {
+    const factor = 1 + (c.rate / 100) * (n / MONTHS)
+    return factor > 0 ? (pay * n) / factor : 0
+  }
+  const r = c.rate / 100 / MONTHS
+  if (r === 0) return pay * n
+  return (pay * (1 - Math.pow(1 + r, -n))) / r
+}
+
+/**
+ * The first instalment date implied by "N months left of M".
+ *
+ * Statements report progress, not a start: Maybank says "78 Months Left Out of
+ * 108" and never names the day the agreement began. This inverts
+ * instalmentsPaid() so the figure people actually have can be typed in, and the
+ * stored row still holds a real date rather than a second way of saying the
+ * same thing.
+ */
+export function startFromMonthsLeft(termMonths, monthsLeft, dueDay, nowISO = isoOf(Date.now())) {
+  const term = Number(termMonths)
+  const left = Number(monthsLeft)
+  const day = Number(dueDay)
+  if (!term || !Number.isFinite(left) || left < 0 || left > term || !day) return ''
+  const paid = term - left
+  const [y, m, d] = nowISO.split('-').map(Number)
+  // instalmentsPaid adds one when today has passed the due day, so the month it
+  // counts back to depends on where in the month we are.
+  const bump = d >= day ? 1 : 0
+  const idx = y * MONTHS + (m - 1) - (paid - bump)
+  const yy = Math.floor(idx / MONTHS)
+  const mm = (idx % MONTHS) + 1
+  return `${yy}-${String(mm).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+export function loanSchedule(c, nowISO = isoOf(Date.now()), extraPrincipal = 0) {
+  const n = c.term_months
+  // A statement shows the instalment, not the amount financed, so the principal
+  // is optional and inverted from the instalment when it is missing. Inverting
+  // is exact for both rate types — it is the same equation read the other way —
+  // so a derived principal is not an estimate, only an unstated fact.
+  const P = c.principal != null ? c.principal : principalFrom(c)
   const flat = c.rate_type === 'FLAT'
   const paid = instalmentsPaid(c.started_on, nowISO, n)
   const left = Math.max(n - paid, 0)

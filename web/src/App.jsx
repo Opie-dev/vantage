@@ -69,7 +69,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
-import { GOAL_KIND, GOAL_NEEDS_INSTRUMENT, goalIncomeIsNet } from '@/lib/calc'
+import {
+  GOAL_KIND,
+  GOAL_NEEDS_INSTRUMENT,
+  goalIncomeIsNet,
+  startFromMonthsLeft,
+} from '@/lib/calc'
 import {
   FISCAL_YEARS,
   INSTITUTIONS,
@@ -1133,6 +1138,8 @@ function AssetEntryDialog({ prefill }) {
  */
 function CommitmentDialog() {
   const { closeModal, addCommitment } = useVantage()
+  // Not saved anywhere. It only computes started_on, which is what is stored.
+  const [monthsLeft, setMonthsLeft] = useState('')
   const [f, setF] = useState({
     kind: 'LOAN',
     name: '',
@@ -1157,7 +1164,7 @@ function CommitmentDialog() {
   const ready =
     f.name.trim() &&
     (f.kind === 'LOAN'
-      ? f.principal && f.rate !== '' && f.term_months && f.started_on
+      ? (f.principal || f.instalment) && f.rate !== '' && f.term_months && f.started_on
       : f.kind === 'REVOLVING'
         ? f.apr !== ''
         : f.amount)
@@ -1245,7 +1252,7 @@ function CommitmentDialog() {
             <Field
               label="Amount financed"
               htmlFor="cm-principal"
-              hint="Not the purchase price — include anything rolled into the loan."
+              hint="Optional — worked out from the instalment if blank. Not the purchase price: include anything rolled into the loan."
             >
               <Input id="cm-principal" className="num" type="number" step="100" value={f.principal} onChange={e => set('principal', e.target.value)} />
             </Field>
@@ -1271,13 +1278,48 @@ function CommitmentDialog() {
             <Field label="Term (months)" htmlFor="cm-term">
               <Input id="cm-term" className="num" type="number" step="1" value={f.term_months} onChange={e => set('term_months', e.target.value)} />
             </Field>
-            <Field label="First payment" htmlFor="cm-start">
+            <Field
+              label="First payment"
+              htmlFor="cm-start"
+              hint={f.started_on ? undefined : 'Or fill it from months left, right.'}
+            >
               <Input id="cm-start" className="num" type="date" value={f.started_on} onChange={e => set('started_on', e.target.value)} />
+            </Field>
+            {/* Statements report progress, never a start date — Maybank says "78
+                Months Left Out of 108". Typing that works the date out, so the
+                stored row still holds a real first payment rather than a second
+                way of saying the same thing. */}
+            <Field
+              label="…or months left"
+              htmlFor="cm-left"
+              hint="What the statement says. Needs the term and due day above."
+            >
+              <Input
+                id="cm-left"
+                className="num"
+                type="number"
+                step="1"
+                placeholder="78"
+                value={monthsLeft}
+                onChange={e => {
+                  setMonthsLeft(e.target.value)
+                  const d = startFromMonthsLeft(
+                    Number(f.term_months),
+                    Number(e.target.value),
+                    Number(f.due_day),
+                  )
+                  if (d) set('started_on', d)
+                }}
+              />
             </Field>
             <Field
               label="Instalment"
               htmlFor="cm-inst"
-              hint="Optional — derived if blank. The bank’s own figure wins when given."
+              hint={
+                f.principal
+                  ? 'Optional — derived if blank. The bank’s own figure wins when given.'
+                  : 'Needed while the amount financed is blank — either one gives the other.'
+              }
             >
               <Input id="cm-inst" className="num" type="number" step="0.01" value={f.instalment} onChange={e => set('instalment', e.target.value)} />
             </Field>
