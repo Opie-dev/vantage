@@ -62,11 +62,21 @@ function checkShape(kind, f) {
         'the other, but not from nothing');
     }
     if (f.principal != null && !positive(f.principal)) throw badRequest('principal must be a positive number — the amount financed, not the purchase price');
-    if (!nonNegative(f.rate)) throw badRequest('rate must be a number of zero or more');
-    if (!RATE_TYPES.includes(f.rate_type)) {
+    // Both optional, and optional TOGETHER: a rate means nothing without knowing
+    // what it is charged on, and 2.79% flat costs nearly double 2.79% reducing.
+    // Half the pair would be worse than neither, because it looks like an answer.
+    if (f.rate != null && !nonNegative(f.rate)) throw badRequest('rate must be a number of zero or more');
+    if (f.rate != null && !RATE_TYPES.includes(f.rate_type)) {
       throw badRequest(
         'rate_type must be FLAT (interest on the original amount, Malaysian hire purchase) ' +
         'or REDUCING (interest on what is left). It cannot be inferred — take it from the agreement');
+    }
+    if (f.rate == null && f.rate_type != null) {
+      throw badRequest('a rate_type with no rate says nothing — give both or neither');
+    }
+    // Without a rate the instalment is the only thing that can say what is owed.
+    if (f.rate == null && f.instalment == null) {
+      throw badRequest('give the instalment when there is no rate — otherwise nothing here knows what you pay');
     }
     if (!Number.isInteger(f.term_months) || f.term_months <= 0) throw badRequest('term_months must be a whole number of months');
     checkDate(f.started_on, 'started_on');

@@ -1161,6 +1161,9 @@ function CommitmentDialog({ prefill }) {
   const editing = prefill.id != null
   // Not saved anywhere. It only computes started_on, which is what is stored.
   const [monthsLeft, setMonthsLeft] = useState('')
+  // Opened when editing a loan that already has a rate, so an existing one is
+  // never hidden behind a disclosure the reader has no reason to open.
+  const [showRate, setShowRate] = useState(prefill.rate != null)
   const str = (v, fallback = '') => (v == null ? fallback : String(v))
   const [f, setF] = useState({
     kind: prefill.kind || 'LOAN',
@@ -1186,7 +1189,7 @@ function CommitmentDialog({ prefill }) {
   const ready =
     f.name.trim() &&
     (f.kind === 'LOAN'
-      ? (f.principal || f.instalment) && f.rate !== '' && f.term_months && f.started_on
+      ? f.instalment && f.term_months && f.started_on
       : f.kind === 'REVOLVING'
         ? f.apr !== ''
         : f.amount)
@@ -1205,8 +1208,10 @@ function CommitmentDialog({ prefill }) {
         ? {
             ...common,
             principal: num(f.principal),
+            // Both or neither: a rate with no basis reads as an answer while
+            // being a coin flip between two loans that cost very differently.
             rate: num(f.rate),
-            rate_type: f.rate_type,
+            rate_type: f.rate === '' ? null : f.rate_type,
             term_months: num(f.term_months),
             started_on: f.started_on,
             instalment: num(f.instalment),
@@ -1278,49 +1283,20 @@ function CommitmentDialog({ prefill }) {
         {f.kind === 'LOAN' ? (
           <>
             <Field
-              label="Amount financed"
-              htmlFor="cm-principal"
-              hint="Optional — worked out from the instalment if blank. Not the purchase price: include anything rolled into the loan."
+              label="Monthly instalment"
+              htmlFor="cm-inst"
+              hint="What leaves your account each month."
             >
-              <Input id="cm-principal" className="num" type="number" step="100" value={f.principal} onChange={e => set('principal', e.target.value)} />
+              <Input id="cm-inst" className="num" type="number" step="0.01" placeholder="705.00" value={f.instalment} onChange={e => set('instalment', e.target.value)} />
             </Field>
-            <Field label="Rate (% p.a.)" htmlFor="cm-rate">
-              <Input id="cm-rate" className="num" type="number" step="0.01" value={f.rate} onChange={e => set('rate', e.target.value)} />
+            <Field label="Term (months)" htmlFor="cm-term" hint="9 years is 108.">
+              <Input id="cm-term" className="num" type="number" step="1" placeholder="108" value={f.term_months} onChange={e => set('term_months', e.target.value)} />
             </Field>
             <Field
-              label="Interest is charged on…"
-              htmlFor="cm-ratetype"
-              className="col-span-2"
-              hint="Not “is it a fixed rate?” — Malaysian lenders call a reducing-balance rate fixed, and a flat rate costs close to double what it looks like."
-            >
-              <Select value={f.rate_type} onValueChange={v => set('rate_type', v)}>
-                <SelectTrigger id="cm-ratetype" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="REDUCING">the balance remaining &mdash; mortgages</SelectItem>
-                  <SelectItem value="FLAT">the original amount &mdash; hire purchase</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Term (months)" htmlFor="cm-term">
-              <Input id="cm-term" className="num" type="number" step="1" value={f.term_months} onChange={e => set('term_months', e.target.value)} />
-            </Field>
-            <Field
-              label="First payment"
-              htmlFor="cm-start"
-              hint={f.started_on ? undefined : 'Or fill it from months left, right.'}
-            >
-              <Input id="cm-start" className="num" type="date" value={f.started_on} onChange={e => set('started_on', e.target.value)} />
-            </Field>
-            {/* Statements report progress, never a start date — Maybank says "78
-                Months Left Out of 108". Typing that works the date out, so the
-                stored row still holds a real first payment rather than a second
-                way of saying the same thing. */}
-            <Field
-              label="…or months left"
+              label="Months left"
               htmlFor="cm-left"
-              hint="What the statement says. Needs the term and due day above."
+              className="col-span-2"
+              hint="Off the statement. Leave blank if it has only just started."
             >
               <Input
                 id="cm-left"
@@ -1334,23 +1310,74 @@ function CommitmentDialog({ prefill }) {
                   const d = startFromMonthsLeft(
                     Number(f.term_months),
                     Number(e.target.value),
-                    Number(f.due_day),
+                    Number(f.due_day) || 1,
                   )
                   if (d) set('started_on', d)
                 }}
               />
             </Field>
-            <Field
-              label="Instalment"
-              htmlFor="cm-inst"
-              hint={
-                f.principal
-                  ? 'Optional — derived if blank. The bank’s own figure wins when given.'
-                  : 'Needed while the amount financed is blank — either one gives the other.'
-              }
-            >
-              <Input id="cm-inst" className="num" type="number" step="0.01" value={f.instalment} onChange={e => set('instalment', e.target.value)} />
-            </Field>
+
+            {/* Behind a disclosure, not deleted. Most people know what they pay
+                and how long is left; far fewer know the rate, and fewer still
+                whether it is charged flat or reducing — which is the half that
+                matters, since a Malaysian lender calls a reducing rate "fixed"
+                and a flat rate costs close to double what it looks like. Asking
+                up front turned a two-minute job into a hunt for the agreement.
+                Given, it buys the real cost of the loan; left alone, what is
+                owed is simply the instalments still to run. */}
+            <div className="col-span-2 grid gap-3">
+              <button
+                type="button"
+                onClick={() => setShowRate(v => !v)}
+                aria-expanded={showRate}
+                className="text-muted-foreground hover:text-foreground justify-self-start text-[11.5px] transition-colors"
+              >
+                {showRate ? 'Hide' : 'Add'} interest details — optional, for the real cost
+              </button>
+
+              {showRate ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field
+                    label="Rate (% p.a.)"
+                    htmlFor="cm-rate"
+                    hint="As the agreement quotes it."
+                  >
+                    <Input id="cm-rate" className="num" type="number" step="0.01" placeholder="2.79" value={f.rate} onChange={e => set('rate', e.target.value)} />
+                  </Field>
+                  <Field
+                    label="Amount financed"
+                    htmlFor="cm-principal"
+                    hint="Worked out from the instalment if blank."
+                  >
+                    <Input id="cm-principal" className="num" type="number" step="100" value={f.principal} onChange={e => set('principal', e.target.value)} />
+                  </Field>
+                  <Field
+                    label="Interest is charged on…"
+                    htmlFor="cm-ratetype"
+                    className="col-span-2"
+                    hint="Not “is it a fixed rate?” — Malaysian lenders call a reducing-balance rate fixed, and a flat rate costs close to double what it looks like."
+                  >
+                    <Select value={f.rate_type} onValueChange={v => set('rate_type', v)}>
+                      <SelectTrigger id="cm-ratetype" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="REDUCING">the balance remaining &mdash; mortgages</SelectItem>
+                        <SelectItem value="FLAT">the original amount &mdash; hire purchase</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field
+                    label="First payment"
+                    htmlFor="cm-start"
+                    className="col-span-2"
+                    hint="Set from months left above. Only worth changing if you know the exact date."
+                  >
+                    <Input id="cm-start" className="num" type="date" value={f.started_on} onChange={e => set('started_on', e.target.value)} />
+                  </Field>
+                </div>
+              ) : null}
+            </div>
           </>
         ) : f.kind === 'REVOLVING' ? (
           <>

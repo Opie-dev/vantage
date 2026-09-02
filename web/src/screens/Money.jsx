@@ -271,7 +271,10 @@ function CommitmentRow({ r, onEdit, onRemove }) {
           {r.kind === 'LOAN' ? (
             <>
               <Meta>
-                {r.quoted}% {r.flat ? 'flat' : 'reducing'}
+                {/* A loan recorded without its rate says so by omission rather
+                    than by printing "null% reducing" — the progress and the due
+                    day are the parts that were actually given. */}
+                {r.rated ? `${r.quoted}% ${r.flat ? 'flat' : 'reducing'}` : 'rate not recorded'}
                 {c.due_day ? ` · due ${c.due_day}` : ''} · <span className="num">{r.paid}</span> of{' '}
                 <span className="num">{c.term_months}</span> paid
               </Meta>

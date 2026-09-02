@@ -2194,6 +2194,9 @@ export function principalFrom(c) {
   const n = c.term_months
   const pay = c.instalment
   if (!pay || !n) return 0
+  // With no rate there is no interest to strip out, so what was financed is
+  // simply what will be paid.
+  if (c.rate == null || c.rate_type == null) return pay * n
   if (c.rate_type === 'FLAT') {
     const factor = 1 + (c.rate / 100) * (n / MONTHS)
     return factor > 0 ? (pay * n) / factor : 0
@@ -2238,10 +2241,20 @@ export function loanSchedule(c, nowISO = isoOf(Date.now()), extraPrincipal = 0) 
   const flat = c.rate_type === 'FLAT'
   const paid = instalmentsPaid(c.started_on, nowISO, n)
   const left = Math.max(n - paid, 0)
+  // Most people know what they pay and how long is left; far fewer know the rate
+  // or whether it is charged flat or reducing. Without it the schedule still
+  // answers the question the screen is actually asking — how much is still to
+  // pay — and simply declines the ones it cannot: no split, no effective rate.
+  const rated = c.rate != null && c.rate_type != null
 
   let instalment, outstanding, interestThisMonth, effective
 
-  if (flat) {
+  if (!rated) {
+    instalment = c.instalment || 0
+    outstanding = left * instalment
+    interestThisMonth = 0
+    effective = null
+  } else if (flat) {
     const totalInterest = P * (c.rate / 100) * (n / MONTHS)
     instalment = c.instalment || (P + totalInterest) / n
     outstanding = left * instalment
@@ -2250,6 +2263,7 @@ export function loanSchedule(c, nowISO = isoOf(Date.now()), extraPrincipal = 0) 
     interestThisMonth = left > 0 ? totalInterest / n : 0
     effective = flatToEffective(c.rate, n)
   } else {
+    // eslint-disable-next-line no-lonely-if
     const r = c.rate / 100 / MONTHS
     const g = Math.pow(1 + r, n)
     instalment = c.instalment || (r === 0 ? P / n : (P * r * g) / (g - 1))
@@ -2274,7 +2288,11 @@ export function loanSchedule(c, nowISO = isoOf(Date.now()), extraPrincipal = 0) 
     flat,
     interestThisMonth,
     principalThisMonth: Math.max(instalment - interestThisMonth, 0),
-    owedIsInstalments: flat,
+    // With no rate, what is owed is the instalments still to run — the same
+    // meaning a flat loan's figure carries, and for the same reason: nothing
+    // here knows how it splits.
+    owedIsInstalments: flat || !rated,
+    rated,
     extraPaid: extraPrincipal,
   }
 }
