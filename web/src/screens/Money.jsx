@@ -24,7 +24,7 @@
  * ahead of that figure.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -33,8 +33,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-import { deductionsOf, waterfall } from '@/lib/calc'
-import { dfmtLong, fmt, fmtS, pct1 } from '@/lib/format'
+import { deductionsOf, netOf, waterfall } from '@/lib/calc'
+import { dfmt, dfmtLong, fmt, fmtS, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 /**
@@ -89,9 +89,15 @@ function Line({ label, value, tone = '', strong = false, rule = false }) {
 
 /* ── coming in ────────────────────────────────────────────────────────────── */
 
-function SourceRow({ r, onRecord, onEdit, onRemove }) {
+function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
   const s = r.source
   const d = r.last ? deductionsOf(r.last) : null
+  // Collapsed by default. A monthly salary accumulates twelve of these a year
+  // and the row exists to show what the source pays, not to list its history —
+  // but a payment you cannot see is one you cannot correct, which is how a
+  // mistyped freelance invoice became permanent.
+  const [open, setOpen] = useState(false)
+  const events = r.events || []
 
   return (
     <div className="border-hairline border-b py-3 last:border-b-0">
@@ -137,6 +143,43 @@ function SourceRow({ r, onRecord, onEdit, onRemove }) {
         <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.source)} />
         <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
       </div>
+
+      {events.length ? (
+        <div className="mt-2 ml-[21px]">
+          <button
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            aria-expanded={open}
+            className="text-muted-foreground hover:text-foreground text-[11.5px] transition-colors"
+          >
+            {open ? 'Hide' : 'Show'} {events.length} recorded payment
+            {events.length === 1 ? '' : 's'}
+          </button>
+
+          {open ? (
+            <div className="mt-1.5 grid gap-0.5">
+              {events.map(e => (
+                <div key={e.id} className="flex items-center gap-3 text-[12px]">
+                  <span className="num text-muted-foreground w-[74px]">{dfmt(e.date)}</span>
+                  <span className="num w-[92px]">{fmt(netOf(e), r.cur)}</span>
+                  {/* Gross only when something was taken off it, so a freelance
+                      payment that nets what it grossed does not read as two
+                      different numbers side by side. */}
+                  <span className="text-faint num flex-1 text-[11px]">
+                    {netOf(e) !== e.gross ? `of ${fmt(e.gross, r.cur)} gross` : ''}
+                    {e.note ? ` · ${e.note}` : ''}
+                  </span>
+                  <RowAction
+                    icon={TrashIcon}
+                    label={`Remove the ${dfmt(e.date)} payment`}
+                    onClick={() => onRemoveEvent(r.id, e.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {d && d.deducted > 0 ? (
         <div className="mt-2.5 ml-[21px]">
@@ -290,8 +333,15 @@ function CommitmentRow({ r, onEdit, onRemove }) {
 /* ── screen ───────────────────────────────────────────────────────────────── */
 
 export default function Money() {
-  const { state, openCommitment, openIncome, openIncomeEvent, deleteIncomeSource, deleteCommitment } =
-    useVantage()
+  const {
+    state,
+    openCommitment,
+    openIncome,
+    openIncomeEvent,
+    deleteIncomeSource,
+    deleteIncomeEvent,
+    deleteCommitment,
+  } = useVantage()
   const w = useMemo(() => waterfall(state), [state])
   const out = w.commitments
   const hasFlat = out.rows.some(r => r.kind === 'LOAN' && r.flat)
@@ -443,6 +493,7 @@ export default function Money() {
                     onRecord={id => openIncomeEvent({ source_id: id })}
                     onEdit={openIncome}
                     onRemove={deleteIncomeSource}
+                    onRemoveEvent={deleteIncomeEvent}
                   />
                 ))}
                 <p className="text-faint mt-3 text-[11.5px] leading-relaxed">
