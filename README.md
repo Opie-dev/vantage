@@ -137,7 +137,7 @@ agent in one double-click. See [The Sync button](#the-sync-button).
 writes the production bundle into `public/`, which is what `npm start` serves.
 
 You can use the app immediately with manual entry, no broker connection needed:
-add instruments (**+ Instrument**), log trades under **Positions**, record deposits
+add instruments under **Instruments**, log trades under **Positions**, record deposits
 under **Wallet**, open a savings account and its entries under **Assets**, and add
 what you earn and owe under **Money**.
 

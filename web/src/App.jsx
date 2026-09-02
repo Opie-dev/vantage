@@ -2,7 +2,7 @@
  * The Vantage app shell.
  *
  * Owns: the side navigation (brand, screens, last-sync line, theme toggle), the
- * top bar (screen title, Sync, ↻ Prices, + Instrument), the first-load /
+ * top bar (screen title, Sync, ↻ Prices, theme), the first-load /
  * server-down states, the toast host, and the three write dialogs.
  *
  * Navigation is a VERTICAL rail, not a row of tabs. Eight screens overflowed a
@@ -227,7 +227,7 @@ function SideNav() {
 
 /** Where you are, and the three things you can do from anywhere. */
 function TopBar() {
-  const { tab, openInstrument, refreshPrices, pricesPending, syncMoomoo, syncPending } = useVantage()
+  const { tab, refreshPrices, pricesPending, syncMoomoo, syncPending } = useVantage()
   const current = TABS.find(t => t.id === tab)
 
   return (
@@ -256,10 +256,6 @@ function TopBar() {
             </TooltipTrigger>
             <TooltipContent>Fetch quotes from Yahoo Finance — the fallback when OpenD is off</TooltipContent>
           </Tooltip>
-          <Button size="sm" onClick={openInstrument}>
-            <PlusIcon />
-            Instrument
-          </Button>
           {/* Beside the other things you can do from anywhere. It used to sit in
               the rail footer, where it was easy to miss entirely — the light
               palette has always existed, but nobody could find the switch. */}
@@ -1746,7 +1742,7 @@ function GoalDialog() {
         <Field
           label={income ? 'Scope' : 'Instrument'}
           htmlFor="g-t"
-          hint={blocked ? 'Add an instrument first, with + Instrument at the top right.' : undefined}
+          hint={blocked ? 'Add an instrument first, from the Instruments screen.' : undefined}
         >
           <Select value={picked} onValueChange={setTicker} disabled={blocked}>
             <SelectTrigger id="g-t" className="w-full">
