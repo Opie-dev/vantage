@@ -76,6 +76,7 @@ import {
   OTHER,
   SHARIAH,
   estimatedRate,
+  epfAccounts,
   institutionOf,
   latestRate,
   productOf,
@@ -707,6 +708,9 @@ function AssetDialog() {
       last_bonus: f.last_bonus === '' ? null : Number(f.last_bonus),
       unit_cap: f.unit_cap === '' ? null : Number(f.unit_cap),
       fiscal_year: f.fiscal_year,
+      // Which catalogue entry this is, so code that needs to know WHAT an account
+      // is — the payroll EPF split, above all — does not have to read its name.
+      product_id: f.product_id || null,
     })
     setBusy(false)
     if (ok) closeModal()
@@ -1348,7 +1352,7 @@ function CommitmentDialog() {
  * source would invent a certainty it does not have, and the API refuses it.
  */
 function IncomeDialog() {
-  const { state, closeModal, addIncomeSource } = useVantage()
+  const { state, closeModal, addIncomeSource, createEpfAccounts } = useVantage()
   const [f, setF] = useState({
     kind: 'EMPLOYMENT',
     name: '',
@@ -1362,6 +1366,22 @@ function IncomeDialog() {
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const monthly = f.cadence === 'MONTHLY'
   const savings = state.assets.filter(a => !a.archived)
+
+  // EPF is one membership split across three accounts, so the question is not
+  // "which account?" but "are they set up?". Anything missing is offered rather
+  // than created behind the reader's back — an account appearing on the Assets
+  // screen that nobody asked for is exactly what was wrong before.
+  const held = new Set(savings.map(a => a.product_id).filter(Boolean))
+  const epfMissing = epfAccounts().filter(p => !held.has(p.id))
+  const persaraan = savings.find(a => a.product_id === 'EPF_PERSARAAN')
+
+  // Once they exist there is one right answer, so it is filled in rather than
+  // asked. The split reaches all three regardless of which is named here.
+  useEffect(() => {
+    if (f.kind === 'EMPLOYMENT' && !f.epf_asset_id && persaraan) {
+      set('epf_asset_id', String(persaraan.id))
+    }
+  }, [f.kind, f.epf_asset_id, persaraan])
 
   const save = async () => {
     if (!f.name.trim()) return
@@ -1459,11 +1479,33 @@ function IncomeDialog() {
           <Input id="in-payer" value={f.payer} onChange={e => set('payer', e.target.value)} />
         </Field>
 
+        {f.kind === 'EMPLOYMENT' && epfMissing.length ? (
+          <div className="border-hairline col-span-2 grid gap-2 rounded-md border border-dashed p-3">
+            <span className="eyebrow">EPF accounts</span>
+            <p className="text-faint text-[11.5px] leading-relaxed">
+              Employment means EPF, and since 2024 a contribution is split three ways —{' '}
+              <span className="num">75%</span> to Akaun Persaraan, <span className="num">15%</span>{' '}
+              to Sejahtera, <span className="num">10%</span> to Fleksibel. Set them up and each
+              payslip you record books its own share into all three.
+            </p>
+            <div>
+              <Button size="sm" variant="outline" onClick={createEpfAccounts}>
+                <PlusIcon />
+                Create {epfMissing.length === 3 ? 'my EPF accounts' : `the missing ${epfMissing.length}`}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {f.kind === 'EMPLOYMENT' && savings.length ? (
           <Field
             label="EPF lands in"
             htmlFor="in-epf"
-            hint="Both halves — yours and your employer's — get booked there automatically."
+            hint={
+              persaraan
+                ? 'Split 75/15/10 across your three EPF accounts, whichever is named here.'
+                : "Both halves — yours and your employer's — get booked there automatically."
+            }
           >
             <Select value={f.epf_asset_id} onValueChange={v => set('epf_asset_id', v)}>
               <SelectTrigger id="in-epf" className="w-full">
