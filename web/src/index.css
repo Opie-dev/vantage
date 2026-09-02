@@ -44,7 +44,10 @@
   --color-faint: var(--faint);
   --color-hairline: var(--hairline);
 
-  /* Series colours for charts + the per-instrument dot. 8 slots, cycled. */
+  /* Series colours for charts + the per-instrument dot.
+     Twelve slots. Tickers cycle the first eight; 9-12 exist because the
+     net-worth strip draws every account and every debt on one bar, and can
+     need more distinct colours than any single chart does. */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -53,6 +56,10 @@
   --color-chart-6: var(--chart-6);
   --color-chart-7: var(--chart-7);
   --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
+  --color-chart-11: var(--chart-11);
+  --color-chart-12: var(--chart-12);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -97,6 +104,10 @@
   --chart-6: #1f7a1f;
   --chart-7: #7266d8;
   --chart-8: #d15757;
+  --chart-9: #12889c;
+  --chart-10: #9a45bd;
+  --chart-11: #6d8a12;
+  --chart-12: #8a5f38;
 }
 
 .dark {
@@ -134,6 +145,10 @@
   --chart-6: #46a846;
   --chart-7: #9085e9;
   --chart-8: #e66767;
+  --chart-9: #2ba8bf;
+  --chart-10: #b866d9;
+  --chart-11: #8fb228;
+  --chart-12: #a97c52;
 }
 
 @layer base {
