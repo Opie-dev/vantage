@@ -352,11 +352,18 @@ try {
   }
   await tick(() => ctl.setTab('dashboard'))
 
-  // each dialog must open through the store opener and close again
-  for (const [open, title] of [['openInstrument', 'Add instrument'], ['openTransaction', 'Add transaction'], ['openCash', 'Add cash movement'], ['openAssetEntry', 'Add entry'], ['openAsset', 'Add account'], ['openCommitment', 'Add commitment'], ['openIncome', 'Add income source'],
-    ['openIncomeEvent', 'Record a payment']]) {
+  // each form must open through the store opener and close again
+  const FORMS = [['openInstrument', 'Add instrument'], ['openTransaction', 'Add transaction'], ['openCash', 'Add cash movement'], ['openAssetEntry', 'Add entry'], ['openAsset', 'Add account'], ['openCommitment', 'Add commitment'], ['openIncome', 'Add income source'],
+    ['openIncomeEvent', 'Record a payment'], ['openGoal', 'New goal']]
+  for (const [open, title] of FORMS) {
     await tick(() => ctl[open]())
     if (!document.body.textContent.includes(title)) throw new Error(`${open}() did not render "${title}"`)
+    // Every form is a side panel now. Asserting the slot catches a form that
+    // silently falls back to a centred dialog, which is the exact drift this
+    // change was made to remove.
+    if (!document.querySelector('[data-slot="sheet-content"]')) {
+      throw new Error(`${open}() rendered "${title}" but not as a side panel`)
+    }
     await tick(() => ctl.closeModal())
     if (document.body.textContent.includes(title)) throw new Error(`closeModal() left "${title}" mounted`)
   }
@@ -364,7 +371,7 @@ try {
   const real = errors.filter(e => !/not wrapped in act|useLayoutEffect does nothing on the server/.test(e))
   if (real.length) throw new Error(`console.error during render:\n${real.join('\n')}`)
 
-  console.log('OK - shell mounts, all ' + SCREENS.length + ' screens render, all eight dialogs open and close')
+  console.log('OK - shell mounts, all ' + SCREENS.length + ' screens render, all ' + FORMS.length + ' side-panel forms open and close')
 } finally {
   await server.close()
   window.close()

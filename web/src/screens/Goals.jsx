@@ -28,23 +28,14 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 import {
   GOAL_KIND,
-  GOAL_NEEDS_INSTRUMENT,
   INCOME_RATE_MONTHS,
   PAYMENTS_AVERAGED,
   goalFunding,
-  goalIncomeIsNet,
   goalProgress,
   instr,
   toRM,
@@ -53,9 +44,9 @@ import { fmt, fq, pct0 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 /** Sentinel for "no instrument" in the scope select — Radix rejects ''. */
-const WHOLE = '__whole__'
+export const WHOLE = '__whole__'
 
-const KIND_OPTIONS = [
+export const KIND_OPTIONS = [
   { id: GOAL_KIND.SHARES, label: 'Shares held', hint: 'Accumulate a number of shares' },
   { id: GOAL_KIND.INCOME_TOTAL, label: 'Total dividends', hint: 'All-time income received' },
   { id: GOAL_KIND.INCOME_YEAR, label: 'Dividends this year', hint: 'Resets each January' },
@@ -67,7 +58,7 @@ const KIND_OPTIONS = [
   },
 ]
 
-const isIncome = kind => kind && kind !== GOAL_KIND.SHARES
+export const isIncome = kind => kind && kind !== GOAL_KIND.SHARES
 
 /**
  * A number field that writes on commit, not on keystroke — legacy used the DOM
@@ -496,169 +487,8 @@ function IncomeCard({ goal }) {
 
 /* ── new goal ─────────────────────────────────────────────────────────────── */
 
-function NewGoalForm() {
-  const { state, addGoal } = useVantage()
-  const [kind, setKind] = useState(GOAL_KIND.SHARES)
-  const [ticker, setTicker] = useState('')
-  const [target, setTarget] = useState('500')
-  const [amount, setAmount] = useState('1000')
-  const [monthly, setMonthly] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  const instruments = state.instruments
-  const income = isIncome(kind)
-  // Per-payment is per holding only: combined across holdings it would measure
-  // which funds happened to pay that day rather than the portfolio.
-  const needsInstrument = GOAL_NEEDS_INSTRUMENT.has(kind)
-  const picked = needsInstrument
-    ? ticker && ticker !== WHOLE
-      ? ticker
-      : instruments[0]?.ticker || ''
-    : ticker || WHOLE
-  const blocked = needsInstrument && !instruments.length
-
-  const submit = async () => {
-    if (blocked || busy) return
-    setBusy(true)
-    const ok = await addGoal(
-      income
-        ? {
-            kind,
-            ticker: picked === WHOLE ? undefined : picked,
-            target_amount: Number(amount) || 0,
-          }
-        : {
-            kind: GOAL_KIND.SHARES,
-            ticker: picked,
-            target_qty: Number(target) || 1,
-            monthly_budget: monthly ? Number(monthly) : null,
-          },
-    )
-    setBusy(false)
-    if (ok) {
-      setTarget('500')
-      setAmount('1000')
-      setMonthly('')
-    }
-  }
-
-  return (
-    <Card>
-      <CardContent className="grid gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="g-kind" className="eyebrow">
-              Goal type
-            </Label>
-            <Select value={kind} onValueChange={setKind}>
-              <SelectTrigger id="g-kind" size="sm" className="w-[190px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {KIND_OPTIONS.map(o => (
-                  <SelectItem key={o.id} value={o.id}>
-                    {o.label}
-                    <span className="text-faint ml-1.5 text-[11px]">{o.hint}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="g-t" className="eyebrow">
-              {income ? 'Scope' : 'Instrument'}
-            </Label>
-            <Select value={picked} onValueChange={setTicker} disabled={blocked}>
-              <SelectTrigger id="g-t" size="sm" className="w-[190px]">
-                <SelectValue placeholder="No instruments yet" />
-              </SelectTrigger>
-              <SelectContent>
-                {income && !needsInstrument ? <SelectItem value={WHOLE}>All holdings</SelectItem> : null}
-                {instruments.map(i => (
-                  <SelectItem key={i.ticker} value={i.ticker}>
-                    {i.ticker}
-                    <span className="text-faint ml-1">{i.currency}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {income ? (
-            <div className="grid gap-1.5">
-              <Label htmlFor="g-amount" className="eyebrow">
-                {kind === GOAL_KIND.INCOME_MONTHLY
-                  ? 'Target per month (RM)'
-                  : kind === GOAL_KIND.INCOME_PER_PAYMENT
-                    ? 'Target per payment (RM)'
-                    : 'Target (RM)'}
-              </Label>
-              <Input
-                id="g-amount"
-                type="number"
-                min="1"
-                step="100"
-                className="num h-8 w-[160px]"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-              />
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-1.5">
-                <Label htmlFor="g-target" className="eyebrow">
-                  Target shares
-                </Label>
-                <Input
-                  id="g-target"
-                  type="number"
-                  min="1"
-                  step="1"
-                  className="num h-8 w-[130px]"
-                  value={target}
-                  onChange={e => setTarget(e.target.value)}
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="g-monthly" className="eyebrow">
-                  Monthly budget (RM)
-                </Label>
-                <Input
-                  id="g-monthly"
-                  type="number"
-                  min="0"
-                  step="10"
-                  placeholder="optional"
-                  className="num h-8 w-[160px]"
-                  value={monthly}
-                  onChange={e => setMonthly(e.target.value)}
-                />
-              </div>
-            </>
-          )}
-
-          <Button size="sm" onClick={submit} disabled={busy || blocked}>
-            <PlusIcon />
-            Add goal
-          </Button>
-        </div>
-
-        {blocked ? <p className="text-faint text-[12px]">Add an instrument first (top right).</p> : null}
-        {income ? (
-          <p className="text-faint text-[12px]">
-            Income targets are in RM so every goal is comparable, and count{' '}
-            {goalIncomeIsNet(state) ? 'what reached your wallet after tax' : 'dividends as declared, before tax'}{' '}
-            — set by the P&amp;L basis in Settings.
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
-  )
-}
-
 export default function Goals() {
-  const { state } = useVantage()
+  const { state, openGoal } = useVantage()
   const funding = useMemo(() => goalFunding(state), [state])
   // Shares first, then income — they answer different questions and interleaving
   // them by id makes the list read as a jumble.
@@ -671,25 +501,36 @@ export default function Goals() {
     <div>
       <BudgetCheck funding={funding} />
       {goals.length ? (
-        <div className="mt-3.5 grid gap-3.5">
-          {goals.map(g =>
-            isIncome(g.kind) ? (
-              <IncomeCard key={g.id} goal={g} />
-            ) : (
-              <SharesCard key={g.id} goal={g} funding={funding} />
-            ),
-          )}
-        </div>
+        <>
+          <div className="mt-3.5 flex justify-end">
+            <Button size="sm" onClick={openGoal}>
+              <PlusIcon />
+              New goal
+            </Button>
+          </div>
+          <div className="mt-3 grid gap-3.5">
+            {goals.map(g =>
+              isIncome(g.kind) ? (
+                <IncomeCard key={g.id} goal={g} />
+              ) : (
+                <SharesCard key={g.id} goal={g} funding={funding} />
+              ),
+            )}
+          </div>
+        </>
       ) : (
         <Card>
           <CardContent className="text-muted-foreground py-9 text-center">
-            No goals yet — set one below, e.g. 1,000 shares of ETCO, or RM 1,000 a month of dividends.
+            No goals yet — e.g. 1,000 shares of ETCO, or RM 1,000 a month of dividends.
+            <div>
+              <Button size="sm" className="mt-4" onClick={openGoal}>
+                <PlusIcon />
+                New goal
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
-
-      <h2 className="num mt-6 mb-3 text-[16px] font-semibold">New goal</h2>
-      <NewGoalForm />
     </div>
   )
 }
