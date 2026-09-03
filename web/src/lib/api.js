@@ -265,6 +265,13 @@ export const saveSnapshot = body => send('POST', '/api/snapshot', body)
  */
 export const saveOwnedSnapshot = body => send('POST', '/api/snapshot/owned', body)
 
+/* ── expenses ─────────────────────────────────────────────────────────────── */
+
+/** What was actually spent. Unpredictable spending only — a subscription is a commitment. */
+export const addExpense = body => send('POST', '/api/expenses', body)
+export const updateExpense = (id, body) => send('PATCH', `/api/expenses/${id}`, body)
+export const deleteExpense = id => send('DELETE', `/api/expenses/${id}`)
+
 export default {
   getState,
   health,
@@ -296,4 +303,7 @@ export default {
   setManualPrice,
   saveSnapshot,
   saveOwnedSnapshot,
+  addExpense,
+  updateExpense,
+  deleteExpense,
 }

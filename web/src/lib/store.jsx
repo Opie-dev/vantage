@@ -60,6 +60,10 @@ const VantageContext = createContext(null)
  *   deleteIncomeSource: (id: number) => Promise<boolean>,
  *   addIncomeEvent: (sourceId: number, body: object) => Promise<boolean>,
  *   addCommitment: (body: object) => Promise<boolean>,
+ *   addExpense: (body: object) => Promise<boolean>,
+ *   updateExpense: (id: number, body: object) => Promise<boolean>,
+ *   deleteExpense: (id: number) => Promise<boolean>,
+ *   openExpense: (prefill?: object) => void,
  *   updateCommitment: (id: number, body: object) => Promise<boolean>,
  *   deleteCommitment: (id: number) => Promise<boolean>,
  *   updateGoal: (id: number, body: object) => Promise<boolean>,
@@ -423,6 +427,8 @@ export function VantageProvider({ children }) {
       // With a row, the form edits it; without, it adds one.
       openCommitment: (prefill = {}) => setModal({ kind: 'commitment', prefill }),
       // With a row, the form edits it; without, it adds one.
+      openExpense: (prefill = {}) => setModal({ kind: 'expense', prefill }),
+      // With a row, the form edits it; without, it adds one.
       openIncome: (prefill = {}) => setModal({ kind: 'income', prefill }),
       openGoal: () => setModal({ kind: 'goal', prefill: {} }),
       openIncomeEvent,
@@ -439,6 +445,9 @@ export function VantageProvider({ children }) {
       deleteDeclaredRate: id =>
         mutate(() => api.deleteDeclaredRate(id), 'Reverted to the built-in figure'),
       addCommitment: body => mutate(() => api.addCommitment(body), `${body.name} added`),
+      addExpense: body => mutate(() => api.addExpense(body), 'Expense recorded'),
+      updateExpense: (id, body) => mutate(() => api.updateExpense(id, body), 'Expense updated'),
+      deleteExpense: id => mutate(() => api.deleteExpense(id), 'Expense removed'),
       addIncomeSource: body => mutate(() => api.addIncomeSource(body), `${body.name} added`),
       updateIncomeSource: (id, body) =>
         mutate(() => api.updateIncomeSource(id, body), `${body.name} updated`),
