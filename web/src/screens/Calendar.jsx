@@ -55,27 +55,11 @@ import {
   slotColor,
   slotOf,
 } from '@/lib/calc'
-import { MINUS, compact, fmt, fmtS, fq, monthLabel } from '@/lib/format'
+import { compact, fmt, fmtS, fq, monthLabel } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-/**
- * Buy green, sell red, income amber, wallet grey.
- *
- * Income keeps the accent it carries everywhere else in the app; deposits, transfers
- * and withholding drop to neutral. Before this they were all amber together, so a
- * payday and a bank transfer were the same dot.
- */
-const markClass = side =>
-  side === 'BUY'
-    ? 'bg-gain'
-    : side === 'SELL'
-      ? 'bg-loss'
-      : side === 'DIV' || side === 'DIVIDEND'
-        ? 'bg-cash'
-        : 'bg-muted-foreground'
 
 /** Chip colour for a row in the day detail — same semantics as the marks. */
 const chipVariant = side =>

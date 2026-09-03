@@ -32,8 +32,6 @@ import { useMemo } from 'react'
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -56,7 +54,6 @@ import {
   PNL_BASIS,
   PNL_BASIS_LABEL,
   allocation,
-  cashSource,
   dashboardTheme,
   dividendMonths,
   equitySeries,
@@ -118,55 +115,6 @@ function Welcome() {
   )
 }
 
-/* ── stat cards ───────────────────────────────────────────────────────────── */
-
-function Stat({ label, value, valueClass = '', sub, subClass = '', badge }) {
-  return (
-    <Card className="gap-0 py-3.5">
-      <CardContent className="px-4">
-        <div className="flex items-center gap-1.5">
-          <span className="eyebrow">{label}</span>
-          {badge}
-        </div>
-        <div className={`stat mt-2 ${valueClass}`}>{value}</div>
-        <div className={`mt-1.5 text-[11.5px] ${subClass || 'text-faint'}`}>{sub}</div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function DerivedHint() {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge variant="neutral" className="cursor-default px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
-          derived
-        </Badge>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[260px]">
-        No broker figure yet — this is computed from your own records. The OpenD sync stores moomoo&rsquo;s
-        own balance, which is the one that reconciles.
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-function IncomeHint({ gross, tax }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Badge variant="neutral" className="cursor-default px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
-          net
-        </Badge>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[260px]">
-        Price movement plus the income these holdings actually paid: {fmt(gross, 'MYR')} declared, less{' '}
-        {fmt(tax, 'MYR')} withheld. Trading fees are excluded here because average cost already includes them.
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 /* ── dividends received ───────────────────────────────────────────────────── */
 
 function DividendTooltip({ active, payload }) {
@@ -195,67 +143,6 @@ function DividendTooltip({ active, payload }) {
         </div>
       )}
     </div>
-  )
-}
-
-function DividendCard({ months, net }) {
-  if (!months.length) {
-    return (
-      <Card className="gap-3">
-        <CardHeader className="px-4">
-          <span className="eyebrow">Dividends received</span>
-        </CardHeader>
-        <CardContent className="px-4 pb-4">
-          <p className="text-faint text-[12.5px]">
-            Dividends appear here once the sync has pulled them — run{' '}
-            <code className="num text-[11.5px]">python sync/moomoo_sync.py --cash-days 120</code>.
-          </p>
-        </CardContent>
-      </Card>
-    )
-  }
-  const best = months.reduce((a, b) => (b.net > a.net ? b : a))
-  return (
-    <Card className="gap-3">
-      <CardHeader className="px-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <span className="eyebrow">Dividends received</span>
-          <span className="text-faint num text-[11.5px]">
-            {fmt(net, 'MYR')} net over {months.length} month{months.length === 1 ? '' : 's'} · best{' '}
-            {best.label} {fmt(best.net, 'MYR')}
-          </span>
-        </div>
-      </CardHeader>
-      <CardContent className="px-2 pb-1">
-        <ResponsiveContainer width="100%" height={188}>
-          <BarChart data={months} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-            <CartesianGrid horizontal vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
-            <XAxis
-              dataKey="label"
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 10.5 }}
-            />
-            <YAxis
-              width={54}
-              tickLine={false}
-              axisLine={false}
-              tick={{ fill: 'var(--muted-foreground)', fontSize: 10.5 }}
-              tickFormatter={v => fmtCompact(v, 'MYR')}
-            />
-            <ChartTooltip content={<DividendTooltip />} cursor={{ fill: 'var(--border)', opacity: 0.35 }} />
-            {/* stacked so the full bar is what the funds declared and the darker
-                cap is what never arrived — 30% FATCA withholding on US dividends */}
-            <Bar dataKey="net" stackId="d" fill="var(--chart-3)" isAnimationActive={false} radius={[0, 0, 2, 2]} />
-            <Bar dataKey="tax" stackId="d" fill="var(--border)" isAnimationActive={false} radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-        <p className="text-faint px-2 pt-1 pb-2 text-[11px]">
-          Bar height is what was declared; the pale cap is withholding tax, so the solid part is what reached your
-          wallet.
-        </p>
-      </CardContent>
-    </Card>
   )
 }
 
@@ -1542,8 +1429,6 @@ function DashboardBody() {
   )
 
   if (!state.transactions.length && !state.cash.length) return <Welcome />
-
-  const derived = cashSource(state) === 'derived'
 
   const monthLabel = now.toLocaleDateString('en-GB', { month: 'long' })
   const dayLabel = now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })

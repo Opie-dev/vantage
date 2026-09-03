@@ -317,9 +317,15 @@ function AccountCard({ row, onAdd, onEdit }) {
           <span className="text-muted-foreground">
             Earned <b className="num text-gain font-semibold">{fmtS(row.earned, row.cur)}</b>
           </span>
+          {/* "of it" pointed at the Contributed figure beside it, which reads as a
+              tighter claim than the ledger supports: an opening balance is one
+              DEPOSIT carrying years of earnings inside it, so what it is a
+              percentage OF is not purely contributions. Same scope as the summary
+              tile, and now the same words. */}
           {row.returnedPct != null ? (
             <span className="text-muted-foreground">
-              Returned <b className="num text-foreground font-semibold">{pct1(row.returnedPct)}</b> of it
+              Returned <b className="num text-foreground font-semibold">{pct1(row.returnedPct)}</b> since
+              tracking began
             </span>
           ) : null}
         </div>
