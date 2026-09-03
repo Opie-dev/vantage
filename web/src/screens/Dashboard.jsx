@@ -155,15 +155,35 @@ function EquityTooltip({ active, payload }) {
     <div className="bg-popover text-popover-foreground rounded-md border px-2.5 py-1.5 shadow-md">
       <div className="text-faint num text-[11px]">{dfmtLong(p.date)}</div>
       <div className="num mt-0.5 text-[13px] font-semibold">{fmt(p.value, 'MYR')}</div>
+      <div className="text-faint text-[10.5px]">at the broker</div>
+      {p.net != null ? (
+        <div className="border-hairline mt-1 border-t pt-1">
+          <div className="num text-gain text-[12.5px] font-semibold">{fmt(p.net, 'MYR')}</div>
+          <div className="text-faint text-[10.5px]">
+            net worth · {fmt(p.assets || 0, 'MYR')} outside, {fmt(p.owed || 0, 'MYR')} owed
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
 
 function EquityCard({ series }) {
+  // Drawn only where it exists. Every point written before the owned columns did
+  // carries net: null, so the line begins partway along the broker curve rather
+  // than diving to zero and inventing a crash that never happened.
+  const hasNet = useMemo(() => series.some(s => s.net != null), [series])
+
   const domain = useMemo(() => {
     if (series.length < 2) return [0, 1]
-    const vals = series.map(s => s.value)
-    return [Math.min(...vals) * 0.97, Math.max(...vals) * 1.02]
+    // The domain must span both lines or the taller one clips. Math.min/max
+    // rather than the old *0.97 / *1.02 on one series: net worth can be negative
+    // when the debts win, and scaling a negative floor by 0.97 raises it.
+    const vals = series.flatMap(s => (s.net == null ? [s.value] : [s.value, s.net]))
+    const lo = Math.min(...vals)
+    const hi = Math.max(...vals)
+    const pad = (hi - lo || Math.abs(hi) || 1) * 0.06
+    return [lo - pad, hi + pad]
   }, [series])
 
   return (
@@ -219,6 +239,25 @@ function EquityCard({ series }) {
                   activeDot={{ r: 3.5, stroke: 'var(--card)', strokeWidth: 2 }}
                   isAnimationActive={false}
                 />
+                {/* No fill: the broker area is the subject and a second filled
+                    region would read as a stack, which this is not — net worth
+                    contains the broker figure rather than sitting on top of it.
+                    connectNulls stays off so the gap before the owned side was
+                    recorded is visible as a gap. */}
+                {hasNet ? (
+                  <Area
+                    type="monotone"
+                    dataKey="net"
+                    stroke="var(--gain)"
+                    strokeWidth={2}
+                    strokeDasharray="4 3"
+                    fill="none"
+                    dot={false}
+                    connectNulls={false}
+                    activeDot={{ r: 3.5, stroke: 'var(--card)', strokeWidth: 2 }}
+                    isAnimationActive={false}
+                  />
+                ) : null}
               </AreaChart>
             </ResponsiveContainer>
           </div>

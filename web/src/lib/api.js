@@ -257,6 +257,14 @@ export const setManualPrice = body => send('POST', '/api/prices/manual', body)
  */
 export const saveSnapshot = body => send('POST', '/api/snapshot', body)
 
+/**
+ * Records today's owned side — the accounts outside moomoo, and what is owed.
+ * Touches assets_rm and liabilities_rm only; the sync worker owns the broker
+ * columns and the two never overwrite each other.
+ * @param {{assets_rm:number, liabilities_rm:number}} body  both already RM
+ */
+export const saveOwnedSnapshot = body => send('POST', '/api/snapshot/owned', body)
+
 export default {
   getState,
   health,
@@ -287,4 +295,5 @@ export default {
   refreshPrices,
   setManualPrice,
   saveSnapshot,
+  saveOwnedSnapshot,
 }

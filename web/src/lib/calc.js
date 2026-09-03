@@ -592,17 +592,37 @@ export function allocation(S) {
 }
 
 /**
- * Equity curve points from the daily snapshots. Value is invested + cash, both
+ * Equity curve points from the daily snapshots. `value` is invested + cash, both
  * already RM in the snapshots table. Fewer than 2 points means the chart should
  * show its empty state ("appears after a few daily snapshots").
- * @returns {Array<{ date: string, label: string, value: number }>}
+ *
+ * `value` KEEPS ITS MEANING — the broker alone — because both charts bind to it
+ * and a curve that silently changed what it plotted would be the worst kind of
+ * quiet change. Net worth arrives as its own field beside it.
+ *
+ * `net` IS NULL WHERE THE OWNED SIDE WAS NEVER RECORDED, which is every point
+ * written before those columns existed. Null rather than the broker figure alone,
+ * because a net worth that silently omits assets and debt is not a smaller truth,
+ * it is a different number wearing the same name. Recharts skips null points, so
+ * the net line simply begins where the data does.
+ *
+ * @returns {Array<{ date, label, value: number, assets: number|null,
+ *          owed: number|null, net: number|null }>}
  */
 export function equitySeries(S) {
-  return S.snapshots.map(s => ({
-    date: s.date,
-    label: s.date,
-    value: s.value_rm + s.cash_rm,
-  }))
+  return S.snapshots.map(s => {
+    const known = s.assets_rm != null || s.liabilities_rm != null
+    const assets = s.assets_rm ?? null
+    const owed = s.liabilities_rm ?? null
+    return {
+      date: s.date,
+      label: s.date,
+      value: s.value_rm + s.cash_rm,
+      assets,
+      owed,
+      net: known ? s.value_rm + s.cash_rm + (assets || 0) - (owed || 0) : null,
+    }
+  })
 }
 
 /**
