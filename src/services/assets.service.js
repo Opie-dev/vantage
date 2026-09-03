@@ -37,6 +37,20 @@ const RATE_QUOTES = ['PERCENT', 'SEN_PER_UNIT'];
 /** Mirrors asset_entries_type_check. */
 const ENTRY_TYPES = ['DEPOSIT', 'WITHDRAW', 'DISTRIBUTION', 'FEE'];
 
+/**
+ * Where an entry came from, which is what decides whether it is a CASH FLOW.
+ *
+ *   manual   you moved this money — the calendar counts it
+ *   payroll  an EPF contribution that booked itself; net pay never contained it
+ *   opening  the balance the account was first recorded with. Real money, but it
+ *            moved before this ledger existed, so counting it as spending on the
+ *            day you typed it in overstates that month by the whole balance.
+ *
+ * All three are equally real to the Assets screen. They differ only in whether
+ * moneyByDay() may treat them as money passing through your hands.
+ */
+const ENTRY_SOURCES = ['manual', 'payroll', 'opening'];
+
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 const FISCAL_RE = /^\d{2}-\d{2}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -180,6 +194,10 @@ async function addEntry(assetId, { type, date, amount, note = '', source = 'manu
   if (!asset) throw notFound('no such asset');
 
   if (!ENTRY_TYPES.includes(type)) throw badRequest(`type must be one of: ${ENTRY_TYPES.join(', ')}`);
+  if (!ENTRY_SOURCES.includes(source)) throw badRequest(`source must be one of: ${ENTRY_SOURCES.join(', ')}`);
+  if (source === 'opening' && type !== 'DEPOSIT') {
+    throw badRequest('only a DEPOSIT can be an opening balance — it is what the account already held');
+  }
   if (!nonNegative(amount)) throw badRequest('amount must be a number of zero or more');
   checkDate(date, 'date');
 
@@ -199,4 +217,4 @@ async function removeEntry(assetId, entryId) {
   await assetEntries.remove(entryId);
 }
 
-module.exports = { create, update, remove, addEntry, removeEntry, KINDS, RATE_BASES, ENTRY_TYPES };
+module.exports = { create, update, remove, addEntry, removeEntry, KINDS, RATE_BASES, ENTRY_TYPES, ENTRY_SOURCES };

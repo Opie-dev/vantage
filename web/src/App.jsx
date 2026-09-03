@@ -1060,6 +1060,8 @@ function AssetEntryDialog({ prefill }) {
     amount: prefill.amount ?? 500,
     date: prefill.date || today(),
     note: prefill.note || '',
+    // Only ever sent with a DEPOSIT — see the Field below for why it exists.
+    source: prefill.source || 'manual',
   })
   const [busy, setBusy] = useState(false)
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
@@ -1073,6 +1075,9 @@ function AssetEntryDialog({ prefill }) {
       amount: Math.abs(Number(f.amount) || 0),
       date: f.date,
       note: f.note.trim(),
+      // The API refuses 'opening' on anything but a DEPOSIT, so a type changed
+      // after the box was set must not carry the old answer along with it.
+      source: f.type === 'DEPOSIT' ? f.source : 'manual',
     })
     setBusy(false)
     if (ok) closeModal()
@@ -1141,6 +1146,29 @@ function AssetEntryDialog({ prefill }) {
             onChange={e => set('date', e.target.value)}
           />
         </Field>
+        {/* Only for a deposit, and only because the money calendar has to tell
+            the two apart. Recording an account you have held for years starts
+            with a balance that moved long before this ledger existed; counting
+            it as spending on the day you type it in overstates that month by the
+            whole balance. Both are equally real to the Assets screen. */}
+        {f.type === 'DEPOSIT' ? (
+          <Field
+            label="What this is"
+            htmlFor="ae-source"
+            className="col-span-2"
+            hint="An opening balance is money the account already held. It counts towards the balance, but never as money leaving your pocket this month."
+          >
+            <Select value={f.source} onValueChange={v => set('source', v)}>
+              <SelectTrigger id="ae-source" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="manual">Contribution — money you paid in</SelectItem>
+                <SelectItem value="opening">Opening balance — what it already held</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : null}
         <Field label="Note" htmlFor="ae-note" className="col-span-2">
           <Input
             id="ae-note"
