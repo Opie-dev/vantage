@@ -34,6 +34,20 @@ const KINDS = ['SAVINGS'];
 const RATE_BASES = ['MIN_MONTHLY', 'MADB', 'NONE'];
 /** Mirrors assets_rate_quote_check. Display only — it decides "5.75 sen" vs "3.50%". */
 const RATE_QUOTES = ['PERCENT', 'SEN_PER_UNIT'];
+/**
+ * Mirrors assets_liquidity_check. How REACHABLE an account is, which is a
+ * different question from what it holds — `kind` is the asset class, this is the
+ * second axis, and neither implies the other.
+ *
+ *   WALLET   where money sits between arriving and being spent. A change in it is
+ *            not a contribution, it is your pocket moving, which is what lets
+ *            spending be inferred rather than recorded.
+ *   SAVINGS  a destination. Money in is money out of pocket.
+ *   LOCKED   cannot be reached before a condition is met. Counted in net worth,
+ *            never counted as within reach.
+ */
+const LIQUIDITIES = ['WALLET', 'SAVINGS', 'LOCKED'];
+
 /** Mirrors asset_entries_type_check. */
 const ENTRY_TYPES = ['DEPOSIT', 'WITHDRAW', 'DISTRIBUTION', 'FEE'];
 
@@ -88,7 +102,7 @@ async function create({
   kind = 'SAVINGS', name, slug, currency = 'MYR', institution = '', account_ref = '',
   unit_label = '', unit_cap = null, fiscal_year = '12-31',
   rate_basis, rate_quote = 'PERCENT', last_rate = null, last_bonus = null, sort_order = 0,
-  product_id = null,
+  product_id = null, liquidity = 'SAVINGS',
 }) {
   if (!KINDS.includes(kind)) throw badRequest(`kind must be one of: ${KINDS.join(', ')}`);
   if (!name || !String(name).trim()) throw badRequest('name is required');
@@ -105,6 +119,9 @@ async function create({
   if (!RATE_QUOTES.includes(rate_quote)) {
     throw badRequest(`rate_quote must be one of: ${RATE_QUOTES.join(', ')}`);
   }
+  if (!LIQUIDITIES.includes(liquidity)) {
+    throw badRequest(`liquidity must be one of: ${LIQUIDITIES.join(', ')}`);
+  }
   if (!FISCAL_RE.test(fiscal_year)) throw badRequest('fiscal_year must be MM-DD, e.g. 12-31');
   // A cap is a progress bar, never a validation — reinvested distributions and
   // inherited units can legitimately carry a balance past ASB's 300,000.
@@ -116,7 +133,7 @@ async function create({
     kind, name: String(name).trim(), slug: key, currency, institution, accountRef: account_ref,
     unitLabel: unit_label, unitCap: unit_cap, fiscalYear: fiscal_year,
     rateBasis: rate_basis, rateQuote: rate_quote,
-    lastRate: last_rate, lastBonus: last_bonus, sortOrder: sort_order,
+    lastRate: last_rate, lastBonus: last_bonus, sortOrder: sort_order, liquidity,
     productId: product_id ? String(product_id).trim() : null,
   });
 }
@@ -136,6 +153,7 @@ async function update(id, body) {
     fiscal_year = asset.fiscal_year, rate_basis = asset.rate_basis, rate_quote = asset.rate_quote,
     last_rate = asset.last_rate, last_bonus = asset.last_bonus,
     sort_order = asset.sort_order, archived = asset.archived,
+    liquidity = asset.liquidity,
   } = body;
 
   if (!name || !String(name).trim()) throw badRequest('name is required');
@@ -150,12 +168,15 @@ async function update(id, body) {
   if (!optionalNumber(last_rate)) throw badRequest('last_rate must be a number');
   if (!optionalNumber(last_bonus)) throw badRequest('last_bonus must be a number');
   if (typeof archived !== 'boolean') throw badRequest('archived must be true or false');
+  if (!LIQUIDITIES.includes(liquidity)) {
+    throw badRequest(`liquidity must be one of: ${LIQUIDITIES.join(', ')}`);
+  }
 
   await assets.update(id, {
     name: String(name).trim(), currency, institution, accountRef: account_ref,
     unitLabel: unit_label, unitCap: unit_cap, fiscalYear: fiscal_year,
     rateBasis: rate_basis, rateQuote: rate_quote,
-    lastRate: last_rate, lastBonus: last_bonus, sortOrder: sort_order, archived,
+    lastRate: last_rate, lastBonus: last_bonus, sortOrder: sort_order, archived, liquidity,
   });
 }
 
@@ -217,4 +238,7 @@ async function removeEntry(assetId, entryId) {
   await assetEntries.remove(entryId);
 }
 
-module.exports = { create, update, remove, addEntry, removeEntry, KINDS, RATE_BASES, ENTRY_TYPES, ENTRY_SOURCES };
+module.exports = {
+  create, update, remove, addEntry, removeEntry,
+  KINDS, RATE_BASES, ENTRY_TYPES, ENTRY_SOURCES, LIQUIDITIES,
+};

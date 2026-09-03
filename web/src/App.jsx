@@ -641,6 +641,7 @@ function AssetDialog({ prefill }) {
     name: str(prefill.name),
     institution: str(prefill.institution),
     rate_basis: prefill.rate_basis || 'MIN_MONTHLY',
+    liquidity: prefill.liquidity || 'SAVINGS',
     rate_quote: prefill.rate_quote || 'PERCENT',
     last_rate: str(prefill.last_rate),
     last_bonus: str(prefill.last_bonus),
@@ -754,6 +755,7 @@ function AssetDialog({ prefill }) {
       institution: f.institution.trim(),
       rate_basis: f.rate_basis,
       rate_quote: f.rate_quote,
+      liquidity: f.liquidity,
       // Sen-per-unit accounts are the ones that talk about units at all.
       unit_label: f.rate_quote === 'SEN_PER_UNIT' ? 'units' : '',
       last_rate: f.last_rate === '' ? null : Number(f.last_rate),
@@ -842,6 +844,34 @@ function AssetDialog({ prefill }) {
             value={f.name}
             onChange={e => set('name', e.target.value)}
           />
+        </Field>
+        {/* Asked separately from "how does it pay" because it is a different
+            question with a different answer: a MAE Tabung declares no rate and is
+            still where you spend from, while EPF Akaun Fleksibel declares one and
+            is not. Nothing defaults to a wallet — that is a claim only the owner
+            can make about their own bank account. */}
+        <Field
+          label="How reachable is it?"
+          htmlFor="as-liq"
+          className="col-span-2"
+          hint="A wallet is where money sits between arriving and being spent — naming one is what lets the app work out what living costs."
+        >
+          <Select value={f.liquidity} onValueChange={v => set('liquidity', v)}>
+            <SelectTrigger id="as-liq" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="WALLET">
+                I spend from it — a current account, an e-wallet
+              </SelectItem>
+              <SelectItem value="SAVINGS">
+                I put money aside in it, and can get it back — ASB, Tabung Haji
+              </SelectItem>
+              <SelectItem value="LOCKED">
+                I cannot touch it yet — EPF Akaun Persaraan
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </Field>
         <Field
           label="How does it pay?"

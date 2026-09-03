@@ -1998,6 +1998,9 @@ export function assetRows(S, { includeArchived = false } = {}) {
         capPct: a.unit_cap ? Math.min((balance / a.unit_cap) * 100, 100) : null,
         headroom: a.unit_cap ? a.unit_cap - balance : null,
         entries,
+        // Hoisted off `asset` because every consumer that cares about reach is
+        // filtering a list of rows, not inspecting one account.
+        liquidity: a.liquidity || 'SAVINGS',
         // Counted, not inferred from `earned` being non-zero. A distribution
         // exactly cancelled by a fee nets to zero, and a screen reading the
         // total would announce that nothing had ever been declared over a
@@ -2025,6 +2028,11 @@ export function assetsTotal(S) {
     earnedRM,
     declared: rows.reduce((n, r) => n + r.declared, 0),
     returnPct: contributedRM > 0 ? (earnedRM / contributedRM) * 100 : null,
+    // What you could actually get at. LOCKED is the whole distinction: EPF Akaun
+    // Persaraan cannot be touched before 55, so counting it beside a Tabung Haji
+    // balance answers "what do I have" and never "what can I reach".
+    reachableRM: rows.filter(r => r.liquidity !== 'LOCKED').reduce((s, r) => s + r.balanceRM, 0),
+    lockedRM: rows.filter(r => r.liquidity === 'LOCKED').reduce((s, r) => s + r.balanceRM, 0),
   }
 }
 
