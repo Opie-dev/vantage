@@ -56,9 +56,27 @@ export const KIND_OPTIONS = [
     label: 'Per dividend payment',
     hint: `Average of the last ${PAYMENTS_AVERAGED} payments`,
   },
+  {
+    id: GOAL_KIND.ASSET_BALANCE,
+    label: 'Account balance',
+    hint: 'A target balance in one account outside moomoo',
+  },
 ]
 
-export const isIncome = kind => kind && kind !== GOAL_KIND.SHARES
+/**
+ * Which card draws a goal. Three shapes, not two.
+ *
+ * A balance goal is filled by paying into an account, so it reads like a share
+ * goal — a thing you accumulate — and nothing like an income one, which measures
+ * what arrives on its own. `isIncome` guards this rather than inferring from
+ * "not SHARES", which is what it used to do and would have quietly routed a
+ * balance goal into the dividend card.
+ */
+export const isBalance = kind => kind === GOAL_KIND.ASSET_BALANCE
+
+/** Sort order for the goal list — see the sort in the screen body. */
+const rank = kind => (isBalance(kind) ? 1 : isIncome(kind) ? 2 : 0)
+export const isIncome = kind => Boolean(kind) && kind !== GOAL_KIND.SHARES && !isBalance(kind)
 
 /**
  * A number field that writes on commit, not on keystroke — legacy used the DOM
@@ -147,10 +165,10 @@ function RemoveButton({ label, onClick }) {
  * Quiet on purpose, for the same reason as History: a badge on every row is
  * provenance, not emphasis.
  */
-function SourceTag() {
+function SourceTag({ children = 'moomoo' }) {
   return (
     <Badge variant="neutral" className="px-1.5 py-0 text-[10px] font-semibold tracking-[0.08em] uppercase">
-      moomoo
+      {children}
     </Badge>
   )
 }
@@ -373,6 +391,104 @@ function incomeTitle(goal) {
   return `${amount} of dividends`
 }
 
+/**
+ * A target balance in one account outside moomoo.
+ *
+ * Deliberately quieter than the share card. There is no price to fetch, no
+ * currency to convert and no market to name — an account holds ringgit and the
+ * balance is a running sum of its own ledger, so the only facts worth showing
+ * are what is in it, what is left, and when the budget gets you there.
+ */
+function BalanceCard({ goal, funding }) {
+  const { state, updateGoal, deleteGoal } = useVantage()
+  const { current, target, remain, prog, months, scope, missing } = goalProgress(state, goal)
+  const row = funding && funding.meaningful ? funding.rows.find(r => r.goal.id === goal.id) : null
+  const name = scope || 'an account that is gone'
+
+  const saveTarget = raw => {
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n <= 0) return false
+    return updateGoal(goal.id, { target_amount: n })
+  }
+
+  const saveBudget = raw => {
+    if (raw === '') return updateGoal(goal.id, { monthly_budget: null })
+    const n = Number(raw)
+    if (!Number.isFinite(n) || n < 0) return false
+    return updateGoal(goal.id, { monthly_budget: n || null })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="num text-[16px]">
+          {fmt(target, 'MYR')} in {name}
+        </CardTitle>
+        <CardDescription className="text-[12px]">
+          {missing
+            ? 'The account this was set against no longer exists'
+            : 'Balance held, from the account’s own ledger'}
+        </CardDescription>
+        <CardAction className="flex items-center gap-2">
+          <SourceTag>{goal.asset_slug || 'account'}</SourceTag>
+          <Badge variant={prog >= 100 ? 'gain' : 'cash'} className="num">
+            {pct0(prog)} there
+          </Badge>
+          <RemoveButton label={`Remove the ${name} goal`} onClick={() => deleteGoal(goal.id)} />
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="grid gap-3">
+        <Progress value={prog} aria-label={`${pct0(prog)} of the ${name} target`} />
+
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1.5 text-[13px]">
+          <Fact>
+            You hold <b className="num text-foreground font-semibold">{fmt(current, 'MYR')}</b>
+          </Fact>
+          <Fact>
+            Still need <b className="num text-foreground font-semibold">{fmt(remain, 'MYR')}</b>
+          </Fact>
+          {months ? (
+            <Fact>
+              <b className="num text-foreground font-semibold">{months}</b> month{months === 1 ? '' : 's'} at the
+              budget below
+            </Fact>
+          ) : null}
+        </div>
+
+        <Separator className="bg-hairline" />
+
+        <div className="flex flex-wrap items-end gap-3">
+          <InlineNumber
+            id={`goal-${goal.id}-target`}
+            label="Target (RM)"
+            value={goal.target_amount ?? ''}
+            min="1"
+            step="100"
+            width="w-[150px]"
+            onCommit={saveTarget}
+          />
+          <InlineNumber
+            id={`goal-${goal.id}-budget`}
+            label="Monthly budget (RM)"
+            value={goal.monthly_budget ?? ''}
+            placeholder="—"
+            min="0"
+            step="10"
+            width="w-[160px]"
+            onCommit={saveBudget}
+          />
+        </div>
+
+        {/* Same component the share card uses: what the waterfall could actually
+            spare, against what this goal asked for. `remain` is already RM, so
+            unlike a share goal there is no conversion to explain. */}
+        <Shortfall row={row} needRM={remain} />
+      </CardContent>
+    </Card>
+  )
+}
+
 function IncomeCard({ goal }) {
   const { state, updateGoal, deleteGoal } = useVantage()
   const { current, remain, prog, rate, months, net, qty, perShare, sharesNeeded, capital, capitalRM, px, priceCur } =
@@ -493,7 +609,9 @@ export default function Goals() {
   // Shares first, then income — they answer different questions and interleaving
   // them by id makes the list read as a jumble.
   const goals = useMemo(
-    () => [...state.goals].sort((a, b) => Number(isIncome(a.kind)) - Number(isIncome(b.kind)) || a.id - b.id),
+    // Shares, then balances, then income: the two you fill by paying in sit
+    // together, and the ones that arrive on their own follow.
+    () => [...state.goals].sort((a, b) => rank(a.kind) - rank(b.kind) || a.id - b.id),
     [state.goals],
   )
 
@@ -510,7 +628,9 @@ export default function Goals() {
           </div>
           <div className="mt-3 grid gap-3.5">
             {goals.map(g =>
-              isIncome(g.kind) ? (
+              isBalance(g.kind) ? (
+                <BalanceCard key={g.id} goal={g} funding={funding} />
+              ) : isIncome(g.kind) ? (
                 <IncomeCard key={g.id} goal={g} />
               ) : (
                 <SharesCard key={g.id} goal={g} funding={funding} />
