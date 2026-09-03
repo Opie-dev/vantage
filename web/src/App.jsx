@@ -31,6 +31,8 @@ import {
   LayersIcon,
   LayoutDashboardIcon,
   BanknoteIcon,
+  EyeIcon,
+  EyeOffIcon,
   MoonIcon,
   PiggyBankIcon,
   RefreshCwIcon,
@@ -169,6 +171,39 @@ function ThemeToggle() {
 }
 
 /**
+ * Hide every figure behind '••••'.
+ *
+ * Beside the theme toggle because it is the same kind of control: how the screen
+ * looks, not what is in it. Nothing is fetched and nothing is written to the
+ * server — the figures are still in the DOM and one request away from the API.
+ * This is for the person standing behind you, and the tooltip says so rather
+ * than implying a protection that is not there.
+ */
+function PrivateToggle() {
+  const { isPrivate, togglePrivate } = useVantage()
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-pressed={isPrivate}
+          aria-label={isPrivate ? 'Show the figures' : 'Hide the figures'}
+          onClick={togglePrivate}
+        >
+          {isPrivate ? <EyeOffIcon /> : <EyeIcon />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[250px]">
+        {isPrivate
+          ? 'Show the figures again'
+          : 'Hide every figure behind ••••, for reading this in company. Not a lock — the numbers are still there.'}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
  * The rail. Brand, the eight screens, and the two things that belong beside them
  * rather than beside the actions: when the data last arrived, and the theme.
  */
@@ -263,6 +298,7 @@ function TopBar() {
           {/* Beside the other things you can do from anywhere. It used to sit in
               the rail footer, where it was easy to miss entirely — the light
               palette has always existed, but nobody could find the switch. */}
+          <PrivateToggle />
           <ThemeToggle />
       </div>
     </header>
