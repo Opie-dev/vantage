@@ -2730,10 +2730,19 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   for (const e of S.assetEntries || []) {
     if (!inMonth(e.date)) continue
 
-    // A CONTRIBUTION FUNDED BY PAYROLL WAS NEVER IN YOUR POCKET. Net pay already
-    // excludes the EPF that produced this row, so showing it as money leaving
-    // would deduct the same ringgit twice on the same screen.
-    if (e.source === 'payroll') continue
+    // TWO SOURCES ARE REAL MONEY THAT NEVER PASSED THROUGH THIS MONTH.
+    //
+    // payroll  net pay already excludes the EPF that produced this row, so
+    //          showing it as money leaving deducts the same ringgit twice on
+    //          the same screen.
+    // opening  the balance an account was first recorded with. It moved years
+    //          before the ledger existed. Counting it on the day it was typed in
+    //          put RM 96,242.85 of savings into one September day and read the
+    //          month as −RM 85,645.73 against a real +RM 10,597.12.
+    //
+    // Both still count on the Assets screen, which asks what you HAVE. This one
+    // asks what MOVED, and the answer is different.
+    if (e.source === 'payroll' || e.source === 'opening') continue
 
     // THE DIRECTION IS THE OPPOSITE OF THE ASSETS SCREEN, and deliberately so.
     // There, a deposit raises the balance and reads +. Here the question is what
