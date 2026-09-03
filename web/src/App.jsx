@@ -71,6 +71,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
 import {
+  EXPENSE_CATEGORIES,
+  EXPENSE_LABEL,
   GOAL_KIND,
   GOAL_NEEDS_INSTRUMENT,
   goalIncomeIsNet,
@@ -1118,6 +1120,145 @@ function AssetDialog({ prefill }) {
  * for one fact. The date defaults to today because most entries are recorded the
  * day they happen; a distribution being backdated is the exception.
  */
+/** Sentinel for "no wallet" in the expense form — Radix rejects '' as a value. */
+const NO_WALLET = '__none__'
+
+/**
+ * One expense.
+ *
+ * DELIBERATELY THE SHORTEST FORM IN THE APP. Every other form here is filled in
+ * once and correct for years; this one is filled in over and over, and the whole
+ * feature is won or lost at the point of entry. Four fields, one of them
+ * optional, and the date defaults to today because that is when you are typing.
+ *
+ * The account is optional on purpose: the log is useful before any wallet is set
+ * up, and cash has no account at all. Naming one is what lets the reconciliation
+ * work per wallet, which matters here because the owner spends from several
+ * cards by purpose.
+ */
+function ExpenseDialog({ prefill }) {
+  const { state, closeModal, addExpense, updateExpense } = useVantage()
+  const editing = prefill.id != null
+  const wallets = (state.assets || []).filter(a => !a.archived && a.liquidity === 'WALLET')
+  const [f, setF] = useState({
+    date: prefill.date || today(),
+    amount: prefill.amount ?? '',
+    category: prefill.category || 'GROCERIES',
+    note: prefill.note || '',
+    asset_id: prefill.asset_id == null ? NO_WALLET : String(prefill.asset_id),
+  })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const amount = Number(f.amount)
+  const valid = f.date && Number.isFinite(amount) && amount > 0
+
+  const save = async () => {
+    if (!valid || busy) return
+    setBusy(true)
+    const body = {
+      date: f.date,
+      amount: Math.abs(amount),
+      category: f.category,
+      note: f.note.trim(),
+      asset_id: f.asset_id === NO_WALLET ? null : Number(f.asset_id),
+    }
+    const ok = editing ? await updateExpense(prefill.id, body) : await addExpense(body)
+    setBusy(false)
+    if (ok) closeModal()
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[440px]">
+      <DialogHeader>
+        <DialogTitle>{editing ? 'Edit expense' : 'Add expense'}</DialogTitle>
+        <DialogDescription>
+          What you actually spent. Rent, insurance and subscriptions are{' '}
+          <b className="font-semibold">commitments</b> and belong there — entering them here as
+          well would count them twice against your income.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Amount (RM)" htmlFor="ex-amount">
+          <Input
+            id="ex-amount"
+            className="num"
+            type="number"
+            min="0"
+            step="0.01"
+            autoFocus
+            placeholder="0.00"
+            value={f.amount}
+            onChange={e => set('amount', e.target.value)}
+          />
+        </Field>
+        <Field label="Date" htmlFor="ex-date">
+          <Input
+            id="ex-date"
+            className="num"
+            type="date"
+            value={f.date}
+            onChange={e => set('date', e.target.value)}
+          />
+        </Field>
+        <Field label="Category" htmlFor="ex-cat" className="col-span-2">
+          <Select value={f.category} onValueChange={v => set('category', v)}>
+            <SelectTrigger id="ex-cat" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPENSE_CATEGORIES.map(c => (
+                <SelectItem key={c} value={c}>
+                  {EXPENSE_LABEL[c]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        {wallets.length ? (
+          <Field
+            label="Paid from"
+            htmlFor="ex-asset"
+            className="col-span-2"
+            hint="Optional. Naming the card it came off is what lets each wallet be reconciled on its own."
+          >
+            <Select value={f.asset_id} onValueChange={v => set('asset_id', v)}>
+              <SelectTrigger id="ex-asset" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_WALLET}>Not recorded — cash, or elsewhere</SelectItem>
+                {wallets.map(a => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : null}
+        <Field label="Note" htmlFor="ex-note" className="col-span-2">
+          <Input
+            id="ex-note"
+            placeholder="Optional — Jaya Grocer, dinner with family"
+            value={f.note}
+            onChange={e => set('note', e.target.value)}
+          />
+        </Field>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={busy || !valid}>
+          Save
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 function AssetEntryDialog({ prefill }) {
   const { state, closeModal, addAssetEntry } = useVantage()
   const [f, setF] = useState({
@@ -2156,6 +2297,7 @@ function Modals() {
       {modal?.kind === 'cash' && <CashDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'asset' && <AssetDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'assetEntry' && <AssetEntryDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'expense' && <ExpenseDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}

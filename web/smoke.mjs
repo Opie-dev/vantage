@@ -501,6 +501,72 @@ try {
     console.log(`  net worth  ${s.filter(p => p.net != null).length}/3 points carry net, earliest stays null (${s[2].net.toFixed(2)})`)
   }
 
+  // Expenses, and the reconciliation that makes a hand-kept log defensible.
+  // Built on a local copy for the same reason the spending block is: a wallet in
+  // the shared fixture would move the Money and Calendar figures asserted above.
+  {
+    const { expensesFor } = await server.ssrLoadModule('/src/lib/calc.js')
+
+    // Without a wallet there is nothing to reconcile against, and the log must
+    // still work — that is the state every owner is in on day one.
+    // FIXED dates, not ago(). Relative ones straddle a month boundary depending
+    // on the day this runs, and expensesFor() reads one month at a time — with
+    // ago(3) and ago(2) this asserted 240 and got 120 for most of every month.
+    // Same trap that made the History assertion fail every Thursday.
+    const iso = d => `2026-01-${String(d).padStart(2, '0')}`
+    const bare = JSON.parse(JSON.stringify(STATE))
+    bare.expenses = [
+      { id: 1, date: iso(5), amount: 120, currency: 'MYR', category: 'GROCERIES', note: '' },
+      { id: 2, date: iso(8), amount: 80, currency: 'MYR', category: 'FUEL', note: '' },
+      { id: 3, date: iso(9), amount: 40, currency: 'MYR', category: 'GROCERIES', note: '' },
+    ]
+    const b = expensesFor(bare, 2026, 0, '2026-02-01')
+    if (Math.abs(b.loggedRM - 240) > 0.005) throw new Error(`expenses: expected 240 logged, got ${b.loggedRM}`)
+    if (b.categories.length !== 2) throw new Error(`expenses: expected 2 categories, got ${b.categories.length}`)
+    // Biggest first, and the two GROCERIES rows must have been summed rather than listed twice.
+    if (b.categories[0].category !== 'GROCERIES' || Math.abs(b.categories[0].amountRM - 160) > 0.005) {
+      throw new Error(`expenses: groceries should lead at 160, got ${b.categories[0].category} ${b.categories[0].amountRM}`)
+    }
+    if (Math.abs(b.categories.reduce((s, c) => s + c.share, 0) - 1) > 1e-9) {
+      throw new Error('expenses: category shares must sum to 1')
+    }
+    if (b.unloggedRM !== null || b.coveragePct !== null) {
+      throw new Error('expenses: with no wallet there is nothing to reconcile against, expected nulls')
+    }
+
+    // With a wallet and two readings the log is measured against what actually left.
+    const rec = JSON.parse(JSON.stringify(bare))
+    rec.expenses = [{ id: 9, date: iso(10), amount: 200, currency: 'MYR', category: 'GROCERIES', note: '' }]
+    rec.assets.push({ id: 99, name: 'MAE', slug: 'mae', currency: 'MYR', liquidity: 'WALLET',
+      kind: 'SAVINGS', archived: false, rate_basis: 'NONE', fiscal_year: '12-31', created_at: iso(1) })
+    rec.assetEntries.unshift({ id: 990, asset_id: 99, type: 'BALANCE', date: iso(1), amount: 5000, source: 'manual' })
+    rec.assetEntries.unshift({ id: 991, asset_id: 99, type: 'BALANCE', date: iso(21), amount: 5600, source: 'manual' })
+    const r = expensesFor(rec, 2026, 0, '2026-02-01')
+    if (r.unloggedRM === null) throw new Error('expenses: with two readings the reconciliation must compute')
+    // The identity that makes the whole thing honest.
+    if (Math.abs(r.loggedInWindowRM + r.unloggedRM - r.spend.spentRM) > 0.005) {
+      throw new Error(`expenses: ${r.loggedInWindowRM} + ${r.unloggedRM} != ${r.spend.spentRM}`)
+    }
+    // Only expenses inside the readings' own window count — one outside it must not.
+    const outside = JSON.parse(JSON.stringify(rec))
+    outside.expenses.push({ id: 10, date: iso(28), amount: 999, currency: 'MYR', category: 'OTHER', note: '' })
+    const o = expensesFor(outside, 2026, 0, '2026-02-01')
+    if (Math.abs(o.loggedInWindowRM - r.loggedInWindowRM) > 0.005) {
+      throw new Error('expenses: an expense outside the reading window must not enter the reconciliation')
+    }
+    if (Math.abs(o.loggedRM - r.loggedRM - 999) > 0.005) {
+      throw new Error('expenses: but it must still count in the month total')
+    }
+    // coveragePct is deliberately null here: this fixture owes more than it earns
+    // so its residual is negative, and a percentage of a negative total says
+    // nothing. The identity above is what the reconciliation actually rests on.
+    console.log(
+      `  expenses   ${b.categories.length} categories, ` +
+      `${r.loggedInWindowRM.toFixed(2)} logged + ${r.unloggedRM.toFixed(2)} unlogged ` +
+      `= ${r.spend.spentRM.toFixed(2)} inferred`,
+    )
+  }
+
   // Reach, not just balance. EPF is LOCKED in the fixture and every other
   // account omits `liquidity` entirely, so this also proves the absent-column
   // fallback reads as SAVINGS rather than undefined.

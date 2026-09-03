@@ -41,6 +41,7 @@ export const EMPTY_STATE = {
   assets: [],
   assetEntries: [], declaredRates: [],
   commitments: [],
+  expenses: [],
   commitmentPayments: [],
   incomeSources: [],
   incomeEvents: [],
@@ -3214,6 +3215,88 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     // app was not watching closely will over-subtract. Negative is a signal the
     // readings or the destinations are incomplete, not a figure to clamp away.
     spentRM: inflowRM - committedRM - savedRM - walletDeltaRM,
+  }
+}
+
+/** The categories an expense may carry. Mirrors expenses_category_check. */
+export const EXPENSE_CATEGORIES = [
+  'GROCERIES', 'EATING_OUT', 'TRANSPORT', 'FUEL',
+  'HEALTH', 'SHOPPING', 'FAMILY', 'CHARITY', 'OTHER',
+]
+
+export const EXPENSE_LABEL = {
+  GROCERIES: 'Groceries',
+  EATING_OUT: 'Eating out',
+  TRANSPORT: 'Transport',
+  FUEL: 'Fuel',
+  HEALTH: 'Health',
+  SHOPPING: 'Shopping',
+  FAMILY: 'Family',
+  CHARITY: 'Charity',
+  OTHER: 'Other',
+}
+
+/**
+ * What was logged in a month, by category, and how complete the log looks.
+ *
+ * THE RECONCILIATION IS THE POINT, and it is what makes a hand-kept expense log
+ * defensible in an app whose own plan argued against one. spendingFor() already
+ * infers what actually left the wallets without anything being entered. This
+ * compares the two: logged RM 1,200 against an inferred RM 1,797 means roughly a
+ * third of the spending never got typed, and the app can say so.
+ *
+ * An abandoned log that silently under-reports is the failure
+ * commitments-and-income-plan.md §2 feared. One that reports its own
+ * incompleteness is a different thing, and the difference is this function.
+ *
+ * `unloggedRM` is null whenever the residual is — with no wallet reading there
+ * is nothing to reconcile against, and a log with nothing to check it is still
+ * perfectly usable as a log.
+ */
+export function expensesFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
+  const key = monthKey(year, monthIndex)
+  const rows = (S.expenses || []).filter(e => e.date.slice(0, 7) === key)
+
+  const byCategory = new Map()
+  let loggedRM = 0
+  for (const e of rows) {
+    const rm = toRM(S, e.amount, e.currency)
+    loggedRM += rm
+    byCategory.set(e.category, (byCategory.get(e.category) || 0) + rm)
+  }
+
+  // Biggest first: on a screen the question is always what the largest slice is,
+  // and the category list's own order says nothing.
+  const categories = [...byCategory.entries()]
+    .map(([category, amountRM]) => ({
+      category,
+      label: EXPENSE_LABEL[category] || category,
+      amountRM,
+      share: loggedRM ? amountRM / loggedRM : 0,
+    }))
+    .sort((a, b) => b.amountRM - a.amountRM)
+
+  const spend = spendingFor(S, year, monthIndex, nowISO)
+  // Only over the window the readings actually bracket, or the comparison is
+  // between a month of logging and something else entirely.
+  const inWindow = spend.spentRM == null
+    ? null
+    : rows.filter(e => e.date > spend.from && e.date <= spend.to)
+      .reduce((sum, e) => sum + toRM(S, e.amount, e.currency), 0)
+
+  return {
+    rows,
+    categories,
+    loggedRM,
+    count: rows.length,
+    spend,
+    // What left the wallets but never got typed. Negative means the opposite —
+    // more logged than actually left, which points at a double entry or an
+    // expense attributed to the wrong month rather than at overspending.
+    unloggedRM: inWindow == null ? null : spend.spentRM - inWindow,
+    loggedInWindowRM: inWindow,
+    coveragePct: inWindow == null || spend.spentRM <= 0 ? null
+      : Math.min((inWindow / spend.spentRM) * 100, 100),
   }
 }
 
