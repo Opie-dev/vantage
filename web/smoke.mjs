@@ -129,8 +129,9 @@ const STATE = {
     { id: 1, ticker: 'ETCO', currency: 'MYR', target_qty: 5000, monthly_budget: 500 },
     { id: 2, ticker: 'INCM', currency: 'USD', target_income: 400, monthly_budget: 300 },
     // A balance goal, so the third card kind cannot rot unnoticed. ASB below
-    // holds 74,300, so this renders a partly-filled bar rather than 0% or 100%,
-    // either of which would pass while the arithmetic was broken.
+    // holds 4,576 — 1,000 in, 12 of fees, 3,588 declared — so this renders a
+    // partly-filled bar rather than 0% or 100%, either of which would pass while
+    // the arithmetic was broken.
     { id: 3, kind: 'ASSET_BALANCE', asset_id: 1, asset_name: 'ASB', asset_slug: 'asb',
       target_amount: 100000, monthly_budget: 1000 },
   ],
@@ -475,6 +476,51 @@ try {
       if (!pane.includes(n)) throw new Error(`${id}: income surface missing "${n}"`)
     }
     console.log(`  ${id.padEnd(10)} income surfaces ok (${needed.length})`)
+  }
+  await tick(() => ctl.setTab('dashboard'))
+
+  // Private mode, driven through the store exactly as the toggle does.
+  //
+  // Worth a check in the mounted app rather than a unit test of the formatters,
+  // because the risky part is not the masking — it is that format.js holds a
+  // module flag which VantageProvider writes DURING render. If that write ever
+  // moves into an effect, the formatters stay correct and the screen still shows
+  // a frame of real figures. Only a render can catch that.
+  {
+    const paneText = () =>
+      document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+    await tick(() => ctl.setTab('assets'))
+    const open = paneText()
+    if (!open.includes('RM ')) throw new Error('private: no figures on Assets to hide in the first place')
+
+    await tick(() => ctl.togglePrivate())
+    const hidden = paneText()
+    if (!hidden.includes('••••')) throw new Error('private: toggled on but nothing is masked')
+
+    // Every rendered MONEY token the open pane showed must be gone. Harvested
+    // from the render rather than listed by hand: a hardcoded list drifts away
+    // from the fixture and then passes while checking nothing, which is worse
+    // than no check at all. The count guard is what stops that happening here.
+    //
+    // Anchored on the currency symbol, so it matches what fmt() emits and not
+    // every decimal on the page. FREE-TEXT NOTES ARE NOT MASKED and cannot be —
+    // a note reading "2025 · 5.75 sen" is prose the owner typed, never passed
+    // through a formatter, and blanking all prose would leave a ledger of dots
+    // with no way to tell one row from another. A bare \d\.\d\d pattern here
+    // matched that note and failed, which is how this was found.
+    const figures = [...new Set(open.match(/(?:RM\s|\$)[\d,]+\.\d{2}/g) || [])]
+    if (figures.length < 4) {
+      throw new Error(`private: only ${figures.length} figures on Assets — too few to be a real check`)
+    }
+    for (const leak of figures) {
+      if (hidden.includes(leak)) throw new Error(`private: "${leak}" still on screen while masked`)
+    }
+    // The month names and dates in the ledger are not the private part.
+    if (!/Sept|Aug|Jul/.test(hidden)) throw new Error('private: dates were masked too')
+
+    await tick(() => ctl.togglePrivate())
+    if (paneText() !== open) throw new Error('private: toggling back did not restore the figures')
+    console.log(`  private    masks all ${figures.length} figures on Assets, keeps dates, and reverses`)
   }
   await tick(() => ctl.setTab('dashboard'))
 

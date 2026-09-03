@@ -13,6 +13,50 @@
 const LOCALE = 'en-MY'
 const MINUS = '−'
 
+/* ── private mode ─────────────────────────────────────────────────────────────
+ *
+ * Every figure on screen passes through one of the helpers below — 266 call
+ * sites — which is what makes hiding them a change in one file rather than in
+ * every component. The flag is module-level for the same reason: threading a
+ * prop or a hook through all of them would be the change this avoids.
+ *
+ * A module variable does not re-render anything by itself. VantageProvider owns
+ * the actual React state and writes it here as it renders, so the flag is always
+ * set before any child formats a number. That ordering is the contract; see
+ * setPrivate()'s caller.
+ *
+ * WHAT THIS IS AND IS NOT. It is a screen you can let someone look at over your
+ * shoulder. It is not a security control: the figures are still in the DOM, in
+ * memory, and one request away from the API. Nothing here should ever be
+ * described as protecting the data.
+ *
+ * TWO THINGS IT DOES NOT HIDE, both by choice:
+ *
+ *  - FREE-TEXT NOTES. A note reading "2025 · 5.75 sen" is prose the owner typed
+ *    and never went through a formatter. Blanking all prose would leave a ledger
+ *    of dots with no way to tell one row from another, so notes stay — and a
+ *    note written as "opening balance RM 58,451" will show that figure.
+ *  - CHART SHAPES. A donut slice, a bar height and the net-worth strip still
+ *    carry their proportions, because they are geometry rather than text. The
+ *    labels are masked; the picture is not. Someone reading over your shoulder
+ *    learns that one holding dwarfs another, just not by how much in ringgit.
+ *
+ * DATES ARE NOT MASKED, deliberately. They are not the private part, and a
+ * calendar of '••••' would be unusable while revealing nothing worth hiding.
+ */
+const MASK = '••••'
+let hidden = false
+
+/** Called by VantageProvider during render. Not for use anywhere else. */
+export function setPrivate(v) {
+  hidden = Boolean(v)
+}
+
+/** Whether figures are currently masked — for the odd number built by hand. */
+export function isPrivate() {
+  return hidden
+}
+
 /** 'MYR' -> 'RM ' , 'USD' -> '$'. Note the MYR symbol carries a trailing space. */
 export function symbol(cur) {
   return cur === 'USD' ? '$' : 'RM '
@@ -26,6 +70,9 @@ export function symbol(cur) {
  * symbol, and it is the same U+2212 the signed helpers use.
  */
 export function fmt(v, cur) {
+  // The symbol stays: 'RM ••••' still says which currency, and a column of bare
+  // dots loses the one thing about the figure that was never private.
+  if (hidden) return symbol(cur) + MASK
   const n = Number(v) || 0
   const abs = Math.abs(n).toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? MINUS : '') + symbol(cur) + abs
@@ -33,6 +80,7 @@ export function fmt(v, cur) {
 
 /** Money without the currency symbol — for a column that already has a header. */
 export function fmtBare(v) {
+  if (hidden) return MASK
   const n = Number(v) || 0
   const abs = Math.abs(n).toLocaleString(LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   return (n < 0 ? MINUS : '') + abs
@@ -40,6 +88,7 @@ export function fmtBare(v) {
 
 /** Share quantity. Locale grouping, up to 3dp, no forced decimals. fq(1000) -> '1,000' */
 export function fq(v) {
+  if (hidden) return MASK
   return (Number(v) || 0).toLocaleString(LOCALE)
 }
 
@@ -50,16 +99,21 @@ export function sign(v) {
 
 /** Signed money: fmtS(-12.3, 'MYR') -> 'RM 12.30' prefixed with the minus sign. */
 export function fmtS(v, cur) {
+  // The sign is dropped with the figure. Gain or loss is exactly the kind of
+  // thing a shoulder reads first, and '+RM ••••' would hand it over.
+  if (hidden) return symbol(cur) + MASK
   return sign(v) + fmt(Math.abs(Number(v) || 0), cur)
 }
 
 /** Signed percentage, 1dp. pctS(-4.27) -> '−4.3%' */
 export function pctS(v) {
+  if (hidden) return MASK
   return sign(v) + Math.abs(Number(v) || 0).toFixed(1) + '%'
 }
 
 /** Unsigned percentage, 0dp — for progress chips. pct0(63.4) -> '63%' */
 export function pct0(v) {
+  if (hidden) return MASK
   return (Number(v) || 0).toFixed(0) + '%'
 }
 
@@ -68,6 +122,7 @@ export function pct0(v) {
  * and say nothing. pct1(0.42) -> '0.4%'
  */
 export function pct1(v) {
+  if (hidden) return MASK
   return (Number(v) || 0).toFixed(1) + '%'
 }
 
@@ -122,6 +177,7 @@ export function today() {
  * being stated, use fmt() or fmtS() and let it wrap or truncate.
  */
 export function compact(v) {
+  if (hidden) return MASK
   const n = Math.abs(Number(v) || 0)
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'm'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k'

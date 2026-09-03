@@ -11,6 +11,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from 'sonner'
 import * as api from './api'
 import { EMPTY_STATE, incomeOutlook } from './calc'
+import { setPrivate as setFormatPrivate } from './format'
 
 export const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -110,6 +111,44 @@ export function VantageProvider({ children }) {
   const [pricesPending, setPricesPending] = useState(false)
   const [syncPending, setSyncPending] = useState(false)
   const [tab, setTabState] = useState(hashTab)
+
+  /**
+   * Private mode — every figure renders as '••••'.
+   *
+   * Read synchronously from localStorage rather than in an effect, because a
+   * balance shown for one frame before the effect runs is precisely the failure
+   * this is for. Per device, not per owner: it answers "who can see this
+   * screen", which is a property of where you are sitting, not of the account —
+   * so unlike the display preferences it stays out of the server.
+   */
+  const [isPrivate, setIsPrivate] = useState(() => {
+    try {
+      return localStorage.getItem('vantage.private') === '1'
+    } catch {
+      // Private windows and storage-blocking browsers throw on access. Failing
+      // open is right: the toggle still works for the session, and the owner is
+      // never locked out of their own figures by a storage policy.
+      return false
+    }
+  })
+
+  // Written during render, not in an effect: children format numbers as they
+  // render, and an effect fires after that — which would paint one frame of real
+  // figures on every toggle. The write is idempotent and derived purely from
+  // state, so re-running it costs nothing.
+  setFormatPrivate(isPrivate)
+
+  const togglePrivate = useCallback(() => {
+    setIsPrivate(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('vantage.private', next ? '1' : '0')
+      } catch {
+        // Nothing to do — the toggle still holds for this session.
+      }
+      return next
+    })
+  }, [])
 
   // Mutators need the newest instrument list without re-creating themselves.
   const latest = useRef(state)
@@ -332,6 +371,8 @@ export function VantageProvider({ children }) {
       lock,
       setPreference,
       ready: !loading && !error && !locked,
+      isPrivate,
+      togglePrivate,
       fx: state.fx,
       reload,
 
@@ -387,7 +428,7 @@ export function VantageProvider({ children }) {
       syncMoomoo,
       syncPending,
     }
-  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending])
+  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate])
 
   return <VantageContext.Provider value={value}>{children}</VantageContext.Provider>
 }
