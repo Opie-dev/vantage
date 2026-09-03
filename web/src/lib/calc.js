@@ -546,8 +546,28 @@ export function portfolio(S, basis = pnlBasis(S)) {
 }
 
 /**
+ * A slice smaller than this is a hairline on a donut and a sliver on the strip —
+ * a legend row and a colour spent on something the eye cannot find. Below it,
+ * accounts fold together.
+ */
+export const TINY_SHARE = 0.005
+
+/**
  * Allocation slices for the donut, RM-combined, largest slot order preserved.
- * Cash is appended as a final neutral slice when positive, exactly as legacy.
+ *
+ * ACCOUNTS OUTSIDE MOOMOO ARE SLICES TOO. Without them the donut showed three US
+ * ETFs and a cash sliver and read as a wildly concentrated portfolio, while the
+ * net-worth strip directly above it said two thirds of the money was somewhere
+ * else. One screen, two answers. With the accounts in, it shows the actual shape
+ * of the money — which is the whole point of the chart.
+ *
+ * Accounts keep the colours ownedSlots() gives them on the strip, so an account
+ * is the same colour wherever it appears. That walk starts past the instruments
+ * precisely so a card avoids a ticker's dot, which matters here in a way it never
+ * did on the strip: this is the one chart where tickers and accounts sit together.
+ *
+ * Cash stays the final neutral slice, exactly as legacy.
+ *
  * @returns {Array<{ name: string, value: number, color: string, share: number }>}
  *          `share` is a fraction 0..1.
  */
@@ -557,9 +577,18 @@ export function allocation(S) {
     .slice()
     .sort((a, b) => a.slot - b.slot)
     .map(p => ({ name: p.t, value: toRM(S, p.val, p.cur), color: slotColor(p.slot) }))
-  if (cashRM > 0) parts.push({ name: 'Cash', value: cashRM, color: 'var(--faint)' })
-  const total = parts.reduce((s, p) => s + p.value, 0) || 1
-  return parts.map(p => ({ ...p, share: p.value / total }))
+
+  // The accounts come from totalOwned(), already folded and already coloured, so
+  // an account is the same colour here as on the net-worth strip and neither
+  // chart can fold differently from the other. `broker` is dropped: the donut
+  // breaks the broker open into its own positions, which is its whole job.
+  const accounts = totalOwned(S).parts.filter(x => x.key !== 'broker')
+
+  const all = [...parts, ...accounts.map(({ name, value, color }) => ({ name, value, color }))]
+  if (cashRM > 0) all.push({ name: 'Cash', value: cashRM, color: 'var(--faint)' })
+
+  const total = all.reduce((s, p) => s + p.value, 0) || 1
+  return all.map(p => ({ ...p, share: p.value / total }))
 }
 
 /**
@@ -2205,15 +2234,48 @@ function ownedSlots(count, after) {
 export function totalOwned(S) {
   const p = portfolio(S)
   const a = assetsTotal(S)
-  const slots = ownedSlots(a.rows.length, S.instruments.length)
+  const live = a.rows.filter(r => r.balanceRM > 0)
+
+  const totalOwnedRM = p.totalRM + live.reduce((sum, r) => sum + r.balanceRM, 0)
+  const scale = totalOwnedRM || 1
+
+  // FOLD FIRST, THEN COLOUR — the order is the point.
+  //
+  // Colouring every account and folding afterwards wasted slots on accounts
+  // nothing draws, and the walk then wrapped into the instruments' range: with
+  // six instruments and seven accounts, Tabung Kawin came out chart-2 and so did
+  // AMDY. Invisible on the strip, which has no tickers, and plainly wrong on the
+  // donut, which is the one chart where the two sit together.
+  //
+  // Assigning only to the accounts that survive leaves three to place instead of
+  // seven, which the palette clears comfortably.
+  const tiny = live.filter(r => r.balanceRM / scale < TINY_SHARE)
+  const folded = tiny.length > 1 ? tiny : []
+  const shown = live.filter(r => !folded.includes(r))
+  const foldedRM = folded.reduce((sum, r) => sum + r.balanceRM, 0)
+  const slots = ownedSlots(shown.length, S.instruments.length)
+
   const parts = [
     { key: 'broker', name: 'moomoo', value: p.totalRM, color: slotColor(BROKER_SLOT) },
-    ...a.rows.map((r, i) => ({
+    ...shown.map((r, i) => ({
       key: r.slug,
       name: r.name,
       value: r.balanceRM,
       color: slotColor(slots[i]),
     })),
+    ...(folded.length
+      ? [
+          {
+            key: 'other',
+            name: `Other · ${folded.length} accounts`,
+            value: foldedRM,
+            // Grey on purpose: a bucket is not an account and should not wear an
+            // account's colour, and this way the fold spends no palette slot.
+            color: 'var(--faint)',
+            detail: folded.map(r => r.name).join(', '),
+          },
+        ]
+      : []),
   ].filter(x => x.value > 0)
 
   const totalRM = parts.reduce((sum, x) => sum + x.value, 0)
