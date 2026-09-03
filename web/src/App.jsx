@@ -1185,13 +1185,20 @@ function AssetEntryDialog({ prefill }) {
               <SelectItem value="WITHDRAW">WITHDRAW</SelectItem>
               <SelectItem value="DISTRIBUTION">DISTRIBUTION</SelectItem>
               <SelectItem value="FEE">FEE</SelectItem>
+              {/* Only where it means anything. On a savings account the API
+                  refuses it, so offering it would be a dead end you can pick. */}
+              {asset?.liquidity === 'WALLET' ? <SelectItem value="BALANCE">BALANCE</SelectItem> : null}
             </SelectContent>
           </Select>
         </Field>
         <Field
           label={`Amount (${asset ? asset.currency : 'MYR'})`}
           htmlFor="ae-amount"
-          hint="Always positive — the type says which way it moves."
+          hint={
+            f.type === 'BALANCE'
+              ? 'What the account holds as of this date — not what changed. This is the reading that lets the app work out what living costs.'
+              : 'Always positive — the type says which way it moves.'
+          }
         >
           <Input
             id="ae-amount"

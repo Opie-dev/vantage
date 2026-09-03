@@ -521,6 +521,58 @@ try {
     console.log(`  reach      ${t.reachableRM.toFixed(2)} within reach, ${t.lockedRM.toFixed(2)} locked`)
   }
 
+  // Spending, inferred. Built on a LOCAL copy of the fixture rather than by
+  // adding a wallet to the shared one: a WALLET is skipped by moneyByDay(), so
+  // putting one in STATE would move the Money and Calendar figures asserted
+  // above and this block would be paid for in unrelated churn.
+  {
+    const { spendingFor, SPEND_UNKNOWN, walletBalanceOn } =
+      await server.ssrLoadModule('/src/lib/calc.js')
+    const clone = () => JSON.parse(JSON.stringify(STATE))
+    const Y = 2026
+    const M = 0 // January, so the window sits wholly in the past whenever this runs
+    const iso = d => `2026-01-${String(d).padStart(2, '0')}`
+
+    // No wallet at all — the state every existing install is in.
+    const a = spendingFor(clone(), Y, M, '2026-02-01')
+    if (a.spentRM !== null || a.reason !== SPEND_UNKNOWN.NO_WALLET) {
+      throw new Error(`spend: with no wallet expect null/NO_WALLET, got ${a.spentRM}/${a.reason}`)
+    }
+
+    // A wallet, but only one reading. One point cannot describe a change.
+    const s1 = clone()
+    s1.assets.push({ id: 99, name: 'MAE', slug: 'mae', currency: 'MYR', liquidity: 'WALLET',
+      kind: 'SAVINGS', archived: false, rate_basis: 'NONE', fiscal_year: '12-31', created_at: iso(1) })
+    s1.assetEntries.unshift({ id: 990, asset_id: 99, type: 'BALANCE', date: iso(1), amount: 5000, source: 'manual' })
+    const b = spendingFor(s1, Y, M, '2026-02-01')
+    if (b.spentRM !== null || b.reason !== SPEND_UNKNOWN.NO_CLOSING_READING) {
+      throw new Error(`spend: one reading expect null/NO_CLOSING_READING, got ${b.spentRM}/${b.reason}`)
+    }
+
+    // Two readings. The identity must hold exactly, and the window must be the
+    // readings' own rather than the calendar month's.
+    const s2 = JSON.parse(JSON.stringify(s1))
+    s2.assetEntries.unshift({ id: 991, asset_id: 99, type: 'BALANCE', date: iso(21), amount: 5600, source: 'manual' })
+    const c = spendingFor(s2, Y, M, '2026-02-01')
+    if (c.reason) throw new Error(`spend: two readings should compute, got ${c.reason}`)
+    if (c.from !== iso(1) || c.to !== iso(21)) throw new Error(`spend: window ${c.from}..${c.to}`)
+    if (c.days !== 20) throw new Error(`spend: expected a 20-day window, got ${c.days}`)
+    if (Math.abs(c.walletDeltaRM - 600) > 0.005) throw new Error(`spend: wallet delta ${c.walletDeltaRM}`)
+    const identity = c.inflowRM - c.committedRM - c.savedRM - c.walletDeltaRM
+    if (Math.abs(identity - c.spentRM) > 1e-9) throw new Error(`spend: identity ${identity} != ${c.spentRM}`)
+
+    // A reading resets rather than accumulates — that is the whole point of the
+    // type, and a DEPOSIT after one must build on the reading, not on history.
+    const s3 = JSON.parse(JSON.stringify(s2))
+    s3.assetEntries.unshift({ id: 992, asset_id: 99, type: 'DEPOSIT', date: iso(25), amount: 100, source: 'manual' })
+    const after = walletBalanceOn(s3, iso(25))
+    if (Math.abs(after - 5700) > 0.005) {
+      throw new Error(`spend: a reading must reset — expected 5700 after 5600 + 100, got ${after}`)
+    }
+
+    console.log(`  spending   null without a wallet, ${c.spentRM.toFixed(2)} over ${c.days} days with two readings`)
+  }
+
   // Private mode, driven through the store exactly as the toggle does.
   //
   // Worth a check in the mounted app rather than a unit test of the formatters,

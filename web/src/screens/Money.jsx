@@ -33,7 +33,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
-import { deductionsOf, netOf, waterfall } from '@/lib/calc'
+import { SPEND_UNKNOWN, deductionsOf, netOf, spendingFor, waterfall } from '@/lib/calc'
 import { dfmt, dfmtLong, fmt, fmtS, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
@@ -335,6 +335,67 @@ function CommitmentRow({ r, onEdit, onRemove }) {
 
 /* ── screen ───────────────────────────────────────────────────────────────── */
 
+/**
+ * What living actually cost — the one line the waterfall never had.
+ *
+ * NEVER A GUESS. Spending here is inferred from a wallet reading, and with no
+ * reading to anchor it the component says what is missing instead of showing a
+ * figure. The badge above still reads "before living costs" until this can
+ * answer, which is the honest pairing.
+ *
+ * The window is stated on every render because it is rarely a calendar month:
+ * readings land when the owner types them, so "over 38 days" is the truth and
+ * "this month" would not be.
+ */
+function LivingCost({ spend }) {
+  if (spend.reason === SPEND_UNKNOWN.NO_WALLET) {
+    return (
+      <p className="text-faint mt-2.5 max-w-[460px] text-[11.5px] leading-relaxed">
+        Mark the account you spend from as a <b className="font-semibold">wallet</b> on the Assets
+        screen and record its balance now and then, and this becomes what living actually cost —
+        without entering a single purchase.
+      </p>
+    )
+  }
+  if (spend.reason) {
+    return (
+      <p className="text-faint mt-2.5 max-w-[460px] text-[11.5px] leading-relaxed">
+        {spend.reason === SPEND_UNKNOWN.NO_CLOSING_READING
+          ? 'One wallet reading so far. Record a second and the gap between them becomes what you spent.'
+          : 'No wallet reading before this month, so there is nothing to measure the gap from yet.'}
+      </p>
+    )
+  }
+  return (
+    <div className="border-hairline mt-3 border-t pt-2.5">
+      <span className="eyebrow">Living cost</span>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
+        <span
+          className={`num text-[19px] font-semibold ${spend.spentRM < 0 ? 'text-loss' : 'text-foreground'}`}
+        >
+          {fmt(spend.spentRM, 'MYR')}
+        </span>
+        <span className="text-faint num text-[11.5px]">
+          over {spend.days} day{spend.days === 1 ? '' : 's'} · {dfmt(spend.from)} to {dfmt(spend.to)}
+        </span>
+      </div>
+      <p className="text-faint mt-1.5 max-w-[460px] text-[11.5px] leading-relaxed">
+        {spend.spentRM < 0 ? (
+          <>
+            Negative, which means a destination is missing rather than that you un-spent money —
+            something left the wallet into somewhere this app is not watching.
+          </>
+        ) : (
+          <>
+            Not recorded — inferred. Everything that arrived, less obligations, less what moved
+            somewhere you can see, less the change in the wallet itself.
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
 export default function Money() {
   const {
     state,
@@ -346,6 +407,11 @@ export default function Money() {
     deleteCommitment,
   } = useVantage()
   const w = useMemo(() => waterfall(state), [state])
+  // This month, because that is the month the headline above is about. The
+  // window it actually reconciles is whatever the wallet readings bracket, and
+  // LivingCost prints those dates rather than implying they are the month.
+  const now = new Date()
+  const spend = useMemo(() => spendingFor(state, now.getFullYear(), now.getMonth()), [state])
   const out = w.commitments
   const hasFlat = out.rows.some(r => r.kind === 'LOAN' && r.flat)
   const hasIncome = w.rows.length > 0
@@ -434,6 +500,7 @@ export default function Money() {
                   </>
                 )}
               </p>
+              {hasIncome ? <LivingCost spend={spend} /> : null}
             </div>
 
             {hasIncome ? (

@@ -1918,6 +1918,28 @@ export function monthGrid(year, monthIndex) {
 /** Money in and money out. WITHDRAW and FEE subtract; DEPOSIT and DISTRIBUTION add. */
 const ASSET_OUT = new Set(['WITHDRAW', 'FEE'])
 
+/**
+ * A reading, not a movement: "as of this date the account holds exactly this".
+ * It RESETS the running balance rather than adjusting it, which is what makes a
+ * current account recordable without entering every transaction. Permitted only
+ * on a WALLET account — see the migration for why the invariant depends on that.
+ */
+const ASSET_RESET = 'BALANCE'
+
+/**
+ * Asset entries that never passed through your hands, and so are not cash flow.
+ *
+ *   payroll  an EPF contribution that booked itself; net pay never contained it
+ *   opening  the balance an account was first recorded with, which moved before
+ *            this ledger existed
+ *
+ * ONE DEFINITION, TWO READERS: moneyByDay() and spendingFor() must agree about
+ * this exactly, because the residual reconciles against the calendar's own
+ * arithmetic. An opening balance leaking into either would read as RM 96,242.85
+ * of spending in a single month.
+ */
+const NON_FLOW_SOURCES = new Set(['payroll', 'opening'])
+
 /** One asset's entries, newest first (the API already sorts them that way). */
 export function assetEntriesFor(S, assetId) {
   return S.assetEntries.filter(e => e.asset_id === assetId)
@@ -1927,9 +1949,40 @@ export function assetEntriesFor(S, assetId) {
  * What the account is worth: everything that went in, less everything that came
  * out, including the distributions it paid itself.
  */
-export function assetBalance(S, a) {
-  return assetEntriesFor(S, a.id).reduce(
-    (sum, e) => sum + (ASSET_OUT.has(e.type) ? -e.amount : e.amount), 0)
+export function assetBalance(S, a, asOfISO = null) {
+  // Oldest first, because a BALANCE reading resets the running total and a reset
+  // only means anything in order. positions() reverses the transaction log for
+  // the same reason. With no readings this is the identical sum it always was.
+  const entries = assetEntriesFor(S, a.id)
+    .filter(e => asOfISO == null || e.date <= asOfISO)
+    .slice()
+    .reverse()
+
+  let bal = 0
+  for (const e of entries) {
+    if (e.type === ASSET_RESET) bal = e.amount
+    else bal += ASSET_OUT.has(e.type) ? -e.amount : e.amount
+  }
+  return bal
+}
+
+/** The sum of every WALLET balance on a date — what you held liquid, then. */
+export function walletBalanceOn(S, iso) {
+  return (S.assets || [])
+    .filter(a => !a.archived && a.liquidity === 'WALLET')
+    .reduce((sum, a) => sum + toRM(S, assetBalance(S, a, iso), a.currency), 0)
+}
+
+/** Dates of every wallet reading, oldest first. A reading anchors the residual. */
+export function walletReadingDates(S) {
+  const wallets = new Set(
+    (S.assets || []).filter(a => !a.archived && a.liquidity === 'WALLET').map(a => a.id),
+  )
+  return [...new Set(
+    (S.assetEntries || [])
+      .filter(e => e.type === ASSET_RESET && wallets.has(e.asset_id))
+      .map(e => e.date),
+  )].sort()
 }
 
 /**
@@ -2868,8 +2921,15 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   }
 
   const assetName = new Map((S.assets || []).map(a => [a.id, a.name]))
+  const liquidityOf = new Map((S.assets || []).map(a => [a.id, a.liquidity || 'SAVINGS']))
   for (const e of S.assetEntries || []) {
     if (!inMonth(e.date)) continue
+
+    // A WALLET IS NOT A DESTINATION, it is where the money already was. Paying
+    // into ASB is money leaving your hands; your current account balance moving
+    // is your hands. Counting it here would double every salary — once as income
+    // arriving and again as a "contribution" to the account it arrived in.
+    if (liquidityOf.get(e.asset_id) === 'WALLET') continue
 
     // TWO SOURCES ARE REAL MONEY THAT NEVER PASSED THROUGH THIS MONTH.
     //
@@ -2883,7 +2943,13 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     //
     // Both still count on the Assets screen, which asks what you HAVE. This one
     // asks what MOVED, and the answer is different.
-    if (e.source === 'payroll' || e.source === 'opening') continue
+    if (NON_FLOW_SOURCES.has(e.source)) continue
+
+    // A reading is not a movement and has no direction. Unreachable today, since
+    // readings are confined to WALLET accounts and those are skipped above — but
+    // this path decides what counts as money leaving, and the default for an
+    // unrecognised type here is "money out", which a reading is not.
+    if (e.type === ASSET_RESET) continue
 
     // THE DIRECTION IS THE OPPOSITE OF THE ASSETS SCREEN, and deliberately so.
     // There, a deposit raises the balance and reads +. Here the question is what
@@ -3014,6 +3080,143 @@ export function moneyMonthNotes(S, year, monthIndex, nowISO = isoOf(Date.now()))
 }
 
 /** In, out and the difference for a month, counting only what the grid shows. */
+/* ── spending, inferred ───────────────────────────────────────────────────────
+ *
+ * See expenses-plan.md. Nothing here asks for a purchase to be recorded. Every
+ * ringgit either meets an obligation, moves somewhere the app can see, or is
+ * spent — and the first two are already exact, so the third is the remainder:
+ *
+ *     spent = inflow − committed − saved − (change in what you hold liquid)
+ *
+ * The last term is the one that makes it honest. Without it the remainder is
+ * spending and unbanked cash stuck together, and reporting that as spending
+ * would err in the app's least forgivable direction: it would make the owner
+ * look poorer and more profligate than they are. So with no wallet reading the
+ * answer is null and the screen says why, exactly as returnPct renders '—'
+ * rather than 0 when there is nothing to divide by.
+ */
+
+/** Why a residual could not be computed. The screen turns these into a sentence. */
+export const SPEND_UNKNOWN = {
+  NO_WALLET: 'NO_WALLET',
+  NO_OPENING_READING: 'NO_OPENING_READING',
+  NO_CLOSING_READING: 'NO_CLOSING_READING',
+}
+
+/**
+ * What living cost, over the window two wallet readings actually bracket.
+ *
+ * THE WINDOW IS NOT THE MONTH, and pretending otherwise is the main way this
+ * could lie. Readings land on the days the owner happens to type them, so a
+ * month with readings 38 days apart yields a 38-day figure. `from` and `to` are
+ * returned so the screen can say so rather than silently calling it monthly.
+ *
+ * Flows are counted over `(from, to]` — after the opening reading, up to and
+ * including the closing one — because a reading states the position at the end
+ * of its own day.
+ *
+ * @returns {{spentRM: number|null, reason: string|null, from: string|null,
+ *   to: string|null, days: number, inflowRM: number, committedRM: number,
+ *   savedRM: number, walletDeltaRM: number}}
+ */
+export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
+  const monthStart = `${monthKey(year, monthIndex)}-01`
+  const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  const monthEnd = `${monthKey(year, monthIndex)}-${String(lastDay).padStart(2, '0')}`
+  // Never reconcile into the future: a reading cannot exist for a day that has
+  // not happened, and flows after today are projections.
+  const ceiling = monthEnd < nowISO ? monthEnd : nowISO
+
+  const empty = {
+    spentRM: null, from: null, to: null, days: 0,
+    inflowRM: 0, committedRM: 0, savedRM: 0, walletDeltaRM: 0,
+  }
+
+  const hasWallet = (S.assets || []).some(a => !a.archived && a.liquidity === 'WALLET')
+  if (!hasWallet) return { ...empty, reason: SPEND_UNKNOWN.NO_WALLET }
+
+  const dates = walletReadingDates(S)
+  // The opening anchor may predate the month — a reading from the 28th of last
+  // month brackets this one perfectly well, and insisting on one inside the
+  // month would throw away a usable window.
+  const from = [...dates].reverse().find(d => d <= monthStart) || dates.find(d => d <= ceiling)
+  if (!from) return { ...empty, reason: SPEND_UNKNOWN.NO_OPENING_READING }
+
+  const to = [...dates].reverse().find(d => d > from && d <= ceiling)
+  if (!to) return { ...empty, from, reason: SPEND_UNKNOWN.NO_CLOSING_READING }
+
+  let inflowRM = 0
+  let committedRM = 0
+  let savedRM = 0
+
+  // Income that actually arrived. An estimated payslip is a projection and
+  // reconciling against it would invent spending in the months it is wrong.
+  for (const e of S.incomeEvents || []) {
+    if (e.date > from && e.date <= to) inflowRM += netOf(e)
+  }
+
+  // Distributions the broker paid in cash over the window, which arrive in a
+  // wallet and are therefore inflow like any other.
+  for (const t of S.transactions || []) {
+    if (t.side !== 'DIV') continue
+    if (t.trade_date > from && t.trade_date <= to) {
+      inflowRM += toRM(S, t.amount || 0, (instr(S, t.ticker) || {}).currency || 'MYR')
+    }
+  }
+
+  // Obligations. Derived from the schedule and NOT filtered to recorded rows:
+  // this app stores only deviations, so an instalment with a due date behind us
+  // and no payment row against it was paid. Filtering to `recorded` would leave
+  // every instalment looking like discretionary spending.
+  // includeEnded, because a loan settled last month still took money out of the
+  // window being reconciled and would otherwise vanish from it.
+  for (const r of commitmentRows(S, { includeEnded: true, nowISO })) {
+    // dueDayIn() is the same clamp the calendar uses, so the 31st in a short
+    // month lands on the same day in both and the two cannot disagree.
+    const day = dueDayIn(year, monthIndex, r.commitment.due_day)
+    if (!day) continue
+    const due = `${monthKey(year, monthIndex)}-${String(day).padStart(2, '0')}`
+    if (due > from && due <= to) committedRM += toRM(S, r.monthlyOut || 0, r.cur)
+  }
+
+  // Money deliberately put somewhere it is not spent: into a savings or locked
+  // account, or into the broker. Wallets are excluded — moving cash between two
+  // of your own pockets is not saving.
+  const liquidityOf = new Map((S.assets || []).map(a => [a.id, a.liquidity || 'SAVINGS']))
+  const curOf = new Map((S.assets || []).map(a => [a.id, a.currency]))
+  for (const e of S.assetEntries || []) {
+    if (e.date <= from || e.date > to) continue
+    if (NON_FLOW_SOURCES.has(e.source)) continue
+    if (liquidityOf.get(e.asset_id) === 'WALLET') continue
+    const cur = curOf.get(e.asset_id) || 'MYR'
+    if (e.type === 'DEPOSIT') savedRM += toRM(S, e.amount, cur)
+    else if (e.type === 'WITHDRAW') savedRM -= toRM(S, e.amount, cur)
+  }
+  for (const c of S.cash || []) {
+    if (c.date <= from || c.date > to) continue
+    if (c.type === 'DEPOSIT') savedRM += toRM(S, c.amount, c.currency)
+    else if (c.type === 'WITHDRAW') savedRM -= toRM(S, c.amount, c.currency)
+  }
+
+  const walletDeltaRM = walletBalanceOn(S, to) - walletBalanceOn(S, from)
+  const days = Math.round((msOf(to) - msOf(from)) / DAY)
+
+  return {
+    reason: null,
+    from,
+    to,
+    days,
+    inflowRM,
+    committedRM,
+    savedRM,
+    walletDeltaRM,
+    // Can legitimately go negative: a month funded by drawing down a wallet the
+    // app was not watching closely will over-subtract. Negative is a signal the
+    // readings or the destinations are incomplete, not a figure to clamp away.
+    spentRM: inflowRM - committedRM - savedRM - walletDeltaRM,
+  }
+}
+
 export function moneyMonthTotals(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   const byDay = moneyByDay(S, year, monthIndex, nowISO)
   let inRM = 0

@@ -49,7 +49,7 @@ const RATE_QUOTES = ['PERCENT', 'SEN_PER_UNIT'];
 const LIQUIDITIES = ['WALLET', 'SAVINGS', 'LOCKED'];
 
 /** Mirrors asset_entries_type_check. */
-const ENTRY_TYPES = ['DEPOSIT', 'WITHDRAW', 'DISTRIBUTION', 'FEE'];
+const ENTRY_TYPES = ['DEPOSIT', 'WITHDRAW', 'DISTRIBUTION', 'FEE', 'BALANCE'];
 
 /**
  * Where an entry came from, which is what decides whether it is a CASH FLOW.
@@ -218,6 +218,18 @@ async function addEntry(assetId, { type, date, amount, note = '', source = 'manu
   if (!ENTRY_SOURCES.includes(source)) throw badRequest(`source must be one of: ${ENTRY_SOURCES.join(', ')}`);
   if (source === 'opening' && type !== 'DEPOSIT') {
     throw badRequest('only a DEPOSIT can be an opening balance — it is what the account already held');
+  }
+  // A BALANCE is a READING — "as of this date the account holds exactly this" —
+  // and it resets the running total rather than adjusting it. Confined to a
+  // WALLET because assetRows() guarantees `balance − contributed === earned` for
+  // every row, and a reading breaks that by construction: the gap between what
+  // was read and what the ledger derived is unexplained, and for a current
+  // account it is mostly spending. Keeping readings out of savings accounts keeps
+  // that invariant true where it is load-bearing.
+  if (type === 'BALANCE' && asset.liquidity !== 'WALLET') {
+    throw badRequest(
+      `a balance reading only makes sense on an account you spend from — set ${asset.name}'s ` +
+      'reachability to WALLET first, or record a deposit or withdrawal instead');
   }
   if (!nonNegative(amount)) throw badRequest('amount must be a number of zero or more');
   checkDate(date, 'date');
