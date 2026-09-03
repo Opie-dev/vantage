@@ -55,7 +55,7 @@ import {
   slotColor,
   slotOf,
 } from '@/lib/calc'
-import { compact, fmt, fmtS, fq, monthLabel } from '@/lib/format'
+import { MINUS, compact, fmt, fmtS, fq, monthLabel } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
@@ -81,6 +81,16 @@ function cashEffect(r) {
   return { dir: r.side === 'BUY' ? -1 : 1, value: r.qty * r.price }
 }
 
+/** The money rules under a day, at legend size — a bar, so it reads as one. */
+function LegendBar({ className, children }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn('h-1 w-3.5 rounded-full', className)} />
+      {children}
+    </span>
+  )
+}
+
 function LegendDot({ className, children }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -93,6 +103,15 @@ function LegendDot({ className, children }) {
 /** Cards shown before the rest collapse into a count. The day detail below the
  *  grid is the full list; a cell is a preview, and a tall cell breaks the grid. */
 const CARDS = 3
+
+/**
+ * How many money events a day cell names before it says "+n more".
+ *
+ * Two, because the cell is 104px and the trade cards have first claim on it. The
+ * day the accounts were set up carried seven at once; naming the two largest and
+ * counting the rest beats a rule that named none of them.
+ */
+const MONEY_LINES = 2
 
 /** Tone by what the card is: income and sales in, buys and charges out. */
 const cardTone = kind =>
@@ -158,20 +177,59 @@ function DayCell({ state, day, cards, incomeRM, due, money, selected, isToday, o
     : []
   const all = [...cards, ...dueCards]
 
-  // Money events get a pair of bars rather than cards: a day can carry a salary,
-  // two instalments and a card due, and four more cards would bury the trades
-  // this grid was built to show.
-  const moneyIn = (money || []).filter(e => e.dir > 0).reduce((s, e) => s + (e.amount || 0), 0)
-  const moneyOut = (money || []).filter(e => e.dir < 0).reduce((s, e) => s + (e.amount || 0), 0)
-  const hasMoney = Boolean(money && money.length)
+  // Money events get bars rather than cards: a day can carry a salary, two
+  // instalments and a card due, and four more cards would bury the trades this
+  // grid was built to show.
+  //
+  // But a bare rule only said "something happened here". A day carrying RM 17.50
+  // of Spotify drew the same mark as one carrying RM 96,242.85, and the figure
+  // lived solely in a `title` — unreachable on touch, and unformatted at that.
+  // So the rules keep their job as the at-a-glance signal, and the events they
+  // stand for are named above them, which is what the dividend days have always
+  // done.
+  const events = money || []
+  const moneyIn = events.filter(e => e.dir > 0).reduce((s, e) => s + (e.amount || 0), 0)
+  const moneyOut = events.filter(e => e.dir < 0).reduce((s, e) => s + (e.amount || 0), 0)
+  const hasMoney = Boolean(events.length)
+
+  // Two lines at most. Biggest first, because on a crowded day the instalment is
+  // what you want to see and the streaming subscription is not.
+  const ranked = [...events].sort((a, b) => (b.amount || 0) - (a.amount || 0))
+  const shownMoney = ranked.slice(0, MONEY_LINES)
+  const moreMoney = ranked.length - shownMoney.length
 
   const moneyMarks = hasMoney ? (
-    <div className="mt-auto flex items-center gap-1 pt-1">
-      {moneyIn > 0 ? <span className="bg-gain h-1 flex-1 rounded-full" title={`In ${moneyIn.toFixed(2)}`} /> : null}
-      {moneyOut > 0 ? <span className="bg-loss h-1 flex-1 rounded-full" title={`Out ${moneyOut.toFixed(2)}`} /> : null}
-      {moneyIn === 0 && moneyOut === 0 ? (
-        <span className="bg-muted-foreground/40 h-1 flex-1 rounded-full" title="Recorded, but no money moved" />
-      ) : null}
+    <div className="mt-auto pt-1">
+      <div className="grid gap-px">
+        {shownMoney.map(e => (
+          <div key={e.key} className="flex items-baseline justify-between gap-1 leading-tight">
+            <span className="text-muted-foreground truncate text-[9.5px]">{e.label}</span>
+            <span
+              className={cn(
+                'num shrink-0 text-[9.5px] font-semibold',
+                e.dir > 0 ? 'text-gain' : e.dir < 0 ? 'text-loss' : 'text-faint',
+              )}
+            >
+              {/* An estimated card statement knows the day and not the figure. */}
+              {e.amount == null
+                ? '—'
+                : `${e.dir > 0 ? '+' : e.dir < 0 ? MINUS : ''}${compact(e.amount)}`}
+            </span>
+          </div>
+        ))}
+        {moreMoney > 0 ? <span className="text-faint text-[9px] leading-tight">+{moreMoney} more</span> : null}
+      </div>
+      <div className="mt-1 flex items-center gap-1">
+        {moneyIn > 0 ? (
+          <span className="bg-gain h-1 flex-1 rounded-full" title={`In ${fmt(moneyIn, 'MYR')}`} />
+        ) : null}
+        {moneyOut > 0 ? (
+          <span className="bg-loss h-1 flex-1 rounded-full" title={`Out ${fmt(moneyOut, 'MYR')}`} />
+        ) : null}
+        {moneyIn === 0 && moneyOut === 0 ? (
+          <span className="bg-muted-foreground/40 h-1 flex-1 rounded-full" title="Recorded, but no money moved" />
+        ) : null}
+      </div>
     </div>
   ) : null
 
@@ -618,6 +676,12 @@ export default function Calendar() {
               <LegendDot className="bg-cash">dividend</LegendDot>
               <LegendDot className="bg-muted-foreground">wallet</LegendDot>
               <LegendDot className="bg-cash opacity-40">expected</LegendDot>
+              {/* Drawn as rules, not dots, because that is how they appear in a
+                  cell — and because they share bg-gain and bg-loss with the buy
+                  and sell dots above, which left a red mark on a day meaning
+                  either "sold something" or "instalment due" with no way to tell. */}
+              <LegendBar className="bg-gain">money in</LegendBar>
+              <LegendBar className="bg-loss">money out</LegendBar>
             </div>
           </div>
 
