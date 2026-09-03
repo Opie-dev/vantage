@@ -163,7 +163,10 @@ const STATE = {
       institution: 'ASNB', account_ref: '', unit_label: '', unit_cap: null,
       fiscal_year: '12-31', rate_basis: 'MIN_MONTHLY', rate_quote: 'PERCENT', last_rate: null,
       last_bonus: null, sort_order: 4, archived: false, created_at: ago(10) },
-    { id: 3, kind: 'SAVINGS', name: 'EPF', slug: 'epf', currency: 'MYR', institution: 'KWSP',
+    // LOCKED, so the reach split is exercised. Every other account here leaves
+    // `liquidity` absent on purpose — that is the shape of a row written before
+    // the column existed, and assetRows() has to read it as SAVINGS.
+    { id: 3, liquidity: 'LOCKED', kind: 'SAVINGS', name: 'EPF', slug: 'epf', currency: 'MYR', institution: 'KWSP',
       account_ref: '', unit_label: '', unit_cap: null, fiscal_year: '12-31',
       rate_basis: 'MADB', rate_quote: 'PERCENT', last_rate: 6.15, last_bonus: null,
       sort_order: 3, archived: false, created_at: ago(400) },
@@ -496,6 +499,26 @@ try {
     if (Math.abs(s[2].net - want) > 0.005) throw new Error(`net worth: expected ${want}, got ${s[2].net}`)
     if (s[2].net >= 0) throw new Error('net worth: this fixture owes more than it owns and must read negative')
     console.log(`  net worth  ${s.filter(p => p.net != null).length}/3 points carry net, earliest stays null (${s[2].net.toFixed(2)})`)
+  }
+
+  // Reach, not just balance. EPF is LOCKED in the fixture and every other
+  // account omits `liquidity` entirely, so this also proves the absent-column
+  // fallback reads as SAVINGS rather than undefined.
+  {
+    const { assetsTotal } = await server.ssrLoadModule('/src/lib/calc.js')
+    const t = assetsTotal(STATE)
+    if (Math.abs(t.reachableRM + t.lockedRM - t.valueRM) > 0.005) {
+      throw new Error(`reach: ${t.reachableRM} + ${t.lockedRM} != ${t.valueRM}`)
+    }
+    if (!(t.lockedRM > 0)) throw new Error('reach: the fixture has a LOCKED account and must report it')
+    if (!(t.reachableRM > 0)) throw new Error('reach: the fixture has reachable accounts too')
+    const epf = t.rows.find(r => r.name === 'EPF')
+    if (epf.liquidity !== 'LOCKED') throw new Error(`reach: EPF should be LOCKED, got ${epf.liquidity}`)
+    const asb = t.rows.find(r => r.name === 'ASB')
+    if (asb.liquidity !== 'SAVINGS') {
+      throw new Error(`reach: a row with no liquidity must default to SAVINGS, got ${asb.liquidity}`)
+    }
+    console.log(`  reach      ${t.reachableRM.toFixed(2)} within reach, ${t.lockedRM.toFixed(2)} locked`)
   }
 
   // Private mode, driven through the store exactly as the toggle does.

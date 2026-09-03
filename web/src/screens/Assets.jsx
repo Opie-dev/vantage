@@ -466,7 +466,18 @@ export default function Assets() {
     <div className="grid gap-3">
       {live(total).length ? (
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-        <Stat label="Outside moomoo" value={fmt(total.valueRM, 'MYR')} sub="combined balance" />
+        {/* The sub-line carries reach rather than a sixth tile, because it is a
+            fact about the total directly above it: "combined balance" was true
+            and unhelpful once one of these accounts is locked until 55. */}
+        <Stat
+          label="Outside moomoo"
+          value={fmt(total.valueRM, 'MYR')}
+          sub={
+            total.lockedRM > 0
+              ? `${fmt(total.reachableRM, 'MYR')} within reach · ${fmt(total.lockedRM, 'MYR')} locked`
+              : 'combined balance'
+          }
+        />
         <Stat
           label="Contributed"
           value={fmt(total.contributedRM, 'MYR')}
