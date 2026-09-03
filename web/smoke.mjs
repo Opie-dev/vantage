@@ -54,9 +54,24 @@ const NOW = Date.now()
 const ago = n => isoOf(NOW - n * DAY)
 
 // Ex-dates on Thursdays paying Friday, which is the real cadence of these funds.
+//
+// The Thursday must be old enough that its Friday has ARRIVED. pendingHistoryRows()
+// skips a declaration whose pay date is still in the future — correctly, that is
+// the outlook's job — so on a Thursday the nearest one pays tomorrow, the newest
+// declaration goes missing, and the History assertion for "PENDING" fails. This
+// ran green six days a week and red on the seventh.
+//
+// Note the two calendars: getUTCDay() is UTC while calc.js builds `today` from
+// the local date, so the comparison is made in local terms to match the code
+// under test rather than the code generating the fixture.
+const localToday = (() => {
+  const d = new Date()
+  const p2 = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+})()
 const lastThursday = (() => {
   let t = NOW
-  while (new Date(t).getUTCDay() !== 4) t -= DAY
+  while (new Date(t).getUTCDay() !== 4 || isoOf(t + DAY) > localToday) t -= DAY
   return t
 })()
 const exOn = k => isoOf(lastThursday - k * 7 * DAY)

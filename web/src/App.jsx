@@ -33,7 +33,6 @@ import {
   BanknoteIcon,
   MoonIcon,
   PiggyBankIcon,
-  PlusIcon,
   RefreshCwIcon,
   SettingsIcon,
   SunIcon,
@@ -174,7 +173,7 @@ function ThemeToggle() {
  * rather than beside the actions: when the data last arrived, and the theme.
  */
 function SideNav() {
-  const { state, tab } = useVantage()
+  const { state } = useVantage()
 
   return (
     <aside className="bg-background sticky top-0 z-30 flex h-svh w-[58px] shrink-0 flex-col border-r lg:w-[212px]">
@@ -1259,7 +1258,7 @@ function CommitmentDialog({ prefill }) {
     // kind is not sent on an edit: the shape decides which columns are
     // meaningful, and changing it would leave a loan's fields on a card.
     const ok = editing
-      ? await updateCommitment(prefill.id, (({ kind, ...rest }) => rest)(body))
+      ? await updateCommitment(prefill.id, (({ kind: _kind, ...rest }) => rest)(body))
       : await addCommitment(body)
     setBusy(false)
     if (ok) closeModal()
