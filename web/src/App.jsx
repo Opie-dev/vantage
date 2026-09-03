@@ -98,7 +98,7 @@ import Positions from '@/screens/Positions'
 import History from '@/screens/History'
 import Wallet from '@/screens/Wallet'
 import CalendarScreen from '@/screens/Calendar'
-import Goals, { KIND_OPTIONS, WHOLE, isIncome } from '@/screens/Goals'
+import Goals, { KIND_OPTIONS, WHOLE, isBalance, isIncome } from '@/screens/Goals'
 import Instruments from '@/screens/Instruments'
 import Assets from '@/screens/Assets'
 import Money from '@/screens/Money'
@@ -1839,13 +1839,19 @@ function GoalDialog() {
   const { state, closeModal, addGoal } = useVantage()
   const [kind, setKind] = useState(GOAL_KIND.SHARES)
   const [ticker, setTicker] = useState('')
+  const [assetId, setAssetId] = useState('')
   const [target, setTarget] = useState('500')
   const [amount, setAmount] = useState('1000')
   const [monthly, setMonthly] = useState('')
   const [busy, setBusy] = useState(false)
 
   const instruments = state.instruments
+  // Archived is what you do instead of deleting an account with history, so it is
+  // not a thing to set a new target against. The API refuses it either way.
+  const accounts = (state.assets || []).filter(a => !a.archived)
   const income = isIncome(kind)
+  const balance = isBalance(kind)
+  const pickedAsset = assetId || String(accounts[0]?.id || '')
   // Per-payment is per holding only: combined across holdings it would measure
   // which funds happened to pay that day rather than the portfolio.
   const needsInstrument = GOAL_NEEDS_INSTRUMENT.has(kind)
@@ -1854,13 +1860,20 @@ function GoalDialog() {
       ? ticker
       : instruments[0]?.ticker || ''
     : ticker || WHOLE
-  const blocked = needsInstrument && !instruments.length
+  const blocked = balance ? !accounts.length : needsInstrument && !instruments.length
 
   const save = async () => {
     if (blocked || busy) return
     setBusy(true)
     const ok = await addGoal(
-      income
+      balance
+        ? {
+            kind,
+            asset_id: Number(pickedAsset),
+            target_amount: Number(amount) || 0,
+            monthly_budget: monthly ? Number(monthly) : null,
+          }
+        : income
         ? {
             kind,
             ticker: picked === WHOLE ? undefined : picked,
@@ -1914,6 +1927,33 @@ function GoalDialog() {
           </Select>
         </Field>
 
+        {/* A balance goal names an account, not a holding, so it gets its own
+            picker rather than a ticker select taught to mean two things. */}
+        {balance ? (
+          <Field
+            label="Account"
+            htmlFor="g-asset"
+            hint={
+              blocked
+                ? 'Add an account first, from the Assets screen.'
+                : 'Measured against the balance its own ledger adds up to.'
+            }
+          >
+            <Select value={pickedAsset} onValueChange={setAssetId} disabled={blocked}>
+              <SelectTrigger id="g-asset" className="w-full">
+                <SelectValue placeholder="No accounts yet" />
+              </SelectTrigger>
+              <SelectContent>
+                {accounts.map(a => (
+                  <SelectItem key={a.id} value={String(a.id)}>
+                    {a.name}
+                    <span className="text-faint ml-1">{a.currency}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : (
         <Field
           label={income ? 'Scope' : 'Instrument'}
           htmlFor="g-t"
@@ -1934,8 +1974,39 @@ function GoalDialog() {
             </SelectContent>
           </Select>
         </Field>
+        )}
 
-        {income ? (
+        {balance ? (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Target (RM)" htmlFor="g-amount" hint="The balance you are aiming the account at.">
+              <Input
+                id="g-amount"
+                type="number"
+                min="1"
+                step="100"
+                className="num"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Monthly budget (RM)"
+              htmlFor="g-monthly-bal"
+              hint="Optional — what you plan to pay in each month."
+            >
+              <Input
+                id="g-monthly-bal"
+                type="number"
+                min="0"
+                step="10"
+                className="num"
+                placeholder="—"
+                value={monthly}
+                onChange={e => setMonthly(e.target.value)}
+              />
+            </Field>
+          </div>
+        ) : income ? (
           <Field
             label={amountLabel}
             htmlFor="g-amount"

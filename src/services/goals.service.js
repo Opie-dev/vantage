@@ -1,12 +1,16 @@
 const instruments = require('../models/instruments.model');
+const assets = require('../models/assets.model');
 const goals = require('../models/goals.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 
 /** Mirrors the goals_kind_check constraint in the migration. */
-const KINDS = ['SHARES', 'INCOME_TOTAL', 'INCOME_MONTHLY', 'INCOME_YEAR', 'INCOME_PER_PAYMENT'];
+const KINDS = ['SHARES', 'INCOME_TOTAL', 'INCOME_MONTHLY', 'INCOME_YEAR', 'INCOME_PER_PAYMENT', 'ASSET_BALANCE'];
 
 // Kinds that measure one holding and cannot be portfolio-wide.
 const NEEDS_INSTRUMENT = new Set(['SHARES', 'INCOME_PER_PAYMENT']);
+
+// The one kind measured against an account outside moomoo instead of a holding.
+const NEEDS_ASSET = new Set(['ASSET_BALANCE']);
 
 const positive = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
 
@@ -17,7 +21,7 @@ const positive = v => typeof v === 'number' && Number.isFinite(v) && v > 0;
  * holding) or omit it (portfolio-wide) — the ticker being optional is what
  * distinguishes the two, so an absent ticker is not an error there.
  */
-async function create({ kind = 'SHARES', ticker, target_qty, target_amount, monthly_budget = null }) {
+async function create({ kind = 'SHARES', ticker, asset_id, target_qty, target_amount, monthly_budget = null }) {
   if (!KINDS.includes(kind)) throw badRequest(`kind must be one of: ${KINDS.join(', ')}`);
 
   let instrumentId = null;
@@ -25,6 +29,22 @@ async function create({ kind = 'SHARES', ticker, target_qty, target_amount, mont
     const instrument = await instruments.findByTicker(ticker);
     if (!instrument) throw badRequest(`Unknown ticker ${ticker}`);
     instrumentId = instrument.id;
+  }
+
+  let assetId = null;
+  if (NEEDS_ASSET.has(kind)) {
+    const asset = asset_id === undefined || asset_id === null ? null : await assets.findById(Number(asset_id));
+    if (!asset) throw badRequest('an account balance goal needs an account');
+    // Archiving is what you do instead of deleting an account with history, so a
+    // goal against one would be a target you have already stopped tracking.
+    if (asset.archived) throw badRequest(`${asset.name} is archived — unarchive it before setting a goal against it`);
+    assetId = asset.id;
+  } else if (asset_id != null) {
+    throw badRequest('only an account balance goal names an account');
+  }
+
+  if (instrumentId && assetId) {
+    throw badRequest('a goal is measured against a holding or an account, not both');
   }
 
   if (NEEDS_INSTRUMENT.has(kind) && !instrumentId) {
@@ -42,6 +62,7 @@ async function create({ kind = 'SHARES', ticker, target_qty, target_amount, mont
   await goals.insert({
     kind,
     instrumentId,
+    assetId,
     targetQty: kind === 'SHARES' ? target_qty : 0,
     targetAmount: kind === 'SHARES' ? null : target_amount,
     monthlyBudget: monthly_budget,

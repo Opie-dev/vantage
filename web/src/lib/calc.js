@@ -587,6 +587,7 @@ export function equitySeries(S) {
  *     monthly budget or no price yet.
  */
 export function goalProgress(S, g) {
+  if (g.kind === GOAL_KIND.ASSET_BALANCE) return assetGoalProgress(S, g)
   if (g.kind && g.kind !== GOAL_KIND.SHARES) return incomeGoalProgress(S, g)
 
   const pos = positionOf(S, g.ticker) || { qty: 0 }
@@ -607,6 +608,48 @@ export function goalProgress(S, g) {
  * I'm earning now, when do I get there". For a MONTHLY goal that projection is
  * meaningless (the rate IS the target), so it stays null.
  */
+/**
+ * Progress towards a balance in one account outside moomoo.
+ *
+ * Shaped like a SHARES goal rather than an income one, because that is what it
+ * is: a thing you fill by paying into it, not a rate that arrives on its own.
+ * So `months` comes from the monthly budget, exactly as a share goal's does.
+ *
+ * THE DECLARED RATE IS DELIBERATELY LEFT OUT of that projection. ASB at 5.75%
+ * genuinely shortens the wait, and distributionOutlook() already estimates the
+ * year's declaration — but it estimates it, from a rate that is announced yearly
+ * and is not a promise. Folding an estimate into "you get there in 31 months"
+ * turns a guess into a date, and this figure sits beside a target the owner set
+ * precisely because they wanted to know when their own money gets them there.
+ * The estimate stays on the Assets screen, labelled as one.
+ *
+ * A goal against an archived account still reports: the service refuses to
+ * CREATE one, but an account archived afterwards would otherwise read 0 and
+ * look like all the money had gone.
+ */
+function assetGoalProgress(S, g) {
+  const row = assetRows(S, { includeArchived: true }).find(r => r.id === g.asset_id)
+  const current = row ? row.balanceRM : 0
+  const target = g.target_amount || 0
+  const remain = Math.max(target - current, 0)
+  const prog = target ? Math.min((current / target) * 100, 100) : 0
+  const months = g.monthly_budget > 0 && remain > 0 ? Math.ceil(remain / g.monthly_budget) : null
+
+  return {
+    kind: GOAL_KIND.ASSET_BALANCE,
+    cur: 'MYR',
+    current,
+    target,
+    remain,
+    prog,
+    months,
+    scope: row ? row.name : g.asset_name || null,
+    // The account is gone from the ledger entirely — a goal pointing at nothing,
+    // which the card says out loud rather than drawing as 0%.
+    missing: !row,
+  }
+}
+
 function incomeGoalProgress(S, g) {
   const target = g.target_amount || 0
   const current = goalCurrent(S, g)
@@ -826,6 +869,7 @@ export const GOAL_KIND = {
   INCOME_MONTHLY: 'INCOME_MONTHLY',
   INCOME_YEAR: 'INCOME_YEAR',
   INCOME_PER_PAYMENT: 'INCOME_PER_PAYMENT',
+  ASSET_BALANCE: 'ASSET_BALANCE',
 }
 
 export const GOAL_KIND_LABEL = {
@@ -834,10 +878,14 @@ export const GOAL_KIND_LABEL = {
   INCOME_MONTHLY: 'Monthly income',
   INCOME_YEAR: 'Dividends this year',
   INCOME_PER_PAYMENT: 'Per dividend payment',
+  ASSET_BALANCE: 'Account balance',
 }
 
 /** Kinds that measure a single holding — a portfolio-wide version makes no sense. */
 export const GOAL_NEEDS_INSTRUMENT = new Set([GOAL_KIND.SHARES, GOAL_KIND.INCOME_PER_PAYMENT])
+
+/** The one kind measured against an account outside moomoo, not a holding. */
+export const GOAL_NEEDS_ASSET = new Set([GOAL_KIND.ASSET_BALANCE])
 
 /** Months averaged for a monthly-income goal. */
 export const INCOME_RATE_MONTHS = 3
@@ -1189,6 +1237,9 @@ export function goalCurrent(S, g) {
   const net = goalIncomeIsNet(S)
   const ticker = g.ticker || null
   const pick = r => (net ? r.net : r.gross)
+
+  // Not income at all — what the account holds today.
+  if (g.kind === GOAL_KIND.ASSET_BALANCE) return assetGoalProgress(S, g).current
 
   if (g.kind === GOAL_KIND.INCOME_PER_PAYMENT) return ticker ? averagePayment(S, ticker, net) : 0
   if (g.kind === GOAL_KIND.INCOME_MONTHLY) return monthlyIncomeRate(S, ticker, net)

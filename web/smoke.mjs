@@ -128,6 +128,11 @@ const STATE = {
   goals: [
     { id: 1, ticker: 'ETCO', currency: 'MYR', target_qty: 5000, monthly_budget: 500 },
     { id: 2, ticker: 'INCM', currency: 'USD', target_income: 400, monthly_budget: 300 },
+    // A balance goal, so the third card kind cannot rot unnoticed. ASB below
+    // holds 74,300, so this renders a partly-filled bar rather than 0% or 100%,
+    // either of which would pass while the arithmetic was broken.
+    { id: 3, kind: 'ASSET_BALANCE', asset_id: 1, asset_name: 'ASB', asset_slug: 'asb',
+      target_amount: 100000, monthly_budget: 1000 },
   ],
   snapshots: [
     { date: ago(2), value_rm: 5000, cash_rm: 300 },
@@ -441,19 +446,27 @@ try {
     // only — if employer EPF ever leaked into it the figure would drop by
     // 1,020 and this fails. Freelance 1,850 is (2400+1800+1350)/3. Income
     // 8,719.50, less commitments 4,051.50, is uncommitted 4,668.00; less the
-    // fixture's 800 of goal budgets, unclaimed 3,868.00.
+    // fixture's 1,800 of goal budgets — 500 shares, 300 income, 1,000 balance —
+    // unclaimed 2,868.00. A balance goal claims from the same pool as the other
+    // two, and this figure is what proves it.
     ['money', ['Unclaimed this month', '= Uncommitted', 'RM 8,719.50', 'RM 4,051.50', 'RM 4,668.00',
-      'RM 3,868.00', 'flat = 6.3% real', 'Deducted from your pay',
+      'RM 2,868.00', 'flat = 6.3% real', 'Deducted from your pay',
       'Paid on top by your employer', 'no balance, pure expense', 'of instalments',
       'Debt falling', '3-month average']],
-    // The payoff: goal budgets checked against real uncommitted cash. RM 800 is
-    // the fixture's two budgets; RM 4,668.00 is income less commitments, both
-    // derived. 'all funded' proves the allocation ran rather than the card just
-    // rendering a total.
+    // The payoff: goal budgets checked against real uncommitted cash. RM 1,800
+    // is the fixture's three budgets; RM 4,668.00 is income less commitments,
+    // both derived. 'all funded' proves the allocation ran rather than the card
+    // just rendering a total.
     // The colour theme lives in localStorage, not the server, so there is no
     // state key to assert — these prove the controls exist and are reachable.
     ['settings', ['Appearance', 'Match my system', 'The colours, not the layout']],
-    ['goals', ['moomoo', 'Claimed each month', 'RM 800.00', 'RM 4,668.00', 'all funded', 'uncommitted']],
+    // 'in ASB' is the balance card's title; 'asb' its source tag. Both together
+    // prove the card was picked, not just that the account name appears somewhere.
+    // 'in ASB' is the balance card's title, 'asb' its source tag — both together
+    // prove the card was picked, not just that the name appears somewhere. The
+    // RM 1,800.00 claimed is 500 + 300 + the balance goal's own 1,000, so this
+    // also catches a balance goal being dropped from the funding waterfall.
+    ['goals', ['moomoo', 'Claimed each month', 'all funded', 'RM 1,800.00', 'in ASB', 'asb']],
   ]
   for (const [id, needed] of surfaces) {
     await tick(() => ctl.setTab(id))
