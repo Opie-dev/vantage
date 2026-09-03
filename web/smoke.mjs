@@ -135,9 +135,14 @@ const STATE = {
     { id: 3, kind: 'ASSET_BALANCE', asset_id: 1, asset_name: 'ASB', asset_slug: 'asb',
       target_amount: 100000, monthly_budget: 1000 },
   ],
+  // Three points, not two, and only the last two carry the owned side. That is
+  // the shape the real table has — columns added partway through a history — and
+  // it is what proves equitySeries() leaves `net` null where nothing was recorded
+  // instead of drawing a dive to zero on the day the feature shipped.
   snapshots: [
-    { date: ago(2), value_rm: 5000, cash_rm: 300 },
-    { date: ago(1), value_rm: 5200, cash_rm: 300 },
+    { date: ago(3), value_rm: 4800, cash_rm: 300, assets_rm: null, liabilities_rm: null },
+    { date: ago(2), value_rm: 5000, cash_rm: 300, assets_rm: 7073.3, liabilities_rm: 60000 },
+    { date: ago(1), value_rm: 5200, cash_rm: 300, assets_rm: 7073.3, liabilities_rm: 59500 },
   ],
   // Holdings outside moomoo. Two rate bases on purpose — MIN_MONTHLY (ASB,
   // Tabung Haji) and MADB (EPF) render different card copy, and a fixture with
@@ -478,6 +483,20 @@ try {
     console.log(`  ${id.padEnd(10)} income surfaces ok (${needed.length})`)
   }
   await tick(() => ctl.setTab('dashboard'))
+
+  // The equity curve carries a net-worth line wherever the owned side was
+  // recorded, and nothing where it was not.
+  {
+    const { equitySeries } = await server.ssrLoadModule('/src/lib/calc.js')
+    const s = equitySeries(STATE)
+    if (s.length !== 3) throw new Error(`net worth: expected 3 snapshot points, got ${s.length}`)
+    if (s[0].net !== null) throw new Error('net worth: a point with no owned side must be null, not 0')
+    // 5200 + 300 broker, + 7073.30 outside, − 59500 owed.
+    const want = 5200 + 300 + 7073.3 - 59500
+    if (Math.abs(s[2].net - want) > 0.005) throw new Error(`net worth: expected ${want}, got ${s[2].net}`)
+    if (s[2].net >= 0) throw new Error('net worth: this fixture owes more than it owns and must read negative')
+    console.log(`  net worth  ${s.filter(p => p.net != null).length}/3 points carry net, earliest stays null (${s[2].net.toFixed(2)})`)
+  }
 
   // Private mode, driven through the store exactly as the toggle does.
   //

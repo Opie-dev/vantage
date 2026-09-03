@@ -10,7 +10,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import * as api from './api'
-import { EMPTY_STATE, incomeOutlook } from './calc'
+import { EMPTY_STATE, incomeOutlook, netWorth } from './calc'
 import { setPrivate as setFormatPrivate } from './format'
 
 export const TABS = [
@@ -154,6 +154,37 @@ export function VantageProvider({ children }) {
   const latest = useRef(state)
   latest.current = state
 
+  /**
+   * Record today's owned side, so the equity curve can become a net-worth curve.
+   *
+   * WHY THE CLIENT WRITES THIS. An asset balance is a running sum the server
+   * could manage in SQL, but a liability is an amortisation schedule derived
+   * from five fields, and calc.js is the single source of truth for that math.
+   * A second implementation on the server would be a second answer to "what do
+   * you owe", and the two would drift.
+   *
+   * NOTHING RECORDED IS NOT ZERO. With no accounts and no commitments the honest
+   * value is "not known", which is what the nullable columns mean — so this
+   * writes nothing rather than asserting a confident RM 0 on both sides.
+   *
+   * Fire-and-forget, and silent on failure. A missing point leaves a gap in a
+   * chart; a toast about one would interrupt the owner over something they did
+   * not ask for and cannot act on.
+   */
+  const recordOwned = useCallback(next => {
+    if (!next.assets?.length && !next.commitments?.length) return
+    const n = netWorth(next)
+    const p2 = v => String(v).padStart(2, '0')
+    const d = new Date()
+    const today = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+    const row = (next.snapshots || []).find(s => s.date === today)
+    // A cent of tolerance: re-posting an identical figure on every refresh would
+    // be a request per reload for a row that already says the right thing.
+    const near = (a, b) => a != null && Math.abs(a - b) < 0.01
+    if (row && near(row.assets_rm, n.assetsRM) && near(row.liabilities_rm, n.owedRM)) return
+    api.saveOwnedSnapshot({ assets_rm: n.assetsRM, liabilities_rm: n.owedRM }).catch(() => {})
+  }, [])
+
   const reload = useCallback(async () => {
     setRefreshing(true)
     try {
@@ -161,6 +192,7 @@ export function VantageProvider({ children }) {
       setState(next)
       setError(null)
       setLocked(false)
+      recordOwned(next)
       return next
     } catch (e) {
       // A 401 is not a failure to report — it means the app is locked and the
@@ -176,7 +208,9 @@ export function VantageProvider({ children }) {
       setRefreshing(false)
       setLoading(false)
     }
-  }, [])
+    // recordOwned is stable, so reload's identity does not change — which matters
+    // because the value memo below depends on it.
+  }, [recordOwned])
 
   useEffect(() => {
     reload().catch(() => {})

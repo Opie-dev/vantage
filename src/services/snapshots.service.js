@@ -63,4 +63,33 @@ async function save(body) {
   return { ok: true, written: byDate.size };
 }
 
-module.exports = { save };
+/**
+ * Record today's owned side.
+ *
+ * A SEPARATE ENTRY POINT rather than two more optional fields on save(). save()
+ * requires both broker columns and returns a fresh literal, which is what stops a
+ * malformed row reaching a TEXT date column — relaxing it so a caller could send
+ * assets alone would weaken the guard for every caller. This writes a different
+ * column pair for a different writer, so it gets its own door.
+ *
+ * The figures come from the CLIENT, deliberately. An asset balance is a running
+ * sum this layer could manage in SQL, but a liability is an amortisation
+ * schedule derived from five fields, and calc.js is the single source of truth
+ * for that math. A second implementation here would be a second answer to "what
+ * do you owe", and the two would drift.
+ */
+async function saveOwned(body) {
+  const num = (v, name) => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) throw badRequest(`${name} must be a number`);
+    if (n < 0) throw badRequest(`${name} cannot be negative`);
+    return n;
+  };
+  const assets_rm = num(body && body.assets_rm, 'assets_rm');
+  const liabilities_rm = num(body && body.liabilities_rm, 'liabilities_rm');
+
+  await transaction(client => snapshots.upsertOwned(client, assets_rm, liabilities_rm));
+  return { ok: true, assets_rm, liabilities_rm };
+}
+
+module.exports = { save, saveOwned };
