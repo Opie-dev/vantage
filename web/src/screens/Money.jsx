@@ -34,7 +34,6 @@ import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 import {
-  EXPENSE_LABEL,
   SPEND_UNKNOWN,
   deductionsOf,
   expensesFor,
@@ -355,117 +354,6 @@ function CommitmentRow({ r, onEdit, onRemove }) {
  * readings land when the owner types them, so "over 38 days" is the truth and
  * "this month" would not be.
  */
-/**
- * What was logged this month, by category — and how much of it is missing.
- *
- * THE RECONCILIATION IS WHY THIS IS DEFENSIBLE. commitments-and-income-plan.md §2
- * argued against an expense log because one gets abandoned and then silently
- * under-reports. The residual is the answer: it knows what actually left the
- * wallets without anything being entered, so the log can be measured against it
- * and told to say when it has gone stale. A log that reports its own
- * incompleteness is a different animal from one that quietly lies.
- */
-function ExpenseBreakdown({ ex, onAdd, onEdit, onRemove }) {
-  const missing = ex.unloggedRM != null && ex.unloggedRM > 1
-  return (
-    <Card className="gap-3 py-4">
-      <CardContent className="px-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="eyebrow">Spent this month</span>
-          <Button size="sm" variant="outline" onClick={() => onAdd()}>
-            <PlusIcon />
-            Add expense
-          </Button>
-        </div>
-
-        <div className="num mt-2 text-[26px] leading-none font-semibold tracking-[-0.02em]">
-          {fmt(ex.loggedRM, 'MYR')}
-        </div>
-        <p className="text-faint mt-1.5 text-[11.5px]">
-          {ex.count} {ex.count === 1 ? 'entry' : 'entries'} recorded
-        </p>
-
-        {/* The gap between what was typed and what actually left. Only shown when
-            there is a residual to compare against — a log with nothing checking
-            it is still a perfectly usable log. */}
-        {ex.coveragePct != null ? (
-          <div
-            className={`mt-3 border-l-2 pl-3 ${missing ? 'border-cash' : 'border-gain'}`}
-          >
-            <p className="text-[12.5px] leading-relaxed">
-              {missing ? (
-                <>
-                  About <b className="num text-cash font-semibold">{fmt(ex.unloggedRM, 'MYR')}</b>{' '}
-                  left your wallet without being logged —{' '}
-                  <b className="num font-semibold">{pct1(ex.coveragePct)}</b> of what actually went
-                  out is here. Not a judgement, just the arithmetic: the app can see the total
-                  without being told, so it can tell you what the list is missing.
-                </>
-              ) : (
-                <>
-                  This matches what actually left your wallet, so the list looks complete for{' '}
-                  {ex.spend.from} to {ex.spend.to}.
-                </>
-              )}
-            </p>
-          </div>
-        ) : null}
-
-        {ex.categories.length ? (
-          <div className="mt-3.5 grid gap-1.5">
-            {ex.categories.map(c => (
-              <div key={c.category} className="grid gap-1">
-                <div className="flex items-baseline justify-between gap-2 text-[12.5px]">
-                  <span className="text-muted-foreground">{c.label}</span>
-                  <span className="num">
-                    {fmt(c.amountRM, 'MYR')}
-                    <span className="text-faint ml-1.5 text-[11px]">{pct1(c.share * 100)}</span>
-                  </span>
-                </div>
-                <Progress value={c.share * 100} aria-label={`${c.label} ${pct1(c.share * 100)}`} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted-foreground mt-3 text-[12.5px] leading-relaxed">
-            Nothing recorded this month. Rent, insurance and subscriptions do not belong here —
-            they are commitments, and entering them twice would count them twice.
-          </p>
-        )}
-
-        {ex.rows.length ? (
-          <div className="border-hairline mt-3.5 border-t pt-2.5">
-            <span className="eyebrow">Recent</span>
-            <div className="mt-1.5 grid gap-0.5">
-              {ex.rows.slice(0, 6).map(e => (
-                <div key={e.id} className="flex items-baseline gap-2 text-[12.5px]">
-                  <span className="num text-muted-foreground w-[74px] shrink-0">{dfmt(e.date)}</span>
-                  <span className="truncate">{EXPENSE_LABEL[e.category] || e.category}</span>
-                  {e.note ? <span className="text-faint truncate text-[11.5px]">{e.note}</span> : null}
-                  <span className="num ml-auto shrink-0">{fmt(e.amount, e.currency)}</span>
-                  <RowAction
-                    icon={PencilIcon}
-                    label={`Edit the ${dfmt(e.date)} expense`}
-                    onClick={() => onEdit(e)}
-                  />
-                  <RowAction
-                    icon={TrashIcon}
-                    label={`Remove the ${dfmt(e.date)} expense`}
-                    onClick={() => onRemove(e.id)}
-                  />
-                </div>
-              ))}
-            </div>
-            {ex.rows.length > 6 ? (
-              <p className="text-faint mt-1.5 text-[11px]">+{ex.rows.length - 6} more this month</p>
-            ) : null}
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
-  )
-}
-
 function LivingCost({ spend }) {
   if (spend.reason === SPEND_UNKNOWN.NO_WALLET) {
     return (
@@ -521,8 +409,7 @@ export default function Money() {
     openCommitment,
     openIncome,
     openIncomeEvent,
-    openExpense,
-    deleteExpense,
+    setTab,
     deleteIncomeSource,
     deleteIncomeEvent,
     deleteCommitment,
@@ -623,6 +510,22 @@ export default function Money() {
                 )}
               </p>
               {hasIncome ? <LivingCost spend={spend} /> : null}
+              {/* A pointer, not a second copy. The breakdown lives on its own
+                  screen; what belongs here is how much of the figure above has
+                  actually been itemised. */}
+              {ex.count ? (
+                <p className="text-faint mt-2 text-[11.5px]">
+                  <span className="num">{fmt(ex.loggedRM, 'MYR')}</span> of it is itemised across{' '}
+                  {ex.count} {ex.count === 1 ? 'entry' : 'entries'} —{' '}
+                  <button
+                    type="button"
+                    className="text-muted-foreground underline underline-offset-2"
+                    onClick={() => setTab('expenses')}
+                  >
+                    see Expenses
+                  </button>
+                </p>
+              ) : null}
             </div>
 
             {hasIncome ? (
@@ -658,15 +561,6 @@ export default function Money() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Directly under the waterfall, because it is the line the waterfall
-          stops one step short of: what living actually cost. */}
-      <ExpenseBreakdown
-        ex={ex}
-        onAdd={() => openExpense()}
-        onEdit={e => openExpense(e)}
-        onRemove={id => deleteExpense(id)}
-      />
 
       <div className="grid gap-3 lg:grid-cols-2">
         <Card className="gap-3">

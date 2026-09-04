@@ -74,6 +74,13 @@ const lastThursday = (() => {
   while (new Date(t).getUTCDay() !== 4 || isoOf(t + DAY) > localToday) t -= DAY
   return t
 })()
+/** A day in whatever month it is today — for fixtures a month-scoped screen reads. */
+const thisMonthDay = d => {
+  const t = new Date(NOW)
+  const p2 = n => String(n).padStart(2, '0')
+  return `${t.getFullYear()}-${p2(t.getMonth() + 1)}-${p2(d)}`
+}
+
 const exOn = k => isoOf(lastThursday - k * 7 * DAY)
 const payOn = k => isoOf(lastThursday - k * 7 * DAY + DAY)
 
@@ -139,6 +146,15 @@ const STATE = {
   // the shape the real table has — columns added partway through a history — and
   // it is what proves equitySeries() leaves `net` null where nothing was recorded
   // instead of drawing a dive to zero on the day the feature shipped.
+  // Pinned to the FIRST DAYS OF THE CURRENT MONTH, not ago(n). The Expenses
+  // screen opens on the current month, and ago(1)/ago(2) fall into the previous
+  // one for the first days of every month — the screen would then render its
+  // empty state and the assertion below would fail on about a tenth of all days.
+  expenses: [
+    { id: 1, date: thisMonthDay(1), amount: 186.4, currency: 'MYR', category: 'GROCERIES', note: 'Jaya Grocer', asset_id: null, source: 'manual' },
+    { id: 2, date: thisMonthDay(2), amount: 60, currency: 'MYR', category: 'FUEL', note: '', asset_id: null, source: 'manual' },
+    { id: 3, date: thisMonthDay(3), amount: 38.9, currency: 'MYR', category: 'EATING_OUT', note: 'lunch', asset_id: null, source: 'manual' },
+  ],
   snapshots: [
     { date: ago(3), value_rm: 4800, cash_rm: 300, assets_rm: null, liabilities_rm: null },
     { date: ago(2), value_rm: 5000, cash_rm: 300, assets_rm: 7073.3, liabilities_rm: 60000 },
@@ -402,7 +418,7 @@ try {
   )
 
   // every screen must mount and render something
-  const SCREENS = ['dashboard', 'positions', 'instruments', 'history', 'wallet', 'calendar', 'goals', 'assets', 'money', 'settings']
+  const SCREENS = ['dashboard', 'positions', 'instruments', 'history', 'wallet', 'calendar', 'goals', 'assets', 'money', 'expenses', 'settings']
   for (const id of SCREENS) {
     await tick(() => ctl.setTab(id))
     const panes = document.querySelectorAll('[data-slot="tabs-content"][data-state="active"]')
@@ -476,6 +492,12 @@ try {
     // RM 1,800.00 claimed is 500 + 300 + the balance goal's own 1,000, so this
     // also catches a balance goal being dropped from the funding waterfall.
     ['goals', ['moomoo', 'Claimed each month', 'all funded', 'RM 1,800.00', 'in ASB', 'asb']],
+    // The screen totals 186.40 + 60.00 + 38.90 and splits three ways. 'Every
+    // entry' proves the list rendered rather than only the summary, and the
+    // wallet prompt proves the reconciliation degrades to a sentence rather than
+    // a number when there is no reading to anchor it — the fixture has no wallet.
+    ['expenses', ['Spent', 'RM 285.30', 'By category', 'Groceries', 'Eating out', 'Every entry',
+      'Jaya Grocer', 'Mark the account you spend from']],
   ]
   for (const [id, needed] of surfaces) {
     await tick(() => ctl.setTab(id))

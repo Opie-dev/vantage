@@ -31,6 +31,7 @@ import {
   LayersIcon,
   LayoutDashboardIcon,
   BanknoteIcon,
+  ReceiptTextIcon,
   EyeIcon,
   EyeOffIcon,
   MoonIcon,
@@ -105,6 +106,7 @@ import CalendarScreen from '@/screens/Calendar'
 import Goals, { KIND_OPTIONS, WHOLE, isBalance, isIncome } from '@/screens/Goals'
 import Instruments from '@/screens/Instruments'
 import Assets from '@/screens/Assets'
+import Expenses from '@/screens/Expenses'
 import Money from '@/screens/Money'
 import Settings from '@/screens/Settings'
 
@@ -118,6 +120,7 @@ const SCREENS = {
   goals: Goals,
   assets: Assets,
   money: Money,
+  expenses: Expenses,
   settings: Settings,
 }
 
@@ -135,6 +138,7 @@ const NAV_ICON = {
   goals: TargetIcon,
   assets: PiggyBankIcon,
   money: BanknoteIcon,
+  expenses: ReceiptTextIcon,
   settings: SettingsIcon,
 }
 

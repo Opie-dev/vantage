@@ -23,6 +23,7 @@ export const TABS = [
   { id: 'goals', label: 'Goals' },
   { id: 'assets', label: 'Assets' },
   { id: 'money', label: 'Money' },
+  { id: 'expenses', label: 'Expenses' },
   { id: 'settings', label: 'Settings' },
 ]
 
