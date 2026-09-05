@@ -504,7 +504,14 @@ function Holdings({ state, pos, fees, drift, basis, onOpen, isNew, hintFor }) {
           <table className="w-full text-[13px]">
             <thead>
               <tr>
-                <th scope="col" className={`${TH} w-full`}>
+                {/* NOT w-full. Giving the name column the slack pinned all six
+                    figures into a block against the right edge, each in about
+                    110px, with a third of the table empty to their left. With
+                    nothing claiming it, the browser shares the surplus out in
+                    proportion to what each column holds — which is what spaces
+                    the figures apart. The ledger's What column IS w-full, and
+                    should be: a note is prose and wants the room. */}
+                <th scope="col" className={TH}>
                   Holding
                 </th>
                 <th scope="col" className={`${TH} text-right`}>
