@@ -572,7 +572,49 @@ export const TINY_SHARE = 0.005
  * @returns {Array<{ name: string, value: number, color: string, share: number }>}
  *          `share` is a fraction 0..1.
  */
-export function allocation(S) {
+/**
+ * What the allocation donut is being asked about.
+ *
+ *   ALL       everything owned — the honest picture, and the default
+ *   BROKER    the moomoo account alone: positions plus its cash
+ *   OUTSIDE   the accounts outside moomoo
+ *
+ * The scopes exist because ALL answers "where is my money" and buries the
+ * question the broker screens are about. With EPF at 42% of everything, the
+ * split between three ETFs — the only part of this that gets traded — is
+ * squeezed into a third of the ring. Neither view is more true; they are
+ * different questions, and one chart can only answer one at a time.
+ */
+export const ALLOC_SCOPE = { ALL: 'all', BROKER: 'broker', OUTSIDE: 'outside' }
+
+export const ALLOC_SCOPE_LABEL = {
+  all: 'Everything',
+  broker: 'moomoo',
+  outside: 'Outside',
+}
+
+/**
+ * Allocation slices for the donut, RM-combined, largest slot order preserved.
+ *
+ * ACCOUNTS OUTSIDE MOOMOO ARE SLICES TOO. Without them the donut showed three US
+ * ETFs and a cash sliver and read as a wildly concentrated portfolio, while the
+ * net-worth strip directly above it said two thirds of the money was somewhere
+ * else. One screen, two answers.
+ *
+ * Accounts keep the colours ownedSlots() gives them on the strip, so an account
+ * is the same colour wherever it appears. That walk starts past the instruments
+ * precisely so a card avoids a ticker's dot, which matters here in a way it never
+ * did on the strip: this is the one chart where tickers and accounts sit together.
+ *
+ * SHARES ARE OF THE SCOPE, not of everything owned. A slice reading 27% under
+ * "moomoo" means 27% of the broker account, and the card's centre total says
+ * which whole that is — a percentage of an unstated denominator is the easiest
+ * way for a chart to mislead.
+ *
+ * @returns {Array<{ name: string, value: number, color: string, share: number }>}
+ *          `share` is a fraction 0..1.
+ */
+export function allocation(S, scope = ALLOC_SCOPE.ALL) {
   const { pos, cashRM } = portfolio(S)
   const parts = pos
     .slice()
@@ -583,10 +625,18 @@ export function allocation(S) {
   // an account is the same colour here as on the net-worth strip and neither
   // chart can fold differently from the other. `broker` is dropped: the donut
   // breaks the broker open into its own positions, which is its whole job.
-  const accounts = totalOwned(S).parts.filter(x => x.key !== 'broker')
+  const accounts = totalOwned(S).parts
+    .filter(x => x.key !== 'broker')
+    .map(({ name, value, color }) => ({ name, value, color }))
 
-  const all = [...parts, ...accounts.map(({ name, value, color }) => ({ name, value, color }))]
-  if (cashRM > 0) all.push({ name: 'Cash', value: cashRM, color: 'var(--faint)' })
+  const all = []
+  if (scope !== ALLOC_SCOPE.OUTSIDE) {
+    all.push(...parts)
+    // Broker cash belongs to the broker scope, not to the outside one — it is
+    // the money sitting in the moomoo account waiting to be invested.
+    if (cashRM > 0) all.push({ name: 'Cash', value: cashRM, color: 'var(--faint)' })
+  }
+  if (scope !== ALLOC_SCOPE.BROKER) all.push(...accounts)
 
   const total = all.reduce((s, p) => s + p.value, 0) || 1
   return all.map(p => ({ ...p, share: p.value / total }))

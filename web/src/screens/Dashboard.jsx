@@ -28,7 +28,7 @@
  * one the eye lands on first, which is a preference and not a fact.
  */
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -44,6 +44,7 @@ import {
 } from 'recharts'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -53,6 +54,8 @@ import {
   DASHBOARD_THEME,
   PNL_BASIS,
   PNL_BASIS_LABEL,
+  ALLOC_SCOPE,
+  ALLOC_SCOPE_LABEL,
   allocation,
   dashboardTheme,
   dividendMonths,
@@ -367,14 +370,49 @@ function AllocationTooltip({ active, payload }) {
   )
 }
 
-function AllocationCard({ parts }) {
+/** One scope chip, matching the History filter chips rather than inventing a control. */
+function ScopeChip({ scope, active, onPick }) {
+  const on = scope === active
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={on ? 'default' : 'outline'}
+      aria-pressed={on}
+      onClick={() => onPick(scope)}
+      className="h-6 rounded-full px-2.5 text-[11px] font-semibold"
+    >
+      {ALLOC_SCOPE_LABEL[scope]}
+    </Button>
+  )
+}
+
+/**
+ * The allocation donut, scoped.
+ *
+ * The scope lives here rather than in the Dashboard body because nothing else
+ * needs it — it is a way of looking at one chart, not a property of the data.
+ *
+ * A scope with nothing in it still renders its chips, so switching to an empty
+ * one is visibly a choice you made rather than the card breaking.
+ */
+function AllocationCard({ state }) {
+  const [scope, setScope] = useState(ALLOC_SCOPE.ALL)
+  const parts = useMemo(() => allocation(state, scope), [state, scope])
   const slices = parts.filter(p => p.value > 0)
   const total = slices.reduce((s, p) => s + p.value, 0)
 
   return (
     <Card className="gap-3">
       <CardHeader className="px-4">
-        <span className="eyebrow">Allocation</span>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <span className="eyebrow">Allocation</span>
+          <div className="flex flex-wrap gap-1">
+            {[ALLOC_SCOPE.ALL, ALLOC_SCOPE.BROKER, ALLOC_SCOPE.OUTSIDE].map(s => (
+              <ScopeChip key={s} scope={s} active={scope} onPick={setScope} />
+            ))}
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="px-4 pb-1">
         {!slices.length ? (
@@ -1267,7 +1305,7 @@ function PremiumPanel({ state, pos }) {
  * full-bleed shell. Nothing in this function may change without the same change
  * being justified on its own; the theme switch is not a licence to redesign it.
  */
-function IncomeLayout({ ticker, lastSync, fx, outlook, monthLabel, p, divMonths, monthsPaid, best, runRate, basis, series, parts, goals }) {
+function IncomeLayout({ state, ticker, lastSync, fx, outlook, monthLabel, p, divMonths, monthsPaid, best, runRate, basis, series, goals }) {
   return (
     <>
       {/* Edge to edge: the shell's padding is re-applied per block, so the
@@ -1324,7 +1362,7 @@ function IncomeLayout({ ticker, lastSync, fx, outlook, monthLabel, p, divMonths,
 
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <EquityCard series={series} />
-          <AllocationCard parts={parts} />
+          <AllocationCard state={state} />
         </div>
 
         {goals.length > 0 && (
@@ -1360,7 +1398,7 @@ function IncomeLayout({ ticker, lastSync, fx, outlook, monthLabel, p, divMonths,
  * being paid to buy in, TwoTruths, and the goals. TwoTruths is unchanged and still
  * present — this layout may reorder the two truths but it does not get to drop one.
  */
-function EquityLayout({ state, ticker, lastSync, fx, basis, p, series, parts, divMonths, outlook, monthLabel, dayLabel, monthsPaid, runRate, goals }) {
+function EquityLayout({ state, ticker, lastSync, fx, basis, p, series, divMonths, outlook, monthLabel, dayLabel, monthsPaid, runRate, goals }) {
   const monthIncome = outlook.received + outlook.estimated
   // Run rate over what was put in — "what this portfolio pays on the money in it".
   // Against cost, not market value: a falling price would otherwise flatter the
@@ -1416,7 +1454,7 @@ function EquityLayout({ state, ticker, lastSync, fx, basis, p, series, parts, di
         <Holdings state={state} p={p} />
 
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <AllocationCard parts={parts} />
+          <AllocationCard state={state} />
           <IncomeMini months={divMonths} projected={outlook.estimated} monthLabel={monthLabel} />
         </div>
 
@@ -1457,7 +1495,6 @@ function DashboardBody() {
   const basis = pnlBasis(state)
   const theme = dashboardTheme(state)
   const p = useMemo(() => portfolio(state, basis), [state, basis])
-  const parts = useMemo(() => allocation(state), [state])
   const series = useMemo(() => equitySeries(state), [state])
   const divMonths = useMemo(() => dividendMonths(state), [state])
   const now = useMemo(() => new Date(), [])
@@ -1492,7 +1529,6 @@ function DashboardBody() {
         basis={basis}
         p={p}
         series={series}
-        parts={parts}
         divMonths={divMonths}
         outlook={outlook}
         monthLabel={monthLabel}
@@ -1506,6 +1542,7 @@ function DashboardBody() {
 
   return (
     <IncomeLayout
+      state={state}
       ticker={ticker}
       lastSync={lastSync}
       fx={fx}
@@ -1518,7 +1555,6 @@ function DashboardBody() {
       runRate={runRate}
       basis={basis}
       series={series}
-      parts={parts}
       goals={goals}
     />
   )
