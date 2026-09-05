@@ -138,6 +138,9 @@ async function ingest(payload) {
   } = payload;
 
   return transaction(async client => {
+    // Postgres decides what day it is, so the app and the database never
+    // disagree about it — the same reason snapshots.todayISO() exists.
+    const today = await snapshots.todayISO();
     const ordersAdded = await ingestOrders(client, orders);
     await ingestQuotes(client, quotes);
     // The instrument must exist first; the quantity is then kept BESIDE the
@@ -158,6 +161,34 @@ async function ingest(payload) {
     }
     // A sync always sends its full list, so anything absent has been closed.
     await brokerPositions.keepOnly(client, heldIds);
+
+    // RECOGNISE A HOLDING NOTHING IN THE LEDGER EXPLAINS.
+    //
+    // Only when the ledger explains NOTHING about the instrument — not when it
+    // merely explains less. A partial gap is a deal that fell outside the synced
+    // window and may still arrive; writing a plug for it would double the
+    // position the day it does. A total absence is different: a free promotional
+    // share has no order behind it and never will, however far back the window
+    // reaches, so waiting for one means waiting for ever.
+    //
+    // Marked `source = 'position'`, never 'api'. It did not come from a deal, and
+    // the History badge has to be able to say so — including about its date,
+    // which is the day it was first seen because the position list carries none.
+    const recognised = [];
+    for (const p of positions) {
+      const qty = Number(p.qty) || 0;
+      if (qty <= 0) continue;
+      const found = await instruments.idByTicker(client, p.ticker);
+      if (!found) continue;
+      if (await transactions.countForInstrument(client, found.id)) continue;
+      const added = await transactions.insertFromPosition(client, found.id, {
+        ticker: instruments.norm(p.ticker),
+        qty,
+        avgCost: Number(p.avg_cost) || 0,
+        date: today,
+      });
+      if (added) recognised.push(p.ticker);
+    }
     const { dividendsAdded, cashAdded } = await ingestCashFlows(client, cash_flows);
     // After positions, so a newly-held instrument already exists to hang facts off.
     const fundsUpdated = await ingestFundMetrics(client, fund_metrics);
@@ -178,6 +209,8 @@ async function ingest(payload) {
 
     return {
       ok: true, ordersAdded, dividendsAdded, cashAdded, fundsUpdated, distributionsAdded,
+      // Named so it can never be mistaken for a synced deal in a log or a toast.
+      recognisedFromPositions: recognised,
       unexplainedCash: dividendsAdded + cashAdded + ordersAdded === 0 ? drift : [],
     };
   });

@@ -34,4 +34,42 @@ async function insertSyncedDividend(q, instrumentId, { amount, date, extId }) {
   return r.rowCount;
 }
 
-module.exports = { listAll, insertManual, remove, insertSyncedTrade, insertSyncedDividend };
+/** Whether the ledger explains anything at all about this instrument. */
+async function countForInstrument(q, instrumentId) {
+  const r = await q.query(
+    `SELECT count(*)::int AS n FROM transactions WHERE instrument_id=$1 AND side <> 'DIV'`,
+    [instrumentId]);
+  return r.rows[0].n;
+}
+
+/**
+ * A holding the broker reports that no deal explains.
+ *
+ * `source = 'position'` and NOT 'api', because this did not come from a deal —
+ * it is the app taking the broker's word for a quantity it cannot otherwise
+ * account for. A free promotional share is the case that needs it: it appears in
+ * the position list with no order behind it, so nothing in the deal history will
+ * ever explain it, however far back the window reaches.
+ *
+ * THE DATE IS THE DAY IT WAS FIRST SEEN, because the broker's position list does
+ * not carry one. That is a real inaccuracy — the share may have arrived months
+ * earlier — and the reason the source is a distinct value rather than 'api': the
+ * History badge says where the row came from, so the date can be read with the
+ * scepticism it deserves and corrected by hand.
+ *
+ * ext_id keeps it to one row per instrument for ever. If the broker's quantity
+ * later changes, the gap reopens and the drift report says so rather than this
+ * quietly writing a second row.
+ */
+async function insertFromPosition(q, instrumentId, { ticker, qty, avgCost, date }) {
+  const r = await q.query(
+    `INSERT INTO transactions (instrument_id,side,qty,price,fees,trade_date,source,ext_id)
+     VALUES ($1,'BUY',$2,$3,0,$4,'position',$5) ON CONFLICT (ext_id) DO NOTHING`,
+    [instrumentId, qty, avgCost || 0, date, `moomoo:pos:${ticker}`]);
+  return r.rowCount;
+}
+
+module.exports = {
+  listAll, insertManual, remove, insertSyncedTrade, insertSyncedDividend,
+  countForInstrument, insertFromPosition,
+};
