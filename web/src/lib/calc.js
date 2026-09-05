@@ -42,6 +42,7 @@ export const EMPTY_STATE = {
   assetEntries: [], declaredRates: [],
   commitments: [],
   expenses: [],
+  brokerPositions: [],
   commitmentPayments: [],
   incomeSources: [],
   incomeEvents: [],
@@ -169,6 +170,70 @@ export function positions(S) {
 }
 
 /** The open position for one ticker, or `{ qty: 0 }`-shaped fallback. */
+/**
+ * Below this the two agree. A share count is a float that has been through
+ * dozens of partial fills — BITO carries 5.68e-14 after 36 buys and 2 sells —
+ * and calling that a discrepancy would cry wolf on every closed position.
+ */
+const QTY_EPSILON = 1e-6
+
+/**
+ * Where the broker and the ledger disagree about what you hold.
+ *
+ * THE LEDGER IS STILL THE SOURCE OF TRUTH. positions() derives holdings from
+ * transactions and nothing here changes that. A broker quantity is EVIDENCE the
+ * ledger is incomplete, not a replacement for it — the same relationship the
+ * expense log has with the spending residual.
+ *
+ * Three shapes of disagreement, and the first is the one that prompted this:
+ *
+ *   missing   the broker holds it, the ledger explains none of it. A free
+ *             promotional share does exactly this: it arrives as a position with
+ *             no deal behind it, so no transaction exists to derive from.
+ *   short     the ledger explains less than the broker reports — a buy that fell
+ *             outside the synced order window.
+ *   over      the ledger explains more — a sell that never came through.
+ *
+ * @returns {Array<{ticker, brokerQty, ledgerQty, diff, kind, avgCost, fetchedAt}>}
+ */
+export function brokerDrift(S) {
+  const ledger = new Map(positions(S).map(p => [p.t, p.qty]))
+  const seen = new Set()
+  const out = []
+
+  for (const b of S.brokerPositions || []) {
+    seen.add(b.ticker)
+    const ledgerQty = ledger.get(b.ticker) || 0
+    const brokerQty = Number(b.qty) || 0
+    const diff = brokerQty - ledgerQty
+    if (Math.abs(diff) <= QTY_EPSILON) continue
+    out.push({
+      ticker: b.ticker,
+      brokerQty,
+      ledgerQty,
+      diff,
+      kind: ledgerQty <= QTY_EPSILON ? 'missing' : diff > 0 ? 'short' : 'over',
+      avgCost: Number(b.avg_cost) || 0,
+      fetchedAt: b.fetched_at,
+    })
+  }
+
+  // A holding the ledger derives that the broker does not report at all. Only
+  // meaningful once a sync has actually run — with an empty table every position
+  // would look like a phantom, which is the opposite of useful.
+  if ((S.brokerPositions || []).length) {
+    for (const [ticker, qty] of ledger) {
+      if (seen.has(ticker) || qty <= QTY_EPSILON) continue
+      out.push({
+        ticker, brokerQty: 0, ledgerQty: qty, diff: -qty,
+        kind: 'over', avgCost: 0, fetchedAt: null,
+      })
+    }
+  }
+
+  return out.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+}
+
 export function positionOf(S, ticker) {
   return positions(S).find(p => p.t === ticker) || null
 }

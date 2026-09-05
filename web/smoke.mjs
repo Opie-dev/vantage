@@ -155,6 +155,13 @@ const STATE = {
     { id: 2, date: thisMonthDay(2), amount: 60, currency: 'MYR', category: 'FUEL', note: '', asset_id: null, source: 'manual' },
     { id: 3, date: thisMonthDay(3), amount: 38.9, currency: 'MYR', category: 'EATING_OUT', note: 'lunch', asset_id: null, source: 'manual' },
   ],
+  // What the broker last said it holds. ETCO and AAPL agree with the ledger;
+  // INCM is ten short, so exactly one drift row must render on Positions.
+  brokerPositions: [
+    { instrument_id: 1, ticker: 'ETCO', qty: 1000, avg_cost: 0.6, fetched_at: ago(0) },
+    { instrument_id: 2, ticker: 'AAPL', qty: 5, avg_cost: 210, fetched_at: ago(0) },
+    { instrument_id: 3, ticker: 'INCM', qty: 210, avg_cost: 20, fetched_at: ago(0) },
+  ],
   snapshots: [
     { date: ago(3), value_rm: 4800, cash_rm: 300, assets_rm: null, liabilities_rm: null },
     { date: ago(2), value_rm: 5000, cash_rm: 300, assets_rm: 7073.3, liabilities_rm: 60000 },
@@ -450,6 +457,11 @@ try {
     ['history', ['PENDING', 'moomoo', 'SYNCED', 'Savings', 'Income', 'What']],
     // The allocation scope chips, on the screen that owns them.
     ['dashboard', ['Allocation', 'Everything', 'Outside']],
+    // The drift card, on the screen it belongs to. 'a buy is missing' is the
+    // INCM short case; the explanatory line proves the card renders in full
+    // rather than just its heading.
+    ['positions', ['moomoo and your ledger disagree', 'INCM', 'a buy is missing',
+      'derived from your transactions']],
     ['wallet', ['INCM dividend', 'INCM withholding tax']],
     // The money layer. The fixture's salary lands on the 25th and the loans on
     // the 1st and 5th, so a grid with no money marks means moneyByDay() stopped
@@ -583,6 +595,44 @@ try {
     if (outside.some(p => p.name === 'ETCO')) throw new Error('allocation: a position leaked into the outside scope')
 
     console.log(`  allocation ${all.length} slices all / ${broker.length} moomoo / ${outside.length} outside, each summing to 100%`)
+  }
+
+  // The broker's own position count, against what the ledger can explain.
+  {
+    const { brokerDrift } = await server.ssrLoadModule('/src/lib/calc.js')
+
+    const d = brokerDrift(STATE)
+    if (d.length !== 1) throw new Error(`drift: expected 1 row from the fixture, got ${d.length}`)
+    if (d[0].ticker !== 'INCM' || d[0].kind !== 'short') {
+      throw new Error(`drift: expected INCM short, got ${d[0].ticker} ${d[0].kind}`)
+    }
+    if (Math.abs(d[0].diff - 10) > 1e-9) throw new Error(`drift: expected a gap of 10, got ${d[0].diff}`)
+
+    // A holding the broker reports and no transaction explains — the free-share
+    // case that prompted all of this. avg_cost 0 is what marks it as a gift.
+    const gift = JSON.parse(JSON.stringify(STATE))
+    gift.instruments.push({ id: 9, ticker: 'FREE', name: 'Gift', market: 'US', currency: 'USD' })
+    gift.brokerPositions.push({ instrument_id: 9, ticker: 'FREE', qty: 0.0153, avg_cost: 0, fetched_at: ago(0) })
+    const g = brokerDrift(gift).find(x => x.ticker === 'FREE')
+    if (!g || g.kind !== 'missing') throw new Error(`drift: a broker-only holding must read 'missing', got ${g && g.kind}`)
+    if (g.avgCost !== 0) throw new Error('drift: the zero cost is what lets the screen call it a free share')
+
+    // Float residue must NOT be a discrepancy. BITO carries 5.68e-14 in the real
+    // database after 36 buys and 2 sells; crying wolf on that would make the
+    // whole report ignorable.
+    const dust = JSON.parse(JSON.stringify(STATE))
+    dust.brokerPositions = [{ instrument_id: 1, ticker: 'ETCO', qty: 1000 + 5.68e-14, avg_cost: 0.6, fetched_at: ago(0) }]
+    if (brokerDrift(dust).some(x => x.ticker === 'ETCO')) {
+      throw new Error('drift: floating-point residue must not register as a gap')
+    }
+
+    // And with no sync ever run, every position would look like a phantom —
+    // the report has to stay silent rather than accuse the whole portfolio.
+    const fresh = JSON.parse(JSON.stringify(STATE))
+    fresh.brokerPositions = []
+    if (brokerDrift(fresh).length) throw new Error('drift: an empty broker table must report nothing')
+
+    console.log(`  drift      ${d.length} gap from the fixture, free-share case detected, residue ignored`)
   }
 
   // Expenses, and the reconciliation that makes a hand-kept log defensible.

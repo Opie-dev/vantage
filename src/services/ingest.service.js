@@ -18,6 +18,7 @@
  */
 const { transaction } = require('../db');
 const instruments = require('../models/instruments.model');
+const brokerPositions = require('../models/brokerPositions.model');
 const transactions = require('../models/transactions.model');
 const cash = require('../models/cash.model');
 const prices = require('../models/prices.model');
@@ -139,9 +140,24 @@ async function ingest(payload) {
   return transaction(async client => {
     const ordersAdded = await ingestOrders(client, orders);
     await ingestQuotes(client, quotes);
-    // Positions only need their instrument to exist — quantity itself is derived
-    // from the transaction log on the client, never stored.
-    for (const p of positions) await instruments.ensure(client, p);
+    // The instrument must exist first; the quantity is then kept BESIDE the
+    // ledger rather than in it. positions() still derives holdings from the
+    // transaction log and nothing here changes that — what the broker reports is
+    // evidence the ledger may be incomplete, not a replacement for it.
+    //
+    // Discarding it, which is what this used to do, is how a free promotional
+    // share stayed invisible: the broker reported qty 0.0153 with no deal behind
+    // it, so no transaction existed and no position was drawn.
+    const heldIds = [];
+    for (const p of positions) {
+      const instrument = await instruments.ensure(client, p);
+      const id = instrument && instrument.id;
+      if (id == null) continue;
+      heldIds.push(id);
+      await brokerPositions.upsert(client, id, Number(p.qty) || 0, Number(p.avg_cost) || 0);
+    }
+    // A sync always sends its full list, so anything absent has been closed.
+    await brokerPositions.keepOnly(client, heldIds);
     const { dividendsAdded, cashAdded } = await ingestCashFlows(client, cash_flows);
     // After positions, so a newly-held instrument already exists to hang facts off.
     const fundsUpdated = await ingestFundMetrics(client, fund_metrics);

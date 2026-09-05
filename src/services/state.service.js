@@ -11,6 +11,7 @@ const assetEntries = require('../models/assetEntries.model');
 const declaredRates = require('../models/declaredRates.model');
 const commitments = require('../models/commitments.model');
 const expensesModel = require('../models/expenses.model');
+const brokerPositions = require('../models/brokerPositions.model');
 const commitmentPayments = require('../models/commitmentPayments.model');
 const income = require('../models/income.model');
 const snapshots = require('../models/snapshots.model');
@@ -37,6 +38,7 @@ async function getState() {
     // client from each loan's terms; payments carry only the deviations.
     commitments: await commitments.listAll(),
     expenses: await expensesModel.listAll(),
+    brokerPositions: await brokerPositions.listAll(),
     commitmentPayments: await commitmentPayments.listAll(),
     // What arrives. Net pay is NOT stored: it is gross less the deducted half
     // of the statutory block, derived on the client so the two column groups

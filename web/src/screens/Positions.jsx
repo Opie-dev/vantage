@@ -46,7 +46,14 @@ import {
 } from '@/components/ui/table'
 
 import { useVantage } from '@/lib/store'
-import { PNL_BASIS_LABEL, feesByTicker, pnlBasis, positionsWithIncome, slotColor } from '@/lib/calc'
+import {
+  PNL_BASIS_LABEL,
+  brokerDrift,
+  feesByTicker,
+  pnlBasis,
+  positionsWithIncome,
+  slotColor,
+} from '@/lib/calc'
 import { fmt, fmtS, fq, pct0, pct1, pctS, toneClass } from '@/lib/format'
 
 /** A right-aligned figure, or an em dash when there is no price to work from. */
@@ -156,14 +163,67 @@ function PositionRow({ p, fees }) {
   )
 }
 
+/**
+ * Where the broker and the ledger disagree about what you hold.
+ *
+ * The ledger stays the source of truth — this reports a gap rather than closing
+ * it, because closing it silently would mean inventing a transaction that never
+ * happened. What it buys is that the gap is impossible to miss: a free
+ * promotional share sat unnoticed until someone counted positions by hand.
+ */
+function BrokerDrift({ drift, onAdd }) {
+  if (!drift.length) return null
+  return (
+    <Card className="border-cash/40 gap-2 py-3.5">
+      <CardContent className="px-4">
+        <span className="eyebrow">moomoo and your ledger disagree</span>
+        <div className="mt-2 grid gap-1.5">
+          {drift.map(d => (
+            <div key={d.ticker} className="flex flex-wrap items-baseline gap-x-2 text-[12.5px]">
+              <b className="num font-semibold">{d.ticker}</b>
+              {d.kind === 'missing' ? (
+                <span className="text-muted-foreground">
+                  moomoo holds <span className="num">{fq(d.brokerQty)}</span>, nothing in your
+                  transactions accounts for it
+                  {d.avgCost === 0 ? ' — cost 0.00, so probably a free share' : ''}
+                </span>
+              ) : d.kind === 'short' ? (
+                <span className="text-muted-foreground">
+                  moomoo holds <span className="num">{fq(d.brokerQty)}</span>, your transactions
+                  explain <span className="num">{fq(d.ledgerQty)}</span> — a buy is missing
+                </span>
+              ) : (
+                <span className="text-muted-foreground">
+                  your transactions explain <span className="num">{fq(d.ledgerQty)}</span>, moomoo
+                  reports <span className="num">{fq(d.brokerQty)}</span> — a sell is missing
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="text-faint mt-2.5 text-[11.5px] leading-relaxed">
+          Positions are derived from your transactions, never from the broker&rsquo;s own count, so
+          a holding nothing explains is not drawn. Record the missing entry and it appears.
+        </p>
+        <Button size="sm" variant="outline" className="mt-2.5" onClick={onAdd}>
+          <PlusIcon />
+          Add transaction
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Positions() {
   const { state, openTransaction } = useVantage()
   const basis = pnlBasis(state)
   const pos = useMemo(() => positionsWithIncome(state, basis), [state, basis])
   const fees = useMemo(() => feesByTicker(state), [state])
+  const drift = useMemo(() => brokerDrift(state), [state])
 
   return (
     <div className="grid gap-3">
+      <BrokerDrift drift={drift} onAdd={() => openTransaction()} />
       <div className="flex flex-wrap items-center gap-2">
         {basis === 'price' ? null : (
           <span className="text-faint text-[11.5px]">
