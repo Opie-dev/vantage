@@ -523,6 +523,36 @@ try {
     console.log(`  net worth  ${s.filter(p => p.net != null).length}/3 points carry net, earliest stays null (${s[2].net.toFixed(2)})`)
   }
 
+  // Declaration axis labels. Asserted on the formatter rather than on rendered
+  // ticks: recharts decides how many ticks fit, and a test that depends on that
+  // measures the chart library instead of the code.
+  {
+    const { dfmtAxis, monthYear, dfmtLong } = await server.ssrLoadModule('/src/lib/format.js')
+
+    // A semi-annual payer repeats its months across years — this is the case
+    // that was unreadable, with the axis showing "9 Feb … 10 Aug … 9 Feb".
+    const a = dfmtAxis('2019-02-09')
+    const b = dfmtAxis('2024-02-09')
+    if (a === b) throw new Error(`axis: two Februaries five years apart must differ, both read ${a}`)
+    if (!/19/.test(a) || !/24/.test(b)) throw new Error(`axis: the year must be in the label, got ${a} / ${b}`)
+
+    // A weekly payer puts several declarations in one month, so the DAY has to
+    // survive too — dropping it in favour of the year would just move the
+    // ambiguity rather than remove it.
+    const c = dfmtAxis('2026-03-05')
+    const d = dfmtAxis('2026-03-12')
+    if (c === d) throw new Error(`axis: two dates in one month must differ, both read ${c}`)
+
+    // The caption names the span in full years; the ticks abbreviate.
+    if (!/2019/.test(monthYear('2019-02-09'))) throw new Error('axis: the caption span wants a full year')
+    // And the single-year path still strips it, which is what it was right about.
+    if (/\d{4}/.test(dfmtLong('2026-02-09').replace(/\s\d{4}$/, ''))) {
+      throw new Error('axis: the single-year label must carry no year at all')
+    }
+
+    console.log(`  axis       ${a} vs ${b} distinguishable, ${c} vs ${d} distinguishable`)
+  }
+
   // Expenses, and the reconciliation that makes a hand-kept log defensible.
   // Built on a local copy for the same reason the spending block is: a wallet in
   // the shared fixture would move the Money and Calendar figures asserted above.

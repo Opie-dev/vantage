@@ -56,7 +56,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 import { useVantage } from '@/lib/store'
 import { declarationTrend, instrumentRows, slotColor, slotOf } from '@/lib/calc'
-import { dfmtLong, dtfmt, fmt, fq, pct1, pctS } from '@/lib/format'
+import { dfmtAxis, dfmtLong, dtfmt, fmt, fq, monthYear, pct1, pctS } from '@/lib/format'
 
 /** Declarations charted per fund. Forty covers roughly a year of a weekly payer. */
 const CHARTED = 40
@@ -214,6 +214,24 @@ function DeclarationTooltip({ active, payload, cur }) {
  */
 function DeclarationChart({ rows, cur, color, firstBought }) {
   const data = useMemo(() => [...rows].slice(0, CHARTED).reverse(), [rows])
+
+  /**
+   * Whether a tick has to carry its year.
+   *
+   * The label used to strip the year always, which is right for the funds this
+   * screen was built around: a weekly payer's forty declarations are nine months
+   * of one year, and "2026" on every tick is noise. It is wrong the moment a
+   * fund pays twice a year — AAPL's forty declarations span two decades, and the
+   * axis read "9 Feb … 10 Aug … 9 Feb … 10 Aug" with no way to tell 2008 from
+   * 2024.
+   *
+   * So the axis answers to the data rather than to an assumption about it.
+   */
+  const spansYears = useMemo(() => {
+    if (data.length < 2) return false
+    return data[0].ex_date.slice(0, 4) !== data[data.length - 1].ex_date.slice(0, 4)
+  }, [data])
+
   if (!data.length) return null
 
   // Only mark the entry when the fund was already declaring before it.
@@ -227,7 +245,11 @@ function DeclarationChart({ rows, cur, color, firstBought }) {
           <XAxis
             dataKey="ex_date"
             tick={{ fontSize: 10, fill: 'var(--faint)' }}
-            tickFormatter={v => dfmtLong(v).replace(/\s\d{4}$/, '')}
+            // The year appears only when the series needs it. Every fund here
+            // does today, but a fund that has only ever declared inside one year
+            // gains nothing from repeating it on every tick — which is what the
+            // original strip-the-year formatter was right about.
+            tickFormatter={v => (spansYears ? dfmtAxis(v) : dfmtLong(v).replace(/\s\d{4}$/, ''))}
             axisLine={false}
             tickLine={false}
             minTickGap={44}
@@ -299,6 +321,9 @@ function InstrumentCard({ row, state }) {
   const { instrument: i, pos, metrics: m, cur, gross, withheld, net, shareOfFund, payments, declarations } = row
   const color = slotColor(slotOf(state, i.ticker))
   const trend = declarationTrend(declarations, TREND_WINDOW)
+  // The same window the chart draws, oldest first, so the caption's span and the
+  // axis cannot disagree about which declarations are on screen.
+  const charted = useMemo(() => [...declarations].slice(0, CHARTED).reverse(), [declarations])
 
   return (
     <Card className={`gap-3 ${row.closed ? 'opacity-80' : ''}`}>
@@ -343,8 +368,13 @@ function InstrumentCard({ row, state }) {
             <DeclarationChart rows={declarations} cur={cur} color={color} firstBought={row.firstBought} />
             <p className="text-faint text-[11px] leading-relaxed">
               The fund&rsquo;s own schedule, {declarations.length} on record
-              {declarations.length > CHARTED ? `, most recent ${CHARTED} shown` : ''}. A faded bar is dated after
-              your last receipt, so it should still be on its way.
+              {declarations.length > CHARTED ? `, most recent ${CHARTED} shown` : ''}
+              {/* The span in words, because a bar chart can only label so many
+                  ticks and the ends are what a reader checks first. */}
+              {charted.length > 1
+                ? ` — ${monthYear(charted[0].ex_date)} to ${monthYear(charted[charted.length - 1].ex_date)}`
+                : ''}
+              . A faded bar is dated after your last receipt, so it should still be on its way.
             </p>
           </div>
         ) : row.closed ? (
