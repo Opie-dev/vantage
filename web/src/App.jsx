@@ -1,27 +1,32 @@
 /**
  * The Vantage app shell.
  *
- * Owns: the side navigation (brand, screens, last-sync line, theme toggle), the
- * top bar (screen title, Sync, ↻ Prices, theme), the first-load /
- * server-down states, the toast host, and the three write dialogs.
+ * Owns: the side navigation (brand, screens, last-sync line), the top bar
+ * (collapse toggle, screen title, Sync, ↻ Prices, private mode, theme), the
+ * first-load / server-down states, the toast host, and the write dialogs.
  *
- * Navigation is a VERTICAL rail, not a row of tabs. Eight screens overflowed a
+ * Navigation is a VERTICAL rail, not a row of tabs. Ten screens overflowed a
  * horizontal strip on any narrow window, and the rail also gives the last-sync
- * line and theme toggle a home that is not competing with the actions.
+ * line a home that is not competing with the actions.
  *
  * It is still Radix Tabs underneath: orientation="vertical" moves the active
- * indicator to the right edge and rebinds the arrow keys to up/down, so the whole
- * keyboard contract comes for free. Below 1024px the rail keeps its structure and
- * drops to icons alone — a layout that changes shape at a breakpoint would need a
- * second orientation, and a drawer would need focus trapping this app has no other
- * use for.
+ * indicator to the right edge and rebinds the arrow keys to up/down, so the
+ * whole keyboard contract comes for free.
+ *
+ * The rail has two widths, never two shapes. Wide it shows labels under three
+ * group headings; narrow it is the same column of icons with the labels held in
+ * sr-only text and tooltips. Above 1024px of window which one you get is the
+ * owner's choice, remembered per device and bound to ⌘B; below it the window
+ * decides, there being no room for labels beside a table. A layout that changed
+ * shape at a breakpoint would need a second orientation, and a drawer would
+ * need focus trapping this app has no other use for.
  *
  * Screens live in src/screens/*.jsx and are rendered inside a TabsContent. They
  * never render their own header or dialogs — they call the openers on
  * useVantage() instead. See src/lib/store.jsx for that contract.
  */
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
   CalendarDaysIcon,
@@ -34,6 +39,8 @@ import {
   EyeIcon,
   EyeOffIcon,
   MoonIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   PiggyBankIcon,
   RefreshCwIcon,
   SettingsIcon,
@@ -208,74 +215,347 @@ function PrivateToggle() {
 }
 
 /**
- * The rail. Brand, the eight screens, and the two things that belong beside them
- * rather than beside the actions: when the data last arrived, and the theme.
+ * The rail's grouping.
+ *
+ * Ten flat icons is a column you search; three short runs is a column you read.
+ * The split is by the question a screen answers — what the market did
+ * (Portfolio), what the month did (Money) — and Settings, which answers neither
+ * and sits at the foot where housekeeping belongs.
+ *
+ * The ids are listed rather than derived, because which screens belong together
+ * is an editorial call and not a property of TABS. Anything TABS gains that is
+ * not named here joins the last open group, so a new screen turns up in the
+ * rail instead of quietly falling out of it.
  */
-function SideNav() {
+const NAV_GROUPS = (() => {
+  const groups = [
+    { label: 'Portfolio', ids: ['dashboard', 'positions', 'instruments', 'history'] },
+    { label: 'Money', ids: ['wallet', 'calendar', 'goals', 'assets', 'money'] },
+    { label: null, foot: true, ids: ['settings'] },
+  ]
+  const named = new Set(groups.flatMap(g => g.ids))
+  const open = groups.filter(g => !g.foot).at(-1)
+  open.ids = [...open.ids, ...TABS.map(t => t.id).filter(id => !named.has(id))]
+  return groups.map(g => ({
+    ...g,
+    items: g.ids.map(id => TABS.find(t => t.id === id)).filter(Boolean),
+  }))
+})()
+
+/** Below this the rail has no room for labels beside a table, whatever the
+ *  owner would prefer. Matches Tailwind's `lg`, which the rest of the app uses
+ *  for the same "is there room for two things side by side" question. */
+const RAIL_WIDE = '(min-width: 1024px)'
+
+/** The shortcut's name, not its behaviour — the handler takes either modifier
+ *  regardless, so a wrong guess here costs a wrong hint and nothing more. */
+const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'
+
+/**
+ * Is the rail showing its labels?
+ *
+ * Two inputs, one answer. The owner's choice is remembered per device — like
+ * private mode, it answers "how do I want to sit in front of this screen",
+ * which is a property of the desk and not of the account. Below 1024px the
+ * viewport overrides that choice rather than overwriting it: widen the window
+ * and the rail comes back the way it was left.
+ *
+ * localStorage is read during the first render rather than in an effect, so the
+ * rail never paints wide for one frame before folding shut.
+ */
+function useRail() {
+  const [chosen, setChosen] = useState(() => {
+    try {
+      return localStorage.getItem('vantage.rail') === 'collapsed'
+    } catch {
+      // Private windows and storage-blocking browsers throw on access. Failing
+      // open costs a preference, never the navigation.
+      return false
+    }
+  })
+  const [wide, setWide] = useState(() => window.matchMedia(RAIL_WIDE).matches)
+
+  useEffect(() => {
+    const mq = window.matchMedia(RAIL_WIDE)
+    const sync = () => setWide(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+
+  const toggle = useCallback(() => {
+    setChosen(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('vantage.rail', next ? 'collapsed' : 'open')
+      } catch {
+        // Nothing to do — the choice still holds for this session.
+      }
+      return next
+    })
+  }, [])
+
+  // ⌘B / Ctrl-B: the shortcut every editor with a sidebar has already trained
+  // into the hands reaching for this one. Bound only while the toggle is
+  // available, so a key that does nothing visible is a key that is not bound.
+  // Skipped while typing — a field owns its own keystrokes, and this one means
+  // bold in more than a few of them.
+  useEffect(() => {
+    if (!wide) return
+    const onKey = e => {
+      if (e.key !== 'b' && e.key !== 'B') return
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const el = e.target
+      if (el?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName || '')) return
+      e.preventDefault()
+      toggle()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [wide, toggle])
+
+  return { collapsed: !wide || chosen, canToggle: wide, toggle }
+}
+
+/**
+ * Fold the rail away, from the top bar.
+ *
+ * It sits with the screen title rather than in the rail's own footer. A control
+ * that hides a thing should not go inside the thing it hides: down there it was
+ * the last item of a column you had to look down to find, and once the rail was
+ * shut it had none of the context that says what it would bring back. Here it is
+ * the first thing on the row that names where you are, which is what it changes.
+ */
+function RailToggle({ collapsed, onToggle }) {
+  const label = collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-controls="app-rail"
+          aria-expanded={!collapsed}
+          aria-label={label}
+          onClick={onToggle}
+        >
+          {collapsed ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {label}
+        <span className="ml-1.5 opacity-60">{MOD_KEY} B</span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
+ * One screen in the rail.
+ *
+ * Collapsed, the label survives twice over: sr-only so it stays the button's
+ * accessible name, and in a tooltip so the eye can reach it too. What hides the
+ * label is the width, never the markup. The tooltip is mounted only when it has
+ * something to say — beside a label that is already legible it would be noise,
+ * and this app's tooltips are for what the screen cannot show.
+ */
+function NavItem({ tab, collapsed }) {
+  const Icon = NAV_ICON[tab.id]
+  const trigger = (
+    <TabsTrigger
+      value={tab.id}
+      className={cn(
+        'h-9 w-full flex-none gap-2.5 rounded-md text-[13px] font-semibold',
+        'data-[state=active]:bg-muted data-[state=active]:after:bg-primary',
+        // The vertical Tabs base pins every trigger to `justify-start` through a
+        // `group-data-[orientation=vertical]` variant. That outranks a plain
+        // `justify-center` on specificity and survives tailwind-merge as a
+        // different key, so the icon rail was centring nothing and sitting flush
+        // left. Answering in the same variant collapses the two into one rule.
+        collapsed
+          ? 'group-data-[orientation=vertical]/tabs:justify-center px-0'
+          : 'group-data-[orientation=vertical]/tabs:justify-start px-3',
+      )}
+    >
+      <Icon aria-hidden="true" />
+      <span className={collapsed ? 'sr-only' : undefined}>{tab.label}</span>
+    </TabsTrigger>
+  )
+  if (!collapsed) return trigger
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+      <TooltipContent side="right">{tab.label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
+ * When the data last arrived, in whichever shape the rail has room for.
+ *
+ * Collapsing must not cost the owner a fact, and this is the only place the app
+ * says when the last sync landed — so at 58px the timestamp becomes a dot that
+ * carries it in a tooltip, with the sentence kept in sr-only text for anyone a
+ * tooltip never reaches.
+ */
+function SyncStamp({ lastSync, collapsed }) {
+  if (!collapsed) {
+    return (
+      <span className="text-faint min-w-0 flex-1 text-[11px] leading-tight">
+        {lastSync ? (
+          <>
+            OpenD sync
+            <br />
+            <span className="num">{dtfmt(lastSync)}</span>
+          </>
+        ) : (
+          'OpenD not synced yet'
+        )}
+      </span>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="grid size-8 place-items-center">
+          <span
+            aria-hidden="true"
+            className={cn('size-1.5 rounded-full', lastSync ? 'bg-cash' : 'bg-faint')}
+          />
+          <span className="sr-only">
+            {lastSync ? `OpenD synced ${dtfmt(lastSync)}` : 'OpenD not synced yet'}
+          </span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="right">
+        {lastSync ? (
+          <>
+            OpenD sync <span className="num">{dtfmt(lastSync)}</span>
+          </>
+        ) : (
+          'OpenD not synced yet'
+        )}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
+ * The rail. Brand, the ten screens in three runs, and the one thing that
+ * belongs beside them rather than beside the actions: when the data last
+ * arrived.
+ *
+ * Whether it is folded is decided in App and handed down, because the control
+ * that folds it lives in the top bar. The rail renders the answer; it no longer
+ * owns the question.
+ */
+function SideNav({ collapsed }) {
   const { state } = useVantage()
 
   return (
-    <aside className="bg-background sticky top-0 z-30 flex h-svh w-[58px] shrink-0 flex-col border-r lg:w-[212px]">
-      <div className="flex h-[60px] shrink-0 items-center justify-center border-b lg:justify-start lg:px-4">
-        <div>
-          <div className="num text-[17px] leading-none font-semibold tracking-[0.04em] lg:text-[19px]">
-            <span className="lg:hidden">V</span>
-            <span className="hidden lg:inline">Vantage</span>
+    <aside
+      id="app-rail"
+      aria-label="Sidebar"
+      data-collapsed={collapsed ? '' : undefined}
+      className={cn(
+        'bg-background sticky top-0 z-30 flex h-svh shrink-0 flex-col border-r',
+        // The width is the whole animation. Everything inside it swaps rather
+        // than slides: a label sliding out from under an icon draws the eye to
+        // the chrome at exactly the moment it should be going to the screen.
+        'transition-[width] duration-200 ease-out motion-reduce:transition-none',
+        collapsed ? 'w-[58px]' : 'w-[212px]',
+      )}
+    >
+      {/* Collapsing narrows the rail; it does not rename the app. The name and
+          the line under it stay in the document either way, hidden by width
+          alone — the same contract the screen labels below keep. */}
+      <div
+        className={cn(
+          'flex h-[60px] shrink-0 items-center border-b',
+          collapsed ? 'justify-center' : 'justify-start px-4',
+        )}
+      >
+        <div className="min-w-0">
+          {/* Spelled out rather than composed: tailwind-merge reads a bare
+              `text-[19px]` as owning the line-height too and drops a
+              `leading-none` that arrived before it. */}
+          <div
+            className={
+              collapsed
+                ? 'num text-[17px] leading-none font-semibold tracking-[0.04em]'
+                : 'num text-[19px] leading-none font-semibold tracking-[0.04em]'
+            }
+          >
+            {collapsed ? <span aria-hidden="true">V</span> : 'Vantage'}
+            {collapsed ? <span className="sr-only">Vantage</span> : null}
           </div>
-          <div className="eyebrow mt-1.5 hidden lg:block">personal finance</div>
+          <div className={cn('eyebrow', collapsed ? 'sr-only' : 'mt-1.5')}>personal finance</div>
         </div>
       </div>
 
       <TabsList
         variant="line"
-        className="w-full flex-1 items-stretch justify-start gap-0.5 overflow-y-auto rounded-none p-2"
+        className="w-full flex-1 items-stretch justify-start gap-0.5 overflow-x-hidden overflow-y-auto rounded-none p-2"
       >
-        {TABS.map(t => {
-          const Icon = NAV_ICON[t.id]
-          return (
-            <TabsTrigger
-              key={t.id}
-              value={t.id}
-              // The label is hidden by width, never removed: sr-only keeps it as the
-              // button's accessible name on the icon rail, where a tooltip would
-              // only reach a mouse. `title` gives that rail a hover hint too.
-              title={t.label}
-              className="h-9 flex-none justify-center gap-2.5 rounded-md px-0 text-[13px] font-semibold data-[state=active]:bg-muted data-[state=active]:after:bg-primary lg:justify-start lg:px-3"
-            >
-              <Icon aria-hidden="true" />
-              <span className="sr-only lg:not-sr-only">{t.label}</span>
-            </TabsTrigger>
-          )
-        })}
+        {NAV_GROUPS.map((g, i) => (
+          <div
+            key={g.label ?? 'foot'}
+            className={cn('flex w-full shrink-0 flex-col gap-0.5', g.foot && 'mt-auto')}
+          >
+            {/* Neither the rule nor the heading is a tab, and both sit inside a
+                role="tablist" — so both are hidden from the accessibility tree.
+                The grouping is a reading aid for an eye scanning a column, and
+                the tab order already carries the same sequence for everyone
+                else. A labelled group needs no rule above it; a collapsed or
+                unlabelled one has nothing else to separate it. */}
+            {i > 0 && (collapsed || !g.label) ? (
+              <div aria-hidden="true" className="bg-border mx-2 my-1.5 h-px" />
+            ) : null}
+            {!collapsed && g.label ? (
+              <div
+                aria-hidden="true"
+                className={cn('eyebrow px-3 pb-1.5', i === 0 ? 'pt-1' : 'pt-3')}
+              >
+                {g.label}
+              </div>
+            ) : null}
+            {g.items.map(t => (
+              <NavItem key={t.id} tab={t} collapsed={collapsed} />
+            ))}
+          </div>
+        ))}
       </TabsList>
 
-      <div className="shrink-0 border-t p-2 lg:px-3 lg:py-2.5">
-        <div className="flex items-center justify-center gap-2">
-          <span className="text-faint hidden text-[11px] leading-tight lg:block">
-            {state.lastSync ? (
-              <>
-                OpenD sync
-                <br />
-                <span className="num">{dtfmt(state.lastSync)}</span>
-              </>
-            ) : (
-              'OpenD not synced yet'
-            )}
-          </span>
-        </div>
+      <div
+        className={cn(
+          'flex shrink-0 items-center border-t',
+          collapsed ? 'justify-center p-2' : 'px-3 py-2.5',
+        )}
+      >
+        <SyncStamp lastSync={state.lastSync} collapsed={collapsed} />
       </div>
     </aside>
   )
 }
 
-/** Where you are, and the three things you can do from anywhere. */
-function TopBar() {
+/** The rail's switch, where you are, and the things you can do from anywhere. */
+function TopBar({ rail }) {
   const { tab, refreshPrices, pricesPending, syncMoomoo, syncPending } = useVantage()
   const current = TABS.find(t => t.id === tab)
 
   return (
     <header className="bg-background/85 sticky top-0 z-20 border-b backdrop-blur-md">
       <div className="flex h-[60px] w-full flex-wrap items-center gap-x-3 gap-y-2 px-[clamp(14px,2.4vw,28px)]">
+        {/* Below `lg` there is nowhere to expand to, and a control that cannot
+            change anything is worse than no control at all — the rail keeps its
+            shape and the header drops the button. The rule after it separates a
+            control from the title it sits next to, which is not one. */}
+        {rail.canToggle ? (
+          <div className="-ml-1 flex items-center gap-2">
+            <RailToggle collapsed={rail.collapsed} onToggle={rail.toggle} />
+            <div aria-hidden="true" className="bg-border h-4 w-px" />
+          </div>
+        ) : null}
         <h1 className="text-[16px] font-semibold tracking-[-0.01em]">{current ? current.label : 'Vantage'}</h1>
           <div className="flex-1" />
           <Tooltip>
@@ -2355,6 +2635,9 @@ function ServerDown({ message, onRetry }) {
 
 export default function App() {
   const { tab, setTab, loading, error, reload, locked, unlock } = useVantage()
+  // Held here rather than in either consumer: the rail renders the width, the
+  // top bar renders the switch, and they have to agree.
+  const rail = useRail()
 
   // Before anything else: no header, no tabs, no data on screen.
   if (locked) {
@@ -2369,10 +2652,10 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={250}>
       <Tabs value={tab} onValueChange={setTab} orientation="vertical" className="min-h-svh items-stretch gap-0">
-        <SideNav />
+        <SideNav collapsed={rail.collapsed} />
         {/* min-w-0 or a wide table inside a screen stretches the whole layout. */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <TopBar />
+          <TopBar rail={rail} />
           <main className="w-full flex-1 px-[clamp(14px,2.4vw,28px)] pt-5 pb-20">
             {loading ? (
               <LoadingScreen />
