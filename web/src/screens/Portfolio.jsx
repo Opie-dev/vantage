@@ -999,6 +999,12 @@ const CHART_W = 640
 const CHART_TOP = 5
 const CHART_BOT = 115
 
+/* The payment table's own measurements, for the height floor below: a 32px
+   header (h-8) over rows of two lines plus py-1.5 either side. */
+const HEAD_H = 32
+const ROW_H = 48
+const MIN_ROWS = 5
+
 function Stat({ label, value, tone = '' }) {
   return (
     <div>
@@ -1168,6 +1174,18 @@ function IncomePanel({ state, ticker, open, onClose }) {
 
   const paid = rows.filter(r => !r.pending)
   const pending = rows.filter(r => r.pending)
+  /**
+   * The table is what has been PAID, newest first, with what is merely owed
+   * beneath it.
+   *
+   * By date a declared-but-unbooked payment is the newest thing here, which put
+   * it at the top of the list — the first figure read in a table of money that
+   * arrived was the one that has not. Money owed belongs after money paid,
+   * whatever its date. The chart still takes `rows` in date order, because there
+   * the pending payment is the dashed tail and moving it would put the tail at
+   * the wrong end of the line.
+   */
+  const tableRows = [...paid, ...pending]
   const netSum = paid.reduce((s, r) => s + r.net, 0)
   const taxSum = paid.reduce((s, r) => s + r.tax, 0)
   const owed = pending.reduce((s, r) => s + r.net, 0)
@@ -1275,7 +1293,16 @@ function IncomePanel({ state, ticker, open, onClose }) {
                 </p>
               </div>
 
-              <Card className="gap-0 overflow-hidden py-0">
+              {/* The panel is a flex column that scrolls, so a long table gets
+                  squeezed down to whatever height is left over — three and a
+                  half rows under a chart, with its own scrollbar inside the
+                  panel's. The floor is five rows, or the whole table when it is
+                  shorter than that, which is the shortest a scrolling table can
+                  be and still read as a list. */}
+              <Card
+                className="gap-0 overflow-hidden py-0"
+                style={{ minHeight: HEAD_H + Math.min(tableRows.length, MIN_ROWS) * ROW_H }}
+              >
                 <div className="overflow-x-auto">
                   <table className="w-full text-[13px]">
                     <thead>
@@ -1298,7 +1325,7 @@ function IncomePanel({ state, ticker, open, onClose }) {
                       </tr>
                     </thead>
                     <TableBody>
-                      {rows.map(r => (
+                      {tableRows.map(r => (
                         <TableRow key={r.date} className={r.pending ? 'opacity-70' : undefined}>
                           <TableCell className={TD}>
                             <DateCell date={r.date} />
