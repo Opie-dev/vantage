@@ -488,10 +488,13 @@ try {
     // fixture's 1,800 of goal budgets — 500 shares, 300 income, 1,000 balance —
     // unclaimed 2,868.00. A balance goal claims from the same pool as the other
     // two, and this figure is what proves it.
-    ['money', ['Unclaimed this month', '= Uncommitted', 'RM 8,719.50', 'RM 4,051.50', 'RM 4,668.00',
-      'RM 2,868.00', 'flat = 6.3% real', 'Deducted from your pay',
-      'Paid on top by your employer', 'no balance, pure expense', 'of instalments',
-      'Debt falling', '3-month average']],
+    // Income and Commitments fold away by default, so their row detail is
+    // asserted separately below — what has to be here is the run rate and the
+    // two section heads it is summarised into.
+    ['money', ['Governs both halves', 'What happened to the money',
+      'Mark the account you spend from', 'The other question', 'forward-looking, not Sep',
+      'Net income', 'RM 8,719.50', '= Uncommitted', 'RM 4,051.50', 'RM 4,668.00',
+      'RM 2,868.00', 'Income · known in advance', 'Commitments · known in advance']],
     // The payoff: goal budgets checked against real uncommitted cash. RM 1,800
     // is the fixture's three budgets; RM 4,668.00 is income less commitments,
     // both derived. 'all funded' proves the allocation ran rather than the card
@@ -506,15 +509,18 @@ try {
     // RM 1,800.00 claimed is 500 + 300 + the balance goal's own 1,000, so this
     // also catches a balance goal being dropped from the funding waterfall.
     ['goals', ['moomoo', 'Claimed each month', 'all funded', 'RM 1,800.00', 'in ASB', 'asb']],
-    // The screen totals 186.40 + 60.00 + 38.90 across two groups. 'Food' and
-    // 'Transport' prove the group layer resolved from the stored categories,
-    // 'Groceries' that the leaf survives into the log, and 'Every entry' that the
-    // list rendered rather than only the summary. The wallet prompt proves the
-    // reconciliation degrades to a sentence rather than a number when there is no
-    // reading to anchor it — the fixture has no wallet — and 'No target set' that
-    // an unset target is a state rather than an invented figure.
-    ['expenses', ['Spent', 'RM 285.30', 'By group', 'Food', 'Transport', 'Groceries', 'Every entry',
-      'Jaya Grocer', 'Mark the account you spend from', 'No target set']],
+    // The Expenses tab is a door into the SAME screen, so the statement has to be
+    // here too — that is the point of the merge. The spending half totals
+    // 186.40 + 60.00 + 38.90 across two groups: 'Food' and 'Transport' prove the
+    // group layer resolved from the stored categories, 'Groceries' that the leaf
+    // survives into the log, 'Every entry' that the list rendered rather than only
+    // the summary. The wallet prompt proves the month cannot be closed without a
+    // reading — the fixture has no wallet — and 'Set a target' that an unset
+    // target is a state rather than an invented figure.
+    ['expenses', ['What happened to the money', 'Mark the account you spend from',
+      'Spending · what was actually spent', 'RM 285.30 logged', 'Logged spend · 12 months',
+      'Set a target', 'Day by day', 'By group', 'Food', 'Transport', 'Groceries',
+      'Every entry', 'Jaya Grocer']],
   ]
   for (const [id, needed] of surfaces) {
     await tick(() => ctl.setTab(id))
@@ -654,6 +660,59 @@ try {
     }
 
     console.log(`  drift      ${d.length} gap from the fixture, free-share case detected, residue ignored`)
+  }
+
+  // Income and Commitments fold away by default: the statement and the log are
+  // the daily read, the two lists are setup. Folding is only acceptable if
+  // unfolding gives everything back, so this asserts the row detail the old
+  // two-card Money screen showed — and, by finding the headers at all, that the
+  // merge did not quietly drop a section.
+  {
+    await tick(() => ctl.setTab('money'))
+    const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+    const header = re =>
+      [...pane().querySelectorAll('button[aria-expanded]')].find(b => re.test(b.textContent))
+
+    const FOLDED = [
+      [/Income · known in advance/, 'income',
+        ['Deducted from your pay', 'Paid on top by your employer', '3-month average',
+          'recorded payment']],
+      [/Commitments · known in advance/, 'commitments',
+        ['flat = 6.3% real', 'no balance, pure expense', 'of instalments', 'Debt falling']],
+    ]
+    for (const [re, what, needed] of FOLDED) {
+      const btn = header(re)
+      if (!btn) throw new Error(`money: no ${what} section header`)
+      for (const n of needed) {
+        if (pane().textContent.includes(n)) {
+          throw new Error(`money: "${n}" is visible while ${what} is folded`)
+        }
+      }
+      await tick(() => btn.click())
+      for (const n of needed) {
+        if (!pane().textContent.includes(n)) {
+          throw new Error(`money: unfolding ${what} did not bring back "${n}"`)
+        }
+      }
+    }
+    console.log('  sections   income and commitments fold away and come back whole')
+
+    // Both tabs are the same component, and the month survives the switch —
+    // that is the difference between one screen with two doors and two screens.
+    const monthOf = () => (pane().textContent.match(/\w+ \d{4}/) || [''])[0]
+    const before = monthOf()
+    await tick(() => pane().querySelector('button[aria-label="Previous month"]').click())
+    const moved = monthOf()
+    if (moved === before) throw new Error('money: the month control did not move')
+    await tick(() => ctl.setTab('expenses'))
+    if (monthOf() !== moved) {
+      throw new Error(`money: the month reset to ${monthOf()} on switching tab, expected ${moved}`)
+    }
+    if (!pane().textContent.includes('Debt falling')) {
+      throw new Error('money: the unfolded section closed itself on switching tab')
+    }
+    console.log(`  one screen both tabs render it, ${moved} survives the switch`)
+    await tick(() => ctl.setTab('money'))
   }
 
   // Expenses, and the reconciliation that makes a hand-kept log defensible.
@@ -932,7 +991,8 @@ try {
     if (document.body.textContent.includes(title)) throw new Error(`closeModal() left "${title}" mounted`)
   }
 
-  const real = errors.filter(e => !/not wrapped in act|useLayoutEffect does nothing on the server/.test(e))
+  const real = errors.filter(e =>
+    !/not wrapped in act|useLayoutEffect does nothing on the server|Window's scrollTo/.test(e))
   if (real.length) throw new Error(`console.error during render:\n${real.join('\n')}`)
 
   console.log('OK - shell mounts, all ' + SCREENS.length + ' screens render, all ' + FORMS.length + ' side-panel forms open and close')

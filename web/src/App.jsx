@@ -108,7 +108,6 @@ import CalendarScreen from '@/screens/Calendar'
 import Goals, { KIND_OPTIONS, WHOLE, isBalance, isIncome } from '@/screens/Goals'
 import Instruments from '@/screens/Instruments'
 import Assets from '@/screens/Assets'
-import Expenses from '@/screens/Expenses'
 import Money from '@/screens/Money'
 import Settings from '@/screens/Settings'
 
@@ -121,10 +120,21 @@ const SCREENS = {
   calendar: CalendarScreen,
   goals: Goals,
   assets: Assets,
-  money: Money,
-  expenses: Expenses,
   settings: Settings,
 }
+
+/**
+ * Money and Expenses are one screen behind two tabs.
+ *
+ * They were two screens, and the split put the coverage figure on one and the
+ * itemised list it measures on the other. Both tabs stay — the spending log is
+ * still something you go to directly — but they open the same component, which
+ * scrolls itself to the right section. One TabsContent with a moving `value`
+ * rather than two panels: the React element keeps its position and its key, so
+ * switching tabs does NOT remount, and the month you were reading survives the
+ * switch.
+ */
+const MONEY_TABS = ['money', 'expenses']
 
 /* ── shell pieces ─────────────────────────────────────────────────────────── */
 
@@ -2383,11 +2393,19 @@ export default function App() {
             ) : error ? (
               <ServerDown message={error} onRetry={() => reload().catch(() => {})} />
             ) : (
-              Object.entries(SCREENS).map(([id, Screen]) => (
-                <TabsContent key={id} value={id}>
-                  <Screen />
+              <>
+                {Object.entries(SCREENS).map(([id, Screen]) => (
+                  <TabsContent key={id} value={id}>
+                    <Screen />
+                  </TabsContent>
+                ))}
+                <TabsContent
+                  key="money"
+                  value={MONEY_TABS.includes(tab) ? tab : 'money'}
+                >
+                  <Money />
                 </TabsContent>
-              ))
+              </>
             )}
           </main>
         </div>
