@@ -425,7 +425,7 @@ try {
   )
 
   // every screen must mount and render something
-  const SCREENS = ['dashboard', 'positions', 'instruments', 'history', 'wallet', 'calendar', 'goals', 'assets', 'money', 'expenses', 'settings']
+  const SCREENS = ['dashboard', 'positions', 'instruments', 'history', 'wallet', 'calendar', 'goals', 'assets', 'money', 'settings']
   for (const id of SCREENS) {
     await tick(() => ctl.setTab(id))
     const panes = document.querySelectorAll('[data-slot="tabs-content"][data-state="active"]')
@@ -491,10 +491,22 @@ try {
     // Income and Commitments fold away by default, so their row detail is
     // asserted separately below — what has to be here is the run rate and the
     // two section heads it is summarised into.
+    // The spending half is asserted here rather than on a tab of its own, which
+    // is the point of the merge: one screen carries the statement AND the log it
+    // measures. That half totals 186.40 + 60.00 + 38.90 across two groups —
+    // 'Food' and 'Transport' prove the group layer resolved from the stored
+    // categories, 'Groceries' that the leaf survives into the log, 'Every entry'
+    // that the list rendered rather than only the summary. The wallet prompt
+    // proves the month cannot be closed without a reading — the fixture has no
+    // wallet — and 'Set a target' that an unset target is a state rather than an
+    // invented figure.
     ['money', ['Governs both halves', 'What happened to the money',
       'Mark the account you spend from', 'The other question', 'forward-looking, not Sep',
       'Net income', 'RM 8,719.50', '= Uncommitted', 'RM 4,051.50', 'RM 4,668.00',
-      'RM 2,868.00', 'Income · known in advance', 'Commitments · known in advance']],
+      'RM 2,868.00', 'Income · known in advance', 'Commitments · known in advance',
+      'Spending · what was actually spent', 'RM 285.30 logged', 'Logged spend · 12 months',
+      'Set a target', 'Day by day', 'By group', 'Food', 'Transport', 'Groceries',
+      'Every entry', 'Jaya Grocer']],
     // The payoff: goal budgets checked against real uncommitted cash. RM 1,800
     // is the fixture's three budgets; RM 4,668.00 is income less commitments,
     // both derived. 'all funded' proves the allocation ran rather than the card
@@ -509,18 +521,6 @@ try {
     // RM 1,800.00 claimed is 500 + 300 + the balance goal's own 1,000, so this
     // also catches a balance goal being dropped from the funding waterfall.
     ['goals', ['moomoo', 'Claimed each month', 'all funded', 'RM 1,800.00', 'in ASB', 'asb']],
-    // The Expenses tab is a door into the SAME screen, so the statement has to be
-    // here too — that is the point of the merge. The spending half totals
-    // 186.40 + 60.00 + 38.90 across two groups: 'Food' and 'Transport' prove the
-    // group layer resolved from the stored categories, 'Groceries' that the leaf
-    // survives into the log, 'Every entry' that the list rendered rather than only
-    // the summary. The wallet prompt proves the month cannot be closed without a
-    // reading — the fixture has no wallet — and 'Set a target' that an unset
-    // target is a state rather than an invented figure.
-    ['expenses', ['What happened to the money', 'Mark the account you spend from',
-      'Spending · what was actually spent', 'RM 285.30 logged', 'Logged spend · 12 months',
-      'Set a target', 'Day by day', 'By group', 'Food', 'Transport', 'Groceries',
-      'Every entry', 'Jaya Grocer']],
   ]
   for (const [id, needed] of surfaces) {
     await tick(() => ctl.setTab(id))
@@ -697,22 +697,15 @@ try {
     }
     console.log('  sections   income and commitments fold away and come back whole')
 
-    // Both tabs are the same component, and the month survives the switch —
-    // that is the difference between one screen with two doors and two screens.
+    // One month control for the whole screen. The statement and the log read the
+    // same month by construction now that they share a component; what is left to
+    // prove is that the control actually moves it.
     const monthOf = () => (pane().textContent.match(/\w+ \d{4}/) || [''])[0]
     const before = monthOf()
     await tick(() => pane().querySelector('button[aria-label="Previous month"]').click())
     const moved = monthOf()
     if (moved === before) throw new Error('money: the month control did not move')
-    await tick(() => ctl.setTab('expenses'))
-    if (monthOf() !== moved) {
-      throw new Error(`money: the month reset to ${monthOf()} on switching tab, expected ${moved}`)
-    }
-    if (!pane().textContent.includes('Debt falling')) {
-      throw new Error('money: the unfolded section closed itself on switching tab')
-    }
-    console.log(`  one screen both tabs render it, ${moved} survives the switch`)
-    await tick(() => ctl.setTab('money'))
+    console.log(`  one screen statement and log, moved together to ${moved}`)
   }
 
   // Expenses, and the reconciliation that makes a hand-kept log defensible.

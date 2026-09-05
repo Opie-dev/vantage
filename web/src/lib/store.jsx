@@ -23,7 +23,6 @@ export const TABS = [
   { id: 'goals', label: 'Goals' },
   { id: 'assets', label: 'Assets' },
   { id: 'money', label: 'Money' },
-  { id: 'expenses', label: 'Expenses' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -82,9 +81,20 @@ export function useVantage() {
   return ctx
 }
 
+/**
+ * Tab ids that were retired, and where they went.
+ *
+ * '#expenses' was a second door into Money for as long as spending had its own
+ * screen. The screens are one now and the rail says so, but a bookmark or an
+ * open window still carries the old hash, and falling through to the Dashboard
+ * would answer a request for the spending log with a portfolio summary.
+ */
+const RETIRED_TABS = { expenses: 'money' }
+
 const hashTab = () => {
   const h = String(window.location.hash || '').replace(/^#\/?/, '')
-  return TABS.some(t => t.id === h) ? h : TABS[0].id
+  if (TABS.some(t => t.id === h)) return h
+  return RETIRED_TABS[h] || TABS[0].id
 }
 
 /**

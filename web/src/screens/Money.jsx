@@ -5,9 +5,9 @@
  * screen, and the split was wrong in a way the statement below makes obvious:
  * "what was logged" and "what actually left the wallet" are two halves of the
  * same claim, and putting them on two screens meant the coverage figure was
- * always somewhere the itemised list was not. The Expenses tab still exists —
- * it opens this screen at the spending section, because two doors into one room
- * is not the same thing as two rooms.
+ * always somewhere the itemised list was not. There was briefly a second rail
+ * entry that opened this screen at the spending section; it is gone, because two
+ * doors into one room read as two rooms to everyone but their author.
  *
  * TWO QUESTIONS, KEPT APART. The statement in the left column is what HAPPENED:
  * every figure in it actually arrived or actually left, over the window two
@@ -36,7 +36,7 @@
  *   the first is healthy. Merging them would hide which one is the problem.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -609,7 +609,6 @@ function CommitmentRow({ r, onEdit, onRemove }) {
 export default function Money() {
   const {
     state,
-    tab,
     openCommitment,
     openIncome,
     openIncomeEvent,
@@ -652,18 +651,6 @@ export default function Money() {
       if (el) window.scrollTo({ top: Math.max(0, el.offsetTop - 120), behavior: 'smooth' })
     })
   }
-
-  // The Expenses tab is a door into this screen rather than a screen of its own,
-  // so selecting it lands on the spending section. Not on first mount: arriving
-  // at Money should start at the statement, and a scroll nobody asked for is
-  // disorienting.
-  const lastTab = useRef(tab)
-  useEffect(() => {
-    if (lastTab.current === tab) return
-    lastTab.current = tab
-    if (tab === 'expenses') jump('spending')
-    else if (tab === 'money') window.scrollTo({ top: 0, behavior: 'smooth' })
-  }, [tab])
 
   const move = n => {
     const next = new Date(y, m + n, 1)

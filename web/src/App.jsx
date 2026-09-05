@@ -31,7 +31,6 @@ import {
   LayersIcon,
   LayoutDashboardIcon,
   BanknoteIcon,
-  ReceiptTextIcon,
   EyeIcon,
   EyeOffIcon,
   MoonIcon,
@@ -120,21 +119,9 @@ const SCREENS = {
   calendar: CalendarScreen,
   goals: Goals,
   assets: Assets,
+  money: Money,
   settings: Settings,
 }
-
-/**
- * Money and Expenses are one screen behind two tabs.
- *
- * They were two screens, and the split put the coverage figure on one and the
- * itemised list it measures on the other. Both tabs stay — the spending log is
- * still something you go to directly — but they open the same component, which
- * scrolls itself to the right section. One TabsContent with a moving `value`
- * rather than two panels: the React element keeps its position and its key, so
- * switching tabs does NOT remount, and the month you were reading survives the
- * switch.
- */
-const MONEY_TABS = ['money', 'expenses']
 
 /* ── shell pieces ─────────────────────────────────────────────────────────── */
 
@@ -150,7 +137,6 @@ const NAV_ICON = {
   goals: TargetIcon,
   assets: PiggyBankIcon,
   money: BanknoteIcon,
-  expenses: ReceiptTextIcon,
   settings: SettingsIcon,
 }
 
@@ -2393,19 +2379,11 @@ export default function App() {
             ) : error ? (
               <ServerDown message={error} onRetry={() => reload().catch(() => {})} />
             ) : (
-              <>
-                {Object.entries(SCREENS).map(([id, Screen]) => (
-                  <TabsContent key={id} value={id}>
-                    <Screen />
-                  </TabsContent>
-                ))}
-                <TabsContent
-                  key="money"
-                  value={MONEY_TABS.includes(tab) ? tab : 'money'}
-                >
-                  <Money />
+              Object.entries(SCREENS).map(([id, Screen]) => (
+                <TabsContent key={id} value={id}>
+                  <Screen />
                 </TabsContent>
-              </>
+              ))
             )}
           </main>
         </div>
