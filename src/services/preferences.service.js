@@ -1,5 +1,5 @@
 /**
- * User display preferences.
+ * User display preferences, and the one intention the app stores.
  *
  * Stored as one JSON blob under the `preferences` settings key rather than a key
  * per option, so adding a preference later needs no migration and no endpoint
@@ -40,15 +40,32 @@ const PNL_BASIS = ['price', 'net', 'gross'];
  */
 const DASHBOARD_THEME = ['income', 'equity'];
 
+/**
+ * What the owner means to spend in a month, in RM, or null for no target.
+ *
+ * NULL IS THE DEFAULT AND IT MATTERS. expenses-plan.md §7 puts a target last and
+ * calls it a nicety, for a good reason: a target is an intention and everything
+ * else on the Expenses screen is a fact, so an invented one would put a made-up
+ * number beside measured ones. Until it is set the screen says "set a target"
+ * rather than comparing against a guess.
+ *
+ * Not a budget per category. That would be intention measured against intention;
+ * this is one figure measured against what actually happened.
+ */
+const isTarget = v =>
+  v === null || (typeof v === 'number' && Number.isFinite(v) && v > 0);
+
 // key -> validator. A validator returns null when the value is fine, or the
 // message explaining why it isn't.
 const ALLOWED = {
   pnlBasis: v => (PNL_BASIS.includes(v) ? null : `pnlBasis must be one of: ${PNL_BASIS.join(', ')}`),
   dashboardTheme: v =>
     DASHBOARD_THEME.includes(v) ? null : `dashboardTheme must be one of: ${DASHBOARD_THEME.join(', ')}`,
+  expenseTargetRM: v =>
+    isTarget(v) ? null : 'expenseTargetRM must be a positive number, or null for no target',
 };
 
-const DEFAULTS = { pnlBasis: 'price', dashboardTheme: 'income' };
+const DEFAULTS = { pnlBasis: 'price', dashboardTheme: 'income', expenseTargetRM: null };
 
 /** Stored preferences merged over the defaults, so a caller always gets a full object. */
 async function get() {

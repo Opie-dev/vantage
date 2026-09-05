@@ -153,7 +153,7 @@ const STATE = {
   expenses: [
     { id: 1, date: thisMonthDay(1), amount: 186.4, currency: 'MYR', category: 'GROCERIES', note: 'Jaya Grocer', asset_id: null, source: 'manual' },
     { id: 2, date: thisMonthDay(2), amount: 60, currency: 'MYR', category: 'FUEL', note: '', asset_id: null, source: 'manual' },
-    { id: 3, date: thisMonthDay(3), amount: 38.9, currency: 'MYR', category: 'EATING_OUT', note: 'lunch', asset_id: null, source: 'manual' },
+    { id: 3, date: thisMonthDay(3), amount: 38.9, currency: 'MYR', category: 'MEALS_OUT', note: 'lunch', asset_id: null, source: 'manual' },
   ],
   // What the broker last said it holds. ETCO and AAPL agree with the ledger;
   // INCM is ten short, so exactly one drift row must render on Positions.
@@ -506,12 +506,15 @@ try {
     // RM 1,800.00 claimed is 500 + 300 + the balance goal's own 1,000, so this
     // also catches a balance goal being dropped from the funding waterfall.
     ['goals', ['moomoo', 'Claimed each month', 'all funded', 'RM 1,800.00', 'in ASB', 'asb']],
-    // The screen totals 186.40 + 60.00 + 38.90 and splits three ways. 'Every
-    // entry' proves the list rendered rather than only the summary, and the
-    // wallet prompt proves the reconciliation degrades to a sentence rather than
-    // a number when there is no reading to anchor it — the fixture has no wallet.
-    ['expenses', ['Spent', 'RM 285.30', 'By category', 'Groceries', 'Eating out', 'Every entry',
-      'Jaya Grocer', 'Mark the account you spend from']],
+    // The screen totals 186.40 + 60.00 + 38.90 across two groups. 'Food' and
+    // 'Transport' prove the group layer resolved from the stored categories,
+    // 'Groceries' that the leaf survives into the log, and 'Every entry' that the
+    // list rendered rather than only the summary. The wallet prompt proves the
+    // reconciliation degrades to a sentence rather than a number when there is no
+    // reading to anchor it — the fixture has no wallet — and 'No target set' that
+    // an unset target is a state rather than an invented figure.
+    ['expenses', ['Spent', 'RM 285.30', 'By group', 'Food', 'Transport', 'Groceries', 'Every entry',
+      'Jaya Grocer', 'Mark the account you spend from', 'No target set']],
   ]
   for (const [id, needed] of surfaces) {
     await tick(() => ctl.setTab(id))
@@ -657,7 +660,7 @@ try {
   // Built on a local copy for the same reason the spending block is: a wallet in
   // the shared fixture would move the Money and Calendar figures asserted above.
   {
-    const { expensesFor } = await server.ssrLoadModule('/src/lib/calc.js')
+    const { expenseHistory, expensesFor } = await server.ssrLoadModule('/src/lib/calc.js')
 
     // Without a wallet there is nothing to reconcile against, and the log must
     // still work — that is the state every owner is in on day one.
@@ -686,6 +689,82 @@ try {
       throw new Error('expenses: with no wallet there is nothing to reconcile against, expected nulls')
     }
 
+    // The group layer, resolved from the stored category and nothing else.
+    // Food is 120 + 40 and Transport is 80, so the groups must sort Food first.
+    if (b.groups.length !== 2) throw new Error(`expenses: expected 2 groups, got ${b.groups.length}`)
+    if (b.groups[0].group !== 'FOOD' || Math.abs(b.groups[0].amountRM - 160) > 0.005) {
+      throw new Error(`expenses: Food should lead at 160, got ${b.groups[0].group} ${b.groups[0].amountRM}`)
+    }
+    // Every category of an open group is carried, the empty ones included — the
+    // drill-down prints an em dash for those rather than dropping them.
+    if (b.groups[0].categories.length !== 3) {
+      throw new Error(`expenses: Food carries 3 categories, got ${b.groups[0].categories.length}`)
+    }
+    if (b.emptyGroupCount !== b.groupCount - 2) {
+      throw new Error('expenses: the untouched groups must be counted, not dropped')
+    }
+    // Nothing logged before January, so there is no usual month and every figure
+    // derived from one is null rather than zero.
+    if (b.usualRM !== null || b.deltaVsUsual !== null || b.groups[0].delta !== null) {
+      throw new Error('expenses: with no history there is nothing to compare against, expected nulls')
+    }
+    // The day strip: 31 cells, the 5th carrying the 120 and the whole strip
+    // summing to the month.
+    if (b.byDay.length !== 31) throw new Error(`expenses: January has 31 days, got ${b.byDay.length}`)
+    if (Math.abs(b.byDay[4] - 120) > 0.005) {
+      throw new Error(`expenses: the 5th should carry 120, got ${b.byDay[4]}`)
+    }
+    if (Math.abs(b.byDay.reduce((sum, v) => sum + v, 0) - b.loggedRM) > 0.005) {
+      throw new Error('expenses: the day strip must sum to the month total')
+    }
+
+    // A USUAL MONTH IS AN AVERAGE OF THE MONTHS THAT WERE LOGGED, not of three
+    // calendar months. October and December carry entries and November does not,
+    // so the divisor is 2 and the usual month is 200 — a naive /3 would say
+    // 133.33 and invent a rise in spending out of a gap in the habit.
+    const hist = JSON.parse(JSON.stringify(bare))
+    hist.expenses.push(
+      { id: 4, date: '2025-12-04', amount: 300, currency: 'MYR', category: 'GROCERIES', note: '' },
+      { id: 5, date: '2025-10-04', amount: 100, currency: 'MYR', category: 'FUEL', note: '' },
+    )
+    const h = expensesFor(hist, 2026, 0, '2026-02-01')
+    if (h.monthsLogged !== 2) throw new Error(`expenses: expected 2 logged months, got ${h.monthsLogged}`)
+    if (Math.abs(h.usualRM - 200) > 0.005) {
+      throw new Error(`expenses: a usual month is 200 here, got ${h.usualRM}`)
+    }
+    if (Math.abs(h.deltaVsUsual - 0.2) > 1e-9) {
+      throw new Error(`expenses: 240 against 200 is +20%, got ${h.deltaVsUsual}`)
+    }
+    // The group averages must sum to the headline, or a group could be up while
+    // the month it belongs to was down and neither figure would be wrong.
+    const usualSum = h.groups.reduce((sum, g) => sum + g.usualRM, 0)
+    if (Math.abs(usualSum - h.usualRM) > 0.005) {
+      throw new Error(`expenses: group averages sum to ${usualSum}, not ${h.usualRM}`)
+    }
+    const transport = h.groups.find(g => g.group === 'TRANSPORT')
+    if (Math.abs(transport.delta - 0.6) > 1e-9) {
+      throw new Error(`expenses: transport 80 against a usual 50 is +60%, got ${transport.delta}`)
+    }
+    // Per day divides by the days that HAVE HAPPENED. January is over on
+    // 1 February, so all 31 of them.
+    if (h.elapsedDays !== 31 || Math.abs(h.perDayRM - 240 / 31) > 1e-9) {
+      throw new Error(`expenses: expected 240/31 a day over 31 days, got ${h.perDayRM} over ${h.elapsedDays}`)
+    }
+
+    // The history window: twelve months ending at the one on screen, and a month
+    // nobody typed into is marked rather than drawn as a zero.
+    const win = expenseHistory(hist, 2026, 0, 12, '2026-02-01')
+    if (win.length !== 12 || win[11].key !== '2026-01' || win[0].key !== '2025-02') {
+      throw new Error(`expenses: expected Feb 2025 to Jan 2026, got ${win[0].key} to ${win[11].key}`)
+    }
+    if (win.filter(x => x.logged).length !== 3) {
+      throw new Error('expenses: three of the twelve months were logged')
+    }
+    const november = win.find(x => x.key === '2025-11')
+    if (november.logged || november.totalRM !== 0) {
+      throw new Error('expenses: a month with nothing typed is not a month with nothing spent')
+    }
+
     // With a wallet and two readings the log is measured against what actually left.
     const rec = JSON.parse(JSON.stringify(bare))
     rec.expenses = [{ id: 9, date: iso(10), amount: 200, currency: 'MYR', category: 'GROCERIES', note: '' }]
@@ -701,7 +780,7 @@ try {
     }
     // Only expenses inside the readings' own window count — one outside it must not.
     const outside = JSON.parse(JSON.stringify(rec))
-    outside.expenses.push({ id: 10, date: iso(28), amount: 999, currency: 'MYR', category: 'OTHER', note: '' })
+    outside.expenses.push({ id: 10, date: iso(28), amount: 999, currency: 'MYR', category: 'UNCATEGORISED', note: '' })
     const o = expensesFor(outside, 2026, 0, '2026-02-01')
     if (Math.abs(o.loggedInWindowRM - r.loggedInWindowRM) > 0.005) {
       throw new Error('expenses: an expense outside the reading window must not enter the reconciliation')
@@ -713,7 +792,8 @@ try {
     // so its residual is negative, and a percentage of a negative total says
     // nothing. The identity above is what the reconciliation actually rests on.
     console.log(
-      `  expenses   ${b.categories.length} categories, ` +
+      `  expenses   ${b.categories.length} categories in ${b.groups.length} groups, ` +
+      `usual ${h.usualRM.toFixed(2)} over ${h.monthsLogged} logged months, ` +
       `${r.loggedInWindowRM.toFixed(2)} logged + ${r.unloggedRM.toFixed(2)} unlogged ` +
       `= ${r.spend.spentRM.toFixed(2)} inferred`,
     )
