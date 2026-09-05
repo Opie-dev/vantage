@@ -448,6 +448,8 @@ try {
     // says the sync wrote it rather than a person. A row can be moomoo and NOT
     // synced, so neither badge can stand in for the other.
     ['history', ['PENDING', 'moomoo', 'SYNCED', 'Savings', 'Income', 'What']],
+    // The allocation scope chips, on the screen that owns them.
+    ['dashboard', ['Allocation', 'Everything', 'Outside']],
     ['wallet', ['INCM dividend', 'INCM withholding tax']],
     // The money layer. The fixture's salary lands on the 25th and the loans on
     // the 1st and 5th, so a grid with no money marks means moneyByDay() stopped
@@ -551,6 +553,36 @@ try {
     }
 
     console.log(`  axis       ${a} vs ${b} distinguishable, ${c} vs ${d} distinguishable`)
+  }
+
+  // The allocation donut, scoped three ways.
+  {
+    const { allocation, ALLOC_SCOPE } = await server.ssrLoadModule('/src/lib/calc.js')
+    const sum = a => a.reduce((s, p) => s + p.value, 0)
+
+    const all = allocation(STATE, ALLOC_SCOPE.ALL)
+    const broker = allocation(STATE, ALLOC_SCOPE.BROKER)
+    const outside = allocation(STATE, ALLOC_SCOPE.OUTSIDE)
+
+    // The two halves must account for the whole, or a scope is dropping money.
+    if (Math.abs(sum(broker) + sum(outside) - sum(all)) > 0.005) {
+      throw new Error(`allocation: ${sum(broker)} + ${sum(outside)} != ${sum(all)}`)
+    }
+    // Every scope's shares are of ITS OWN total — a percentage of an unstated
+    // denominator is the easiest way for a chart to mislead.
+    for (const [name, a] of [['all', all], ['broker', broker], ['outside', outside]]) {
+      if (!a.length) throw new Error(`allocation: ${name} must have slices in this fixture`)
+      const shares = a.reduce((s, p) => s + p.share, 0)
+      if (Math.abs(shares - 1) > 1e-9) throw new Error(`allocation: ${name} shares sum to ${shares}`)
+    }
+    // Cash is the broker's, not the accounts'. It is money waiting to be invested.
+    if (!broker.some(p => p.name === 'Cash')) throw new Error('allocation: broker scope must carry its cash')
+    if (outside.some(p => p.name === 'Cash')) throw new Error('allocation: outside scope must not')
+    // And the scopes must not leak into each other.
+    if (broker.some(p => p.name.startsWith('EPF'))) throw new Error('allocation: an account leaked into the broker scope')
+    if (outside.some(p => p.name === 'ETCO')) throw new Error('allocation: a position leaked into the outside scope')
+
+    console.log(`  allocation ${all.length} slices all / ${broker.length} moomoo / ${outside.length} outside, each summing to 100%`)
   }
 
   // Expenses, and the reconciliation that makes a hand-kept log defensible.
