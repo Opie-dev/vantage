@@ -48,7 +48,7 @@ export const EMPTY_STATE = {
   incomeEvents: [],
   funds: [],
   fx: 4.22,
-  preferences: { pnlBasis: 'price', dashboardTheme: 'income' },
+  preferences: { pnlBasis: 'price', dashboardTheme: 'income', expenseTargetRM: null },
   lastSync: null,
 }
 
@@ -3333,26 +3333,106 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   }
 }
 
-/** The categories an expense may carry. Mirrors expenses_category_check. */
-export const EXPENSE_CATEGORIES = [
-  'GROCERIES', 'EATING_OUT', 'TRANSPORT', 'FUEL',
-  'HEALTH', 'SHOPPING', 'FAMILY', 'CHARITY', 'OTHER',
+/* ── the expense log ──────────────────────────────────────────────────────── */
+
+/**
+ * The taxonomy: a group, and the categories inside it. Mirrors
+ * src/services/expenses.service.js, which mirrors expenses_category_check.
+ *
+ * TWO LEVELS, ONE QUESTION. Only the category is stored; the group is a function
+ * of it and never varies, so keeping it anywhere but here would be a second
+ * place for one fact to be wrong. The form still asks once. The group exists
+ * because a month is only comparable to the months before it at a level where
+ * the comparison means something — "food is up" is a sentence, "meals out is up
+ * and groceries are down" is two, and the flat list could say neither.
+ *
+ * Chosen for what they are NOT: none of these can be a RECURRING commitment.
+ * There is no Housing, Insurance or Subscriptions group and there must never be
+ * one — those are known in advance and already modelled on Money, and entering
+ * them here as well would count them twice against income.
+ */
+export const EXPENSE_GROUPS = [
+  { group: 'FOOD', label: 'Food', categories: ['GROCERIES', 'MEALS_OUT', 'COFFEE_SNACKS'] },
+  { group: 'TRANSPORT', label: 'Transport', categories: ['FUEL', 'FARES', 'PARKING_TOLLS'] },
+  { group: 'HOME', label: 'Home', categories: ['HOUSEHOLD_GOODS', 'HOME_UPKEEP'] },
+  { group: 'HEALTH', label: 'Health', categories: ['MEDICAL', 'PHARMACY'] },
+  { group: 'PERSONAL_CARE', label: 'Personal care', categories: ['GROOMING', 'TOILETRIES'] },
+  { group: 'SHOPPING', label: 'Shopping', categories: ['CLOTHES', 'THINGS'] },
+  { group: 'ENTERTAINMENT', label: 'Entertainment', categories: ['GOING_OUT', 'GAMES_MEDIA'] },
+  { group: 'TRAVEL', label: 'Travel', categories: ['FLIGHTS_STAYS', 'TRIP_SPENDING'] },
+  // RELATIVES is money sent to parents or relatives — what the old FAMILY
+  // category meant. Its own leaf rather than a Gift, because for this owner it
+  // is a regular flow and filing it under Giving would lose it.
+  { group: 'FAMILY', label: 'Family', categories: ['RELATIVES', 'KIDS', 'PETS'] },
+  { group: 'GIVING', label: 'Giving', categories: ['GIFTS', 'DONATIONS'] },
+  { group: 'LEARNING', label: 'Learning', categories: ['COURSES', 'BOOKS'] },
+  { group: 'FEES', label: 'Fees', categories: ['BANK_FEES', 'CARD_CHARGES'] },
+  { group: 'OTHER', label: 'Other', categories: ['UNCATEGORISED'] },
 ]
 
 export const EXPENSE_LABEL = {
   GROCERIES: 'Groceries',
-  EATING_OUT: 'Eating out',
-  TRANSPORT: 'Transport',
+  MEALS_OUT: 'Meals out',
+  COFFEE_SNACKS: 'Coffee & snacks',
   FUEL: 'Fuel',
-  HEALTH: 'Health',
-  SHOPPING: 'Shopping',
-  FAMILY: 'Family',
-  CHARITY: 'Charity',
-  OTHER: 'Other',
+  FARES: 'Ride-hailing & fares',
+  PARKING_TOLLS: 'Parking & tolls',
+  HOUSEHOLD_GOODS: 'Household goods',
+  HOME_UPKEEP: 'Home upkeep',
+  MEDICAL: 'Medical',
+  PHARMACY: 'Pharmacy',
+  GROOMING: 'Grooming',
+  TOILETRIES: 'Toiletries',
+  CLOTHES: 'Clothes',
+  THINGS: 'Things',
+  GOING_OUT: 'Going out',
+  GAMES_MEDIA: 'Games & media',
+  FLIGHTS_STAYS: 'Flights & stays',
+  TRIP_SPENDING: 'Trip spending',
+  RELATIVES: 'Family support',
+  KIDS: 'Kids',
+  PETS: 'Pets',
+  GIFTS: 'Gifts',
+  DONATIONS: 'Donations',
+  COURSES: 'Courses',
+  BOOKS: 'Books',
+  BANK_FEES: 'Bank & ATM fees',
+  CARD_CHARGES: 'Card charges',
+  UNCATEGORISED: 'Uncategorised',
+}
+
+/** Every category, in group order — the order the form offers them in. */
+export const EXPENSE_CATEGORIES = EXPENSE_GROUPS.flatMap(g => g.categories)
+
+export const EXPENSE_GROUP_LABEL = Object.fromEntries(
+  EXPENSE_GROUPS.map(g => [g.group, g.label]))
+
+const GROUP_OF = new Map(EXPENSE_GROUPS.flatMap(g => g.categories.map(c => [c, g.group])))
+
+/** The group a category sits in. Falls back to OTHER for a value from the future. */
+export const expenseGroupOf = category => GROUP_OF.get(category) || 'OTHER'
+
+/**
+ * How many months back "a usual month" looks.
+ *
+ * Three, because it is long enough to flatten a big weekly shop landing on the
+ * 1st and short enough that a habit changed in spring is not still being
+ * compared against. It is an average, not a trend: one month above it is
+ * weather, and the screen says so rather than drawing an arrow.
+ */
+const USUAL_MONTHS = 3
+
+/** 365.25/12. Only ever used to put a monthly average on a daily footing. */
+const DAYS_PER_MONTH = 30.4375
+
+/** The owner's monthly spending target in RM, or null if none is set. */
+export function expenseTarget(S) {
+  const t = S.preferences && S.preferences.expenseTargetRM
+  return typeof t === 'number' && Number.isFinite(t) && t > 0 ? t : null
 }
 
 /**
- * What was logged in a month, by category, and how complete the log looks.
+ * What was logged in a month, and how it reads against the months before it.
  *
  * THE RECONCILIATION IS THE POINT, and it is what makes a hand-kept expense log
  * defensible in an app whose own plan argued against one. spendingFor() already
@@ -3366,18 +3446,34 @@ export const EXPENSE_LABEL = {
  *
  * `unloggedRM` is null whenever the residual is — with no wallet reading there
  * is nothing to reconcile against, and a log with nothing to check it is still
- * perfectly usable as a log.
+ * perfectly usable as a log. `usualRM` and every delta beside it are null on the
+ * same principle: a month with nothing before it has nothing to be up against.
  */
 export function expensesFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   const key = monthKey(year, monthIndex)
-  const rows = (S.expenses || []).filter(e => e.date.slice(0, 7) === key)
+  const all = S.expenses || []
+  // Newest first, id as the tie-break — a day commonly carries several, and the
+  // screen claims an order the state cannot be trusted to arrive in.
+  const rows = all
+    .filter(e => e.date.slice(0, 7) === key)
+    .sort((a, b) => (a.date === b.date ? (b.id || 0) - (a.id || 0) : a.date < b.date ? 1 : -1))
 
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
   const byCategory = new Map()
+  const countByCategory = new Map()
+  const byGroup = new Map()
+  const byDay = Array.from({ length: daysInMonth }, () => 0)
   let loggedRM = 0
+
   for (const e of rows) {
     const rm = toRM(S, e.amount, e.currency)
     loggedRM += rm
     byCategory.set(e.category, (byCategory.get(e.category) || 0) + rm)
+    countByCategory.set(e.category, (countByCategory.get(e.category) || 0) + 1)
+    const g = expenseGroupOf(e.category)
+    byGroup.set(g, (byGroup.get(g) || 0) + rm)
+    const d = Number(e.date.slice(8, 10))
+    if (d >= 1 && d <= daysInMonth) byDay[d - 1] += rm
   }
 
   // Biggest first: on a screen the question is always what the largest slice is,
@@ -3386,10 +3482,86 @@ export function expensesFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     .map(([category, amountRM]) => ({
       category,
       label: EXPENSE_LABEL[category] || category,
+      group: expenseGroupOf(category),
       amountRM,
+      count: countByCategory.get(category) || 0,
       share: loggedRM ? amountRM / loggedRM : 0,
     }))
     .sort((a, b) => b.amountRM - a.amountRM)
+
+  /* ── a usual month ──
+   *
+   * The mean of the three months before this one, over those that were actually
+   * logged. A month with no entries is a month nobody typed into, not a month
+   * nobody spent in, and averaging a zero for it would invent a fall in spending
+   * out of a gap in the habit. With none of the three logged there is no usual
+   * month, and every figure derived from one is null.
+   *
+   * One divisor for every group, so the group averages sum to the headline and
+   * the two cannot disagree.
+   */
+  const priorKeys = []
+  for (let back = 1; back <= USUAL_MONTHS; back++) {
+    const d = new Date(Date.UTC(year, monthIndex - back, 1))
+    priorKeys.push(monthKey(d.getUTCFullYear(), d.getUTCMonth()))
+  }
+  const priorRows = all.filter(e => priorKeys.includes(e.date.slice(0, 7)))
+  const monthsLogged = new Set(priorRows.map(e => e.date.slice(0, 7))).size
+
+  const usualByGroup = new Map()
+  let usualTotal = 0
+  for (const e of priorRows) {
+    const rm = toRM(S, e.amount, e.currency) / monthsLogged
+    const g = expenseGroupOf(e.category)
+    usualByGroup.set(g, (usualByGroup.get(g) || 0) + rm)
+    usualTotal += rm
+  }
+  const usualRM = monthsLogged ? usualTotal : null
+
+  const groups = EXPENSE_GROUPS
+    .map(g => {
+      const amountRM = byGroup.get(g.group) || 0
+      const groupUsualRM = monthsLogged ? usualByGroup.get(g.group) || 0 : null
+      return {
+        group: g.group,
+        label: g.label,
+        amountRM,
+        share: loggedRM ? amountRM / loggedRM : 0,
+        usualRM: groupUsualRM,
+        // Null rather than +100% for a group with no history: a first month of
+        // Travel is not a rise, it is a thing with nothing to measure against.
+        delta: !groupUsualRM ? null : amountRM / groupUsualRM - 1,
+        // Every category of the group, including the empty ones. The screen
+        // prints an em dash for those rather than dropping them, so the taxonomy
+        // stays legible and the owner can see what they are not using.
+        categories: g.categories.map(category => {
+          const catRM = byCategory.get(category) || 0
+          return {
+            category,
+            label: EXPENSE_LABEL[category] || category,
+            amountRM: catRM,
+            count: countByCategory.get(category) || 0,
+            shareOfGroup: amountRM ? catRM / amountRM : 0,
+          }
+        }),
+      }
+    })
+    .filter(g => g.amountRM > 0)
+    .sort((a, b) => b.amountRM - a.amountRM)
+
+  /* ── pace ──
+   *
+   * Per day over the days that have HAPPENED, not the days in the month. Five
+   * days into September, dividing by 30 would report a fifth of the real rate
+   * and make every month look like it started well. Nothing is projected forward
+   * from it either: five days is not a month.
+   */
+  const monthStart = `${key}-01`
+  const monthEnd = `${key}-${String(daysInMonth).padStart(2, '0')}`
+  const open = nowISO >= monthStart && nowISO <= monthEnd
+  const elapsedDays = nowISO < monthStart ? 0 : open ? Number(nowISO.slice(8, 10)) : daysInMonth
+  const perDayRM = elapsedDays ? loggedRM / elapsedDays : null
+  const usualPerDayRM = usualRM == null ? null : usualRM / DAYS_PER_MONTH
 
   const spend = spendingFor(S, year, monthIndex, nowISO)
   // Only over the window the readings actually bracket, or the comparison is
@@ -3402,8 +3574,24 @@ export function expensesFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   return {
     rows,
     categories,
+    groups,
+    // How much of the taxonomy went unused. Not a reproach — most months should
+    // leave several groups empty, and a month that fills all thirteen is the
+    // one worth a second look.
+    emptyGroupCount: EXPENSE_GROUPS.length - groups.length,
+    groupCount: EXPENSE_GROUPS.length,
     loggedRM,
     count: rows.length,
+    byDay,
+    daysInMonth,
+    elapsedDays,
+    open,
+    perDayRM,
+    usualRM,
+    usualPerDayRM,
+    monthsLogged,
+    // Null when there is no usual month, for the same reason a group's delta is.
+    deltaVsUsual: usualRM ? loggedRM / usualRM - 1 : null,
     spend,
     // What left the wallets but never got typed. Negative means the opposite —
     // more logged than actually left, which points at a double entry or an
@@ -3413,6 +3601,42 @@ export function expensesFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     coveragePct: inWindow == null || spend.spentRM <= 0 ? null
       : Math.min((inWindow / spend.spentRM) * 100, 100),
   }
+}
+
+/**
+ * A window of monthly totals ending at the given month, for the history chart.
+ *
+ * `logged` tells a month with nothing typed apart from a month with nothing
+ * spent. The chart draws the first as a gap rather than a zero bar, because a
+ * zero bar is a claim — it says the owner lived on nothing that month — and
+ * every month before the log existed would otherwise make it.
+ */
+export function expenseHistory(S, year, monthIndex, months = 12, nowISO = isoOf(Date.now())) {
+  const totals = new Map()
+  for (const e of S.expenses || []) {
+    const k = e.date.slice(0, 7)
+    totals.set(k, (totals.get(k) || 0) + toRM(S, e.amount, e.currency))
+  }
+
+  const out = []
+  for (let back = months - 1; back >= 0; back--) {
+    const d = new Date(Date.UTC(year, monthIndex - back, 1))
+    const y = d.getUTCFullYear()
+    const m = d.getUTCMonth()
+    const k = monthKey(y, m)
+    const days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+    out.push({
+      key: k,
+      year: y,
+      monthIndex: m,
+      short: MONTH_LABEL[m],
+      totalRM: totals.get(k) || 0,
+      logged: totals.has(k),
+      open: nowISO >= `${k}-01` && nowISO <= `${k}-${String(days).padStart(2, '0')}`,
+      selected: y === year && m === monthIndex,
+    })
+  }
+  return out
 }
 
 export function moneyMonthTotals(S, year, monthIndex, nowISO = isoOf(Date.now())) {

@@ -13,11 +13,47 @@ const { badRequest, notFound } = require('../middleware/errorHandler');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Mirrors expenses_category_check. Short on purpose — see the migration. */
-const CATEGORIES = [
-  'GROCERIES', 'EATING_OUT', 'TRANSPORT', 'FUEL',
-  'HEALTH', 'SHOPPING', 'FAMILY', 'CHARITY', 'OTHER',
+/**
+ * The taxonomy: a group, and the categories inside it. Mirrors
+ * expenses_category_check, and web/src/lib/calc.js mirrors both.
+ *
+ * TWO LEVELS, ONE QUESTION. Only the category is stored — the group is a
+ * function of it and never varies, so a column for it would be a second place
+ * for one fact to be wrong. The form still asks once; the group is what lets the
+ * screen compare a month against the three before it at a level where the
+ * comparison means something.
+ *
+ * Chosen for what they are NOT: none of these can be a RECURRING commitment.
+ * There is no Housing, Insurance or Subscriptions group and there must never be
+ * one — those are known in advance and already modelled, and entering them here
+ * as well would count them twice against income.
+ */
+const GROUPS = [
+  ['FOOD', 'Food', ['GROCERIES', 'MEALS_OUT', 'COFFEE_SNACKS']],
+  ['TRANSPORT', 'Transport', ['FUEL', 'FARES', 'PARKING_TOLLS']],
+  ['HOME', 'Home', ['HOUSEHOLD_GOODS', 'HOME_UPKEEP']],
+  ['HEALTH', 'Health', ['MEDICAL', 'PHARMACY']],
+  ['PERSONAL_CARE', 'Personal care', ['GROOMING', 'TOILETRIES']],
+  ['SHOPPING', 'Shopping', ['CLOTHES', 'THINGS']],
+  ['ENTERTAINMENT', 'Entertainment', ['GOING_OUT', 'GAMES_MEDIA']],
+  ['TRAVEL', 'Travel', ['FLIGHTS_STAYS', 'TRIP_SPENDING']],
+  // RELATIVES is money sent to parents or relatives — the old FAMILY column,
+  // kept as its own leaf because folding it into Gifts would lose a real and
+  // regular flow rather than merely renaming it.
+  ['FAMILY', 'Family', ['RELATIVES', 'KIDS', 'PETS']],
+  ['GIVING', 'Giving', ['GIFTS', 'DONATIONS']],
+  ['LEARNING', 'Learning', ['COURSES', 'BOOKS']],
+  ['FEES', 'Fees', ['BANK_FEES', 'CARD_CHARGES']],
+  ['OTHER', 'Other', ['UNCATEGORISED']],
 ];
+
+const CATEGORIES = GROUPS.flatMap(g => g[2]);
+
+// Twenty-eight names on one line is unreadable, and an error nobody reads is an
+// error that does not help. Grouped, it is a list you can scan for the one you
+// meant.
+const categoryHelp = () =>
+  'category must be one of: ' + GROUPS.map(g => g[1] + ' (' + g[2].join(', ') + ')').join('; ');
 
 /** Mirrors expenses_source_check. `import` is reserved for a future importer. */
 const SOURCES = ['manual', 'import'];
@@ -57,7 +93,7 @@ async function resolveAsset(asset_id) {
 async function create({ date, amount, currency = 'MYR', category, note = '', asset_id = null, source = 'manual' }) {
   checkDate(date);
   if (!positive(amount)) throw badRequest('amount must be a positive number');
-  if (!CATEGORIES.includes(category)) throw badRequest(`category must be one of: ${CATEGORIES.join(', ')}`);
+  if (!CATEGORIES.includes(category)) throw badRequest(categoryHelp());
   if (!SOURCES.includes(source)) throw badRequest(`source must be one of: ${SOURCES.join(', ')}`);
 
   return expenses.insert({
@@ -78,7 +114,7 @@ async function update(id, body) {
 
   checkDate(date);
   if (!positive(amount)) throw badRequest('amount must be a positive number');
-  if (!CATEGORIES.includes(category)) throw badRequest(`category must be one of: ${CATEGORIES.join(', ')}`);
+  if (!CATEGORIES.includes(category)) throw badRequest(categoryHelp());
 
   // Distinguishes "not sent" from "sent as null", so an expense can be detached
   // from a wallet as well as moved between two.
@@ -95,4 +131,4 @@ async function remove(id) {
   await expenses.remove(id);
 }
 
-module.exports = { create, update, remove, CATEGORIES };
+module.exports = { create, update, remove, CATEGORIES, GROUPS };

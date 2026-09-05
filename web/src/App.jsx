@@ -63,7 +63,9 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -72,7 +74,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
 import {
-  EXPENSE_CATEGORIES,
+  EXPENSE_GROUPS,
   EXPENSE_LABEL,
   GOAL_KIND,
   GOAL_NEEDS_INSTRUMENT,
@@ -1210,11 +1212,20 @@ function ExpenseDialog({ prefill }) {
             <SelectTrigger id="ex-cat" className="w-full">
               <SelectValue />
             </SelectTrigger>
+            {/* Grouped, because twenty-eight names in one column is a scroll and a
+                scroll at the point of entry is where this feature is lost. The
+                group is a heading and not a choice: only the category is
+                stored, and picking one is still a single click. */}
             <SelectContent>
-              {EXPENSE_CATEGORIES.map(c => (
-                <SelectItem key={c} value={c}>
-                  {EXPENSE_LABEL[c]}
-                </SelectItem>
+              {EXPENSE_GROUPS.map(g => (
+                <SelectGroup key={g.group}>
+                  <SelectLabel>{g.label}</SelectLabel>
+                  {g.categories.map(c => (
+                    <SelectItem key={c} value={c}>
+                      {EXPENSE_LABEL[c]}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
