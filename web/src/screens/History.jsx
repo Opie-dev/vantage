@@ -192,7 +192,11 @@ function SourceTag({ source }) {
   // 'api' is only ever written by the moomoo ingest, and nothing writes 'csv' at
   // all. Neither word means anything to a reader; what they want to know is
   // whether they typed the row or something else did.
-  const AUTO = { api: 'SYNCED', csv: 'IMPORTED', payroll: 'AUTO' }
+  // 'position' is the odd one and deliberately does not say SYNCED: it was never
+  // a deal. The broker reported a holding no order explained — a free share — and
+  // the app took its word for the quantity. The date is the day it was noticed,
+  // not the day it arrived, and this badge is what lets a reader know that.
+  const AUTO = { api: 'SYNCED', csv: 'IMPORTED', payroll: 'AUTO', position: 'FROM HOLDING' }
   const label = AUTO[source]
   if (!label) return null
   return (
@@ -208,7 +212,9 @@ function SourceTag({ source }) {
       <TooltipContent className="max-w-[260px]">
         {source === 'payroll'
           ? 'Written by a payslip you recorded under Money, not typed here — the EPF contribution books itself.'
-          : 'Written by the moomoo sync rather than entered by hand.'}
+          : source === 'position'
+            ? 'Not a deal. moomoo reported this holding with no order behind it — usually a free share — so the app recorded the quantity it was given. The date is the day it was noticed, not the day it arrived; edit it if you know better.'
+            : 'Written by the moomoo sync rather than entered by hand.'}
       </TooltipContent>
     </Tooltip>
   )

@@ -632,6 +632,24 @@ try {
     fresh.brokerPositions = []
     if (brokerDrift(fresh).length) throw new Error('drift: an empty broker table must report nothing')
 
+    // Once the ingest has recognised a broker-only holding, the ledger derives it
+    // and the gap must close. A BUY at price 0 is the free-share shape, and its
+    // percentage has to read 0% rather than Infinity — cost is the divisor.
+    const recognised = JSON.parse(JSON.stringify(gift))
+    recognised.transactions.unshift({
+      id: 9001, ticker: 'FREE', side: 'BUY', qty: 0.0153, price: 0, fees: 0,
+      amount: null, trade_date: ago(0), source: 'position', ext_id: 'moomoo:pos:FREE',
+    })
+    if (brokerDrift(recognised).some(x => x.ticker === 'FREE')) {
+      throw new Error('drift: recognising the holding must close the gap it reported')
+    }
+    const { positionsWithIncome, pnlBasis } = await server.ssrLoadModule('/src/lib/calc.js')
+    const free = positionsWithIncome(recognised, pnlBasis(recognised)).find(p => p.t === 'FREE')
+    if (!free) throw new Error('drift: the recognised holding must now derive as a position')
+    if (!Number.isFinite(free.pctShown) || free.pctShown !== 0) {
+      throw new Error(`drift: a zero-cost holding must read 0%, got ${free.pctShown}`)
+    }
+
     console.log(`  drift      ${d.length} gap from the fixture, free-share case detected, residue ignored`)
   }
 
