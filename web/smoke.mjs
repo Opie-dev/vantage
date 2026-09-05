@@ -401,7 +401,7 @@ try {
 
   const text = document.body.textContent
   const html = document.body.innerHTML
-  const need = ['Vantage', 'personal finance', 'Prices', 'Instrument', 'Dashboard', 'Positions', 'History', 'Wallet', 'Calendar', 'Goals', 'Assets', 'Money']
+  const need = ['Vantage', 'personal finance', 'Prices', 'Dashboard', 'Portfolio', 'History', 'Calendar', 'Goals', 'Assets', 'Money']
   for (const n of need) if (!text.includes(n)) throw new Error(`shell is missing "${n}"`)
   if (!text.includes('OpenD sync')) throw new Error('last-sync line missing')
   if (!html.includes('data-state="active"')) throw new Error('no active tab')
@@ -425,7 +425,7 @@ try {
   )
 
   // every screen must mount and render something
-  const SCREENS = ['dashboard', 'positions', 'instruments', 'history', 'wallet', 'calendar', 'goals', 'assets', 'money', 'settings']
+  const SCREENS = ['dashboard', 'portfolio', 'history', 'calendar', 'goals', 'assets', 'money', 'settings']
   for (const id of SCREENS) {
     await tick(() => ctl.setTab(id))
     const panes = document.querySelectorAll('[data-slot="tabs-content"][data-state="active"]')
@@ -450,19 +450,23 @@ try {
       // the assets bar, so owing more than you own is visible rather than
       // normalised away.
       'the loans are counted, the things they bought are not']],
-    ['instruments', ['Quoted yield', 'Has really paid you', 'Declared per share']],
+    // One screen where there were three. The four figures are the frame, not a
+    // tab, so they have to be on screen before anything is clicked.
+    ['portfolio', ['Portfolio value', 'Unrealised P&L', 'Net income', 'Wallet',
+      'Holdings', 'Ledger',
+      // The holdings table's combined columns. 'Price / cost' in one header is
+      // the merge itself — two columns became one and the header says so.
+      'Price / cost', 'Value / units',
+      'a missing quote must never read as a wipe-out',
+      // The drift card became a chip. 'DRIFT' is the badge, the sentence after
+      // it is what the card used to spend four lines saying.
+      'INCM', 'DRIFT', 'more than your transactions account for']],
     // Provenance on two axes: 'moomoo' says which world a row is from, 'SYNCED'
     // says the sync wrote it rather than a person. A row can be moomoo and NOT
     // synced, so neither badge can stand in for the other.
     ['history', ['PENDING', 'moomoo', 'SYNCED', 'Savings', 'Income', 'What']],
     // The allocation scope chips, on the screen that owns them.
     ['dashboard', ['Allocation', 'Everything', 'Outside']],
-    // The drift card, on the screen it belongs to. 'a buy is missing' is the
-    // INCM short case; the explanatory line proves the card renders in full
-    // rather than just its heading.
-    ['positions', ['moomoo and your ledger disagree', 'INCM', 'a buy is missing',
-      'derived from your transactions']],
-    ['wallet', ['INCM dividend', 'INCM withholding tax']],
     // The money layer. The fixture's salary lands on the 25th and the loans on
     // the 1st and 5th, so a grid with no money marks means moneyByDay() stopped
     // producing them. 'across the month' is the in/out/net line.
@@ -965,6 +969,40 @@ try {
     await tick(() => ctl.togglePrivate())
     if (paneText() !== open) throw new Error('private: toggling back did not restore the figures')
     console.log(`  private    masks all ${figures.length} figures on Assets, keeps dates, and reverses`)
+  }
+  await tick(() => ctl.setTab('dashboard'))
+
+  // The two halves of Portfolio that a tab click away, and the panel behind a
+  // holding's name. Local state, so the store cannot drive any of it — these
+  // click what the owner clicks.
+  {
+    await tick(() => ctl.setTab('portfolio'))
+    const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+    const button = re => [...pane().querySelectorAll('button')].find(b => re.test(b.textContent))
+
+    // The holding name IS the control — there is no View button to find.
+    const holding = pane().querySelector('table button')
+    if (!holding) throw new Error('portfolio: no holding row to open')
+    await tick(() => holding.click())
+    const panel = document.querySelector('[data-slot="sheet-content"]')
+    if (!panel) throw new Error('portfolio: clicking a holding opened no panel')
+    for (const n of ['Paid you, net', 'Quoted yield', 'Per share trend', 'Owed to you', 'Withheld']) {
+      if (!panel.textContent.includes(n)) throw new Error(`portfolio panel: missing "${n}"`)
+    }
+    // The panel is the income history, so it has to carry the payments as well
+    // as the analytics above them.
+    if (!panel.textContent.includes('Per share') || !panel.textContent.includes('Net'))
+      throw new Error('portfolio panel: the payment table did not render')
+    await tick(() => document.querySelector('[data-slot="sheet-content"] button[type="button"]')?.click())
+
+    await tick(() => button(/^Ledger/)?.click())
+    const ledger = pane().textContent
+    // 'Wallet after' is the running balance this screen derives; 'Columns' and
+    // 'Per page' prove the toolbar and the pager came with it.
+    for (const n of ['Wallet after', 'Columns', 'Per page', 'Add movement', 'running balance']) {
+      if (!ledger.includes(n)) throw new Error(`portfolio ledger: missing "${n}"`)
+    }
+    console.log('  portfolio  holdings, the income panel, and the ledger all open')
   }
   await tick(() => ctl.setTab('dashboard'))
 

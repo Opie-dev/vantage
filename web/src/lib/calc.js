@@ -281,11 +281,6 @@ export function brokerCash(S, cur) {
   return f && typeof f.cash === 'number' ? f.cash : null
 }
 
-/** 'broker' when the figures come from moomoo, 'derived' when computed locally. */
-export function cashSource(S) {
-  return brokerCash(S, 'MYR') === null && brokerCash(S, 'USD') === null ? 'derived' : 'broker'
-}
-
 /**
  * Dividend income to date, RM-combined.
  *
@@ -914,101 +909,15 @@ export function fundMetricsFor(S, ticker) {
   return (S.fundMetrics || []).find(f => f.ticker === ticker) || null
 }
 
-/**
- * One row per instrument for the Instruments screen: what the thing is, what the
- * fund is, what you own of it and what it has paid you.
- *
- * ONLY what you currently hold. A sold-out instrument has no fund figures worth
- * showing (the sync stops refreshing it) and its dividend history already lives
- * in History, so listing it here would be a card of dashes.
- *
- * `shareOfFund` is your holding as a percentage of the whole vehicle. It is the
- * figure that shows ETCO is a RM 4m fund you own a meaningful slice of, which no
- * other screen surfaces.
- */
-/** Everything ever put into a ticker, fees included — the base a closed position's
- * income is measured against, since its running cost basis is gone once it is sold. */
-function investedEver(S, ticker) {
-  let cost = 0
-  for (const x of S.transactions) {
-    if (x.ticker !== ticker || x.side !== 'BUY') continue
-    cost += x.qty * x.price + (x.fees || 0)
-  }
-  return cost
-}
-
 /** The day a ticker was FIRST bought — where your money entered a schedule the
  * fund had already been running, which is worth seeing on the declaration chart. */
-function firstBoughtOn(S, ticker) {
+export function firstBoughtOn(S, ticker) {
   let first = ''
   for (const x of S.transactions) {
     if (x.ticker !== ticker || x.side !== 'BUY' || !x.trade_date) continue
     if (!first || x.trade_date < first) first = x.trade_date
   }
   return first || null
-}
-
-/** The day a ticker was last sold, for a position that is now closed. */
-function lastSoldOn(S, ticker) {
-  let last = ''
-  for (const x of S.transactions) {
-    if (x.ticker !== ticker || x.side !== 'SELL' || !x.trade_date) continue
-    if (x.trade_date > last) last = x.trade_date
-  }
-  return last || null
-}
-
-/**
- * One row per instrument for the Instruments screen.
- *
- * By default only what is currently held: the sync refreshes fund figures and
- * declaration schedules for held codes alone, so a sold fund's card would be a row
- * of dashes. With `includeClosed` those come back anyway, marked `closed` and
- * carrying only what survives a sale — the income it paid while you held it, and
- * what you put in. Callers must not expect `pos` or `metrics` on those.
- */
-export function instrumentRows(S, { includeClosed = false } = {}) {
-  const held = new Map(positions(S).map(p => [p.t, p]))
-  const divs = dividendsByTicker(S)
-  const tax = withholdingByTicker(S)
-  const fees = feesByTicker(S)
-
-  return S.instruments
-    .filter(i => held.has(i.ticker) || (includeClosed && (divs[i.ticker] || investedEver(S, i.ticker))))
-    .map(i => {
-      const pos = held.get(i.ticker) || null
-      const m = fundMetricsFor(S, i.ticker)
-      const gross = divs[i.ticker] || 0
-      const withheld = tax[i.ticker] || 0
-      // Units and holding are both in shares, so this needs no conversion.
-      const shareOfFund = m && m.outstanding_units && pos ? (pos.qty / m.outstanding_units) * 100 : null
-      const cost = pos ? pos.cost : investedEver(S, i.ticker)
-      return {
-        instrument: i,
-        ticker: i.ticker,
-        cur: i.currency,
-        pos,
-        closed: !pos,
-        soldOn: pos ? null : lastSoldOn(S, i.ticker),
-        firstBought: firstBoughtOn(S, i.ticker),
-        invested: cost,
-        metrics: m,
-        gross,
-        withheld,
-        net: gross - withheld,
-        fees: fees[i.ticker] || 0,
-        returnedPct: cost > 0 ? ((gross - withheld) / cost) * 100 : null,
-        shareOfFund,
-        payments: dividendPayments(S, i.ticker).length,
-        declarations: distributionsFor(S, i.ticker),
-      }
-    })
-    // Held first, largest holding down; then closed positions by what they paid.
-    .sort((a, b) => {
-      if (!a.pos !== !b.pos) return a.pos ? -1 : 1
-      if (a.pos) return b.pos.val - a.pos.val || a.ticker.localeCompare(b.ticker)
-      return b.net - a.net || a.ticker.localeCompare(b.ticker)
-    })
 }
 
 /**
@@ -1532,61 +1441,6 @@ export function pendingHistoryRows(S) {
   return rows
 }
 
-/**
- * Everything that moved the wallet, newest first.
- *
- * A dividend is stored as a DIV transaction because it belongs to a holding, not
- * to the wallet — but it is money paid INTO the wallet all the same, and leaving
- * it out showed the withholding tax without the payment it was taken from. The
- * ledger then read as an account that is only ever charged.
- *
- * Declared-but-unbooked payments are here too: the broker's balance at the top of
- * the screen already includes them (moomoo credits the cash before it publishes
- * the row), so omitting them would leave the ledger further from the balance, not
- * closer. They carry `pending` and the screen marks them.
- *
- * This still does not sum to the balance, and is not meant to: moomoo leaves trade
- * fees out of its cash-flow ledger entirely. See the note on the Wallet screen.
- */
-const WALLET_ORDER = { DIVIDEND: 0, DEPOSIT: 1, WITHDRAW: 2, FEE: 3 }
-
-export function walletMovements(S) {
-  const tickerOf = {}
-  for (const i of S.instruments) tickerOf[i.id] = i.ticker
-  const rows = S.cash.map(c => ({
-    ...c,
-    key: `c${c.id}`,
-    ticker: (c.instrument_id && tickerOf[c.instrument_id]) || null,
-  }))
-
-  for (const x of S.transactions) {
-    if (x.side !== 'DIV' || !x.trade_date) continue
-    const i = instr(S, x.ticker)
-    rows.push({
-      key: `t${x.id}`, id: x.id, type: 'DIVIDEND', ticker: x.ticker,
-      currency: i ? i.currency : 'MYR', amount: (x.amount ?? x.price) || 0,
-      date: x.trade_date, source: x.source,
-    })
-  }
-
-  for (const r of pendingHistoryRows(S)) {
-    rows.push({
-      key: r.key, id: null, type: r.kind === 'DIV' ? 'DIVIDEND' : 'FEE',
-      ticker: r.ticker, currency: r.currency, amount: r.amount,
-      date: r.date, source: 'pending', pending: true,
-    })
-  }
-
-  // Newest day first, then a fund's dividend immediately above the tax taken from
-  // it — the two rows are one event and read as nonsense in the other order.
-  return rows.sort(
-    (x, y) =>
-      y.date.localeCompare(x.date) ||
-      String(x.ticker || '').localeCompare(String(y.ticker || '')) ||
-      (WALLET_ORDER[x.type] ?? 9) - (WALLET_ORDER[y.type] ?? 9),
-  )
-}
-
 export function historyRows(S) {
   const rows = []
   // Which world a row belongs to. Distinct from `source`, which says how it got
@@ -1731,13 +1585,157 @@ export function filterHistory(rows, filter) {
   if (HISTORY_DOMAIN[filter]) return rows.filter(r => r.domain === filter)
   // CASH means the broker's wallet movements, not every ringgit that ever moved —
   // an ASB deposit is a DEPOSIT too, and sweeping it in here would make this
-  // filter mean something different from what the Wallet screen shows.
+  // filter mean something different from what the portfolio ledger shows.
   if (filter === 'CASH') {
     return rows.filter(
       r => r.domain === HISTORY_DOMAIN.MOOMOO &&
         (r.kind === 'DEPOSIT' || r.kind === 'WITHDRAW' || r.kind === 'FEE'))
   }
   return rows.filter(r => r.kind === filter)
+}
+
+/* ── the portfolio screen ─────────────────────────────────────────────────── */
+
+/** Units held on a date, from the transactions alone. A payment's size is the
+ *  rate times what you held THEN, which is rarely what you hold now. */
+function unitsOn(S, ticker, iso) {
+  let q = 0
+  for (const x of S.transactions) {
+    if (x.ticker !== ticker || !x.trade_date || x.trade_date > iso) continue
+    if (x.side === 'BUY') q += x.qty
+    else if (x.side === 'SELL') q -= x.qty
+  }
+  return q
+}
+
+/** The same figure in a named currency, whatever currency it was booked in. */
+function inCur(S, v, from, to) {
+  if (from === to) return v
+  const rm = toRM(S, v, from)
+  return to === 'USD' ? (S.fx ? rm / S.fx : 0) : rm
+}
+
+/**
+ * Every dividend one holding has paid, newest first, in the instrument's OWN
+ * currency.
+ *
+ * dividendPayments() answers the same question in MYR, which is right for the
+ * goals and the run rate — they add MYR and USD together and have to. This one
+ * exists for the income panel, which never sums across two markets: a US fund's
+ * payments are dollars, and converting them at today's rate would restate money
+ * that arrived at last year's.
+ *
+ * PER SHARE IS DERIVED, NOT READ. The declaration table carries the rate the
+ * fund announced; this divides what actually arrived by what was actually held
+ * on the day. The two agree when nothing odd happened, and when they disagree
+ * it is this one that is true — a part-month holding or a corrected declaration
+ * shows up here and nowhere else.
+ *
+ * The last entry may be `pending`: declared, its pay date reached, and still not
+ * booked by moomoo. It is money owed rather than money received, so it is left
+ * out of every total the panel computes and marked wherever it is drawn.
+ *
+ * @returns {Array<{date: string, perShare: number|null, units: number,
+ *                  gross: number, tax: number, net: number, pending: boolean}>}
+ */
+export function dividendSchedule(S, ticker) {
+  const i = instr(S, ticker)
+  const cur = i ? i.currency : 'MYR'
+  const byDate = new Map()
+  const at = d => {
+    if (!byDate.has(d)) byDate.set(d, { date: d, gross: 0, tax: 0, pending: false })
+    return byDate.get(d)
+  }
+
+  for (const x of S.transactions) {
+    if (x.side !== 'DIV' || x.ticker !== ticker || !x.trade_date) continue
+    at(x.trade_date).gross += (x.amount ?? x.price) || 0
+  }
+
+  // Withholding is booked as its own cash row against the instrument, on the day
+  // of the payment it was taken from — so it attaches to an existing row and
+  // never creates one.
+  const tickerOf = {}
+  for (const x of S.instruments) tickerOf[x.id] = x.ticker
+  for (const c of S.cash) {
+    if (c.type !== 'FEE' || !c.date || tickerOf[c.instrument_id] !== ticker) continue
+    const e = byDate.get(c.date)
+    if (e) e.tax += inCur(S, c.amount, c.currency, cur)
+  }
+
+  // Declared, due, unbooked. pendingHistoryRows() already works this out for
+  // every holding — including the settlement lag and the withholding rate — so
+  // it is read here rather than derived a second time.
+  for (const r of pendingHistoryRows(S)) {
+    if (r.ticker !== ticker) continue
+    const e = at(r.date)
+    e.pending = true
+    if (r.kind === 'DIV') e.gross += inCur(S, r.amount, r.currency, cur)
+    else e.tax += inCur(S, r.amount, r.currency, cur)
+  }
+
+  return [...byDate.values()]
+    .map(e => {
+      const units = unitsOn(S, ticker, e.date)
+      return {
+        ...e,
+        units,
+        perShare: units > 0 ? e.gross / units : null,
+        net: e.gross - e.tax,
+      }
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+}
+
+/**
+ * The broker's ledger — every row that touched the moomoo account, newest first,
+ * carrying the wallet balance that stood after it.
+ *
+ * ABOUT `walletAfter`. moomoo does not publish a per-row balance, so this is a
+ * running total computed here: the rows in order, each one's effect on the
+ * wallet it moved, in the currency it moved. The MYR series and the USD series
+ * are separate columns of arithmetic that happen to be interleaved on screen —
+ * an MYR row and the USD row above it do not continue one another, and the
+ * footnote on the screen says so.
+ *
+ * IT IS ANCHORED, NOT ACCUMULATED FROM ZERO. Where a sync has run, the newest
+ * row of each currency is pinned to moomoo's own current figure and the rest are
+ * worked backwards from it. That way the bottom of the column agrees with the
+ * balance shown at the top of the screen, which is the number the owner can
+ * check against their phone. Without a sync there is nothing to anchor to and
+ * the series is the derived one, from zero — the same figure cashBal() reports.
+ *
+ * The anchor is doing real work rather than tidying: moomoo's cash-flow ledger
+ * leaves trade fees out entirely, so an unanchored sum drifts from the truth by
+ * every commission ever paid. What the anchor cannot fix is the drift BETWEEN
+ * rows — an older balance is only as right as the rows above it are complete.
+ */
+export function portfolioLedger(S) {
+  const rows = historyRows(S)
+    .filter(r => r.domain === HISTORY_DOMAIN.MOOMOO)
+    .concat(pendingHistoryRows(S))
+    .sort((a, b) => b.date.localeCompare(a.date) || String(a.kind).localeCompare(String(b.kind)))
+
+  // Oldest first, so a balance is built from what came before it.
+  const running = {}
+  const after = new Map()
+  for (let k = rows.length - 1; k >= 0; k -= 1) {
+    const r = rows[k]
+    const cur = r.currency || 'MYR'
+    running[cur] = (running[cur] || 0) + r.direction * r.amount
+    after.set(r.key, running[cur])
+  }
+
+  const offset = {}
+  for (const cur of Object.keys(running)) {
+    const broker = brokerCash(S, cur)
+    offset[cur] = broker == null ? 0 : broker - running[cur]
+  }
+
+  return rows.map(r => {
+    const cur = r.currency || 'MYR'
+    return { ...r, currency: cur, walletAfter: after.get(r.key) + (offset[cur] || 0) }
+  })
 }
 
 /* ── calendar ─────────────────────────────────────────────────────────────── */

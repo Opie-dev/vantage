@@ -15,10 +15,8 @@ import { setPrivate as setFormatPrivate } from './format'
 
 export const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'positions', label: 'Positions' },
-  { id: 'instruments', label: 'Instruments' },
+  { id: 'portfolio', label: 'Portfolio' },
   { id: 'history', label: 'History' },
-  { id: 'wallet', label: 'Wallet' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'goals', label: 'Goals' },
   { id: 'assets', label: 'Assets' },
@@ -88,8 +86,17 @@ export function useVantage() {
  * screen. The screens are one now and the rail says so, but a bookmark or an
  * open window still carries the old hash, and falling through to the Dashboard
  * would answer a request for the spending log with a portfolio summary.
+ *
+ * The same is true three times over of Positions, Instruments and Wallet, which
+ * are one Portfolio screen now. An old link lands on the screen that answers it
+ * rather than on a summary of something else.
  */
-const RETIRED_TABS = { expenses: 'money' }
+const RETIRED_TABS = {
+  expenses: 'money',
+  positions: 'portfolio',
+  instruments: 'portfolio',
+  wallet: 'portfolio',
+}
 
 const hashTab = () => {
   const h = String(window.location.hash || '').replace(/^#\/?/, '')
@@ -296,7 +303,7 @@ export function VantageProvider({ children }) {
   const value = useMemo(() => {
     const openTransaction = (prefill = {}) => {
       if (!latest.current.instruments.length) {
-        toast.warning('Add an instrument first', { description: 'Add one on the Instruments screen.' })
+        toast.warning('Add an instrument first', { description: 'Add one from the Portfolio screen.' })
         return
       }
       setModal({ kind: 'transaction', prefill })

@@ -93,8 +93,8 @@ const WAYS = [
   <>
     Run the OpenD sync — start OpenD, then <code className="num text-foreground">python sync/moomoo_sync.py</code>
   </>,
-  <>Add instruments on the Instruments screen and log trades under Positions</>,
-  <>Record a deposit under Wallet</>,
+  <>Add instruments and log trades under Portfolio</>,
+  <>Record a deposit under Portfolio</>,
 ]
 
 function Welcome() {

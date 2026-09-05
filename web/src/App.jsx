@@ -5,9 +5,9 @@
  * top bar (screen title, Sync, ↻ Prices, theme), the first-load /
  * server-down states, the toast host, and the three write dialogs.
  *
- * Navigation is a VERTICAL rail, not a row of tabs. Eight screens overflowed a
- * horizontal strip on any narrow window, and the rail also gives the last-sync
- * line and theme toggle a home that is not competing with the actions.
+ * Navigation is a VERTICAL rail, not a row of tabs. Even at eight screens a
+ * horizontal strip overflowed on any narrow window, and the rail also gives the
+ * last-sync line and theme toggle a home that is not competing with the actions.
  *
  * It is still Radix Tabs underneath: orientation="vertical" moves the active
  * indicator to the right edge and rebinds the arrow keys to up/down, so the whole
@@ -17,8 +17,14 @@
  * use for.
  *
  * Screens live in src/screens/*.jsx and are rendered inside a TabsContent. They
- * never render their own header or dialogs — they call the openers on
- * useVantage() instead. See src/lib/store.jsx for that contract.
+ * never render their own header, and every form that WRITES lives here — a
+ * screen calls the openers on useVantage() instead. See src/lib/store.jsx for
+ * that contract.
+ *
+ * A panel that only READS is the screen's own business: Portfolio opens one for
+ * a holding's income history. It is not shared, it is not a form, and putting it
+ * in the store would mean the shell holding a piece of one screen's presentation
+ * state on that screen's behalf.
  */
 
 import { useEffect, useState } from 'react'
@@ -27,7 +33,6 @@ import {
   CalendarDaysIcon,
   CloudDownloadIcon,
   HistoryIcon,
-  LandmarkIcon,
   LayersIcon,
   LayoutDashboardIcon,
   BanknoteIcon,
@@ -40,7 +45,6 @@ import {
   SunIcon,
   TargetIcon,
   TriangleAlertIcon,
-  WalletIcon,
 } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -100,22 +104,18 @@ import { TABS, useVantage } from '@/lib/store'
 import { dtfmt, today } from '@/lib/format'
 
 import Dashboard from '@/screens/Dashboard'
-import Positions from '@/screens/Positions'
+import Portfolio from '@/screens/Portfolio'
 import History from '@/screens/History'
-import Wallet from '@/screens/Wallet'
 import CalendarScreen from '@/screens/Calendar'
 import Goals, { KIND_OPTIONS, WHOLE, isBalance, isIncome } from '@/screens/Goals'
-import Instruments from '@/screens/Instruments'
 import Assets from '@/screens/Assets'
 import Money from '@/screens/Money'
 import Settings from '@/screens/Settings'
 
 const SCREENS = {
   dashboard: Dashboard,
-  positions: Positions,
-  instruments: Instruments,
+  portfolio: Portfolio,
   history: History,
-  wallet: Wallet,
   calendar: CalendarScreen,
   goals: Goals,
   assets: Assets,
@@ -129,10 +129,8 @@ const SCREENS = {
  *  and which glyph a screen wears is a presentation choice. */
 const NAV_ICON = {
   dashboard: LayoutDashboardIcon,
-  positions: LayersIcon,
-  instruments: LandmarkIcon,
+  portfolio: LayersIcon,
   history: HistoryIcon,
-  wallet: WalletIcon,
   calendar: CalendarDaysIcon,
   goals: TargetIcon,
   assets: PiggyBankIcon,
@@ -2182,7 +2180,7 @@ function GoalDialog() {
         <Field
           label={income ? 'Scope' : 'Instrument'}
           htmlFor="g-t"
-          hint={blocked ? 'Add an instrument first, from the Instruments screen.' : undefined}
+          hint={blocked ? 'Add an instrument first, from the Portfolio screen.' : undefined}
         >
           <Select value={picked} onValueChange={setTicker} disabled={blocked}>
             <SelectTrigger id="g-t" className="w-full">

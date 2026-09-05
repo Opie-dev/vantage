@@ -119,15 +119,15 @@ const DOMAIN_COLOR = {
  * or month filter is narrowing the feed — see the empty state below.
  */
 const EMPTY_COPY = {
-  ALL: 'Nothing here yet — run the OpenD sync, or add a transaction under Positions.',
-  MOOMOO: 'Nothing from the broker yet — run the OpenD sync, or add a transaction under Positions.',
+  ALL: 'Nothing here yet — run the OpenD sync, or add a transaction under Portfolio.',
+  MOOMOO: 'Nothing from the broker yet — run the OpenD sync, or add a transaction under Portfolio.',
   SAVINGS: 'No entries against ASB, Tabung Haji or EPF yet — add one under Assets.',
   INCOME: 'No payments recorded yet — add a source and a payslip under Money.',
   OWED: 'No loan payments recorded. Routine instalments are derived, never typed — this only fills up when something deviates from the schedule.',
   BUY: 'No buys recorded yet.',
   SELL: 'No sells yet — nothing has left the portfolio.',
   DIV: 'No dividends yet.',
-  CASH: 'No deposits or withdrawals yet — record one under Wallet.',
+  CASH: 'No deposits or withdrawals yet — record one under Portfolio.',
 }
 
 const TH =
