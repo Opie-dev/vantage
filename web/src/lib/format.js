@@ -111,6 +111,31 @@ export function pctS(v) {
   return sign(v) + Math.abs(Number(v) || 0).toFixed(1) + '%'
 }
 
+/**
+ * Month and year in full, for naming a range in prose.
+ * monthYear('2019-02-09') -> 'Feb 2019'
+ */
+export function monthYear(d) {
+  if (!d) return ''
+  return new Date(d + 'T00:00').toLocaleDateString(LOCALE, { month: 'short', year: 'numeric' })
+}
+
+/**
+ * A date for a chart axis that crosses years. dfmtAxis('2019-02-09') -> '9 Feb 19'
+ *
+ * Two digits of year rather than four, and the day KEPT rather than dropped. A
+ * weekly payer puts several declarations in one month, so losing the day would
+ * make its ticks repeat; a semi-annual one repeats its months across years, so
+ * losing the year makes those repeat instead. Carrying both costs three
+ * characters and is the only version that is never ambiguous.
+ */
+export function dfmtAxis(d) {
+  if (!d) return ''
+  return new Date(d + 'T00:00').toLocaleDateString(LOCALE, {
+    day: 'numeric', month: 'short', year: '2-digit',
+  })
+}
+
 /** Unsigned percentage, 0dp — for progress chips. pct0(63.4) -> '63%' */
 export function pct0(v) {
   if (hidden) return MASK
