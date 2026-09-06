@@ -2703,6 +2703,8 @@ export function planRows(S, card, nowISO = isoOf(Date.now())) {
         amount: p.amount,
         tenure,
         instalment: p.instalment,
+        upfront_fee: p.upfront_fee || 0,
+        rate: p.rate || 0,
         paid,
         left,
         outstanding,
@@ -2935,6 +2937,11 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
           minimumIsStated: !!stated,
           derivedMinimum: derived,
           statement: stmt,
+          // Every bill recorded for this card, newest first — the sheet lists them,
+          // and their count is what says how much history the float actually has.
+          statements: (S.cardStatements || [])
+            .filter(x => x.commitment_id === c.id)
+            .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1)),
           cycle: cardCycle(c, nowISO),
           // Only if the balance is carried — what it costs to revolve, not a
           // charge already incurred.
@@ -3558,6 +3565,11 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   const empty = {
     spentRM: null, from: null, to: null, days: 0,
     inflowRM: 0, committedRM: 0, savedRM: 0, walletDeltaRM: 0,
+    // Declared here too, so a caller reading them off an unresolvable month gets
+    // an explicit null rather than undefined. There is no window to compute a
+    // float over: it is measured across the SAME two wallet readings, and without
+    // those the question has no boundaries rather than a zero answer.
+    floatRM: null, floatReason: null, floatUnreadableCards: [], livingCostRM: null,
   }
 
   const hasWallet = (S.assets || []).some(a => !a.archived && a.liquidity === 'WALLET')
