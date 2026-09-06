@@ -3252,6 +3252,45 @@ export function waterfall(S, opts = {}) {
 }
 
 /**
+ * Whether a card has room for a plan of `amount`, against what is ACTUALLY free.
+ *
+ * NOT AGAINST WHAT THE BILL SAYS, and the gap between the two is the whole point.
+ * A statement showing a third of the limit used can sit on an account with almost
+ * nothing left: instalments already contracted but not yet billed keep blocking
+ * the limit until each month's principal is paid, and no statement prints that
+ * total anywhere. `apparentFree` is what the bill implies; `availableRM` is what
+ * is there.
+ *
+ * IT WARNS, IT DOES NOT REFUSE. The bank decides what fits. This only makes sure
+ * the decision is taken against the real number — and a plan taken out anyway is
+ * still a plan the app has to record faithfully.
+ *
+ * Returns null when the card has no limit recorded, because there is then nothing
+ * to be free of and a fit is not a question this can answer.
+ */
+export function planFit(S, cardId, amount, opts = {}) {
+  const row = commitmentRows(S, opts).find(r => r.id === Number(cardId))
+  if (!row || row.availableRM == null) return null
+  const limit = row.commitment.credit_limit
+  return {
+    fits: amount <= row.availableRM,
+    amount,
+    cur: row.cur,
+    limit,
+    revolving: row.revolving,
+    blocked: row.blocked,
+    availableRM: row.availableRM,
+    minimum: row.minimum,
+    // What the STATEMENT ALONE implies: the limit less what has been billed and
+    // not paid. It knows nothing of instalments not yet billed, so it is never
+    // tighter than the real figure and is looser by exactly `blocked`. Kept
+    // beside availableRM so a screen can show both and name the gap.
+    apparentFree: limit - row.revolving,
+    apparentPct: limit ? (row.revolving / limit) * 100 : 0,
+  }
+}
+
+/**
  * The month as one column of figures, for whichever way the Overview draws it.
  *
  * ONE SOURCE, TWO VIEWS. Waterfall reads it downward, Flow lays it out left to

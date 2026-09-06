@@ -60,7 +60,8 @@ function CycleLine({ label, value, strong = false }) {
  * principal keeps blocking it until each month's share is repaid.
  */
 export default function CardSheet({ row, open, onClose }) {
-  const { deleteCardStatement, openCardStatement, openStatementImport, openCardPlan } = useVantage()
+  const { deleteCardStatement, openCardStatement, openStatementImport, openCardPlan, openCardPayment } =
+    useVantage()
   if (!row) return null
   const c = row.commitment
   const limit = c.credit_limit || 0
@@ -137,7 +138,19 @@ export default function CardSheet({ row, open, onClose }) {
           </div>
 
           <div className="border-hairline border-t pt-4">
-            <span className="eyebrow">The cycle</span>
+            <div className="flex items-center gap-2">
+              <span className="eyebrow">The cycle</span>
+              <div className="flex-1" />
+              {/* A card is the one commitment whose monthly figure is a guess, so
+                  what was actually paid outranks anything derived here. */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openCardPayment({ commitment_id: row.id })}
+              >
+                Pay this card
+              </Button>
+            </div>
             {row.cycle ? (
               <>
                 <div className="mt-2.5 grid gap-1.5">

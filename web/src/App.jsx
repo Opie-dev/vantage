@@ -27,7 +27,7 @@
  * state on that screen's behalf.
  */
 
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
   CalendarClockIcon,
@@ -89,8 +89,10 @@ import {
   EXPENSE_LABEL,
   GOAL_KIND,
   GOAL_NEEDS_INSTRUMENT,
+  commitmentRows,
   goalIncomeIsNet,
   planEffectiveRate,
+  planFit,
   previewStatementImport,
   startFromMonthsLeft,
 } from '@/lib/calc'
@@ -1578,6 +1580,28 @@ function CardPlanDialog({ prefill }) {
   // would invent living costs that never happened.
   const isSpending = f.kind === 'EPP'
 
+  /**
+   * Whether the account has room for this, against what is ACTUALLY free.
+   *
+   * Not against what the bill says. A statement showing a third of the limit used
+   * can sit on an account with almost nothing left, because instalments not yet
+   * billed keep blocking the limit until each month's principal is paid — and no
+   * statement prints that total anywhere. `availableRM` is the figure that does.
+   *
+   * It warns rather than refuses. The bank decides what fits; this only makes sure
+   * the decision is taken against the real number, and a plan taken out anyway is
+   * still a plan the app has to record faithfully. Skipped while editing, where
+   * the plan is already on the account and would be counted against itself.
+   */
+  // Derived in calc.js, where the rest of the card arithmetic lives and where it
+  // can be tested without a form. Skipped while editing: the plan is already on
+  // the account and would be counted against itself.
+  const fit = useMemo(() => {
+    if (editing || !f.commitment_id || !num(f.amount)) return null
+    const r = planFit(state, f.commitment_id, num(f.amount))
+    return r && { ...r, instalment: num(f.instalment) || 0 }
+  }, [editing, state, f.commitment_id, f.amount, f.instalment])
+
   const save = async () => {
     if (!ready) return
     setBusy(true)
@@ -1759,6 +1783,59 @@ function CardPlanDialog({ prefill }) {
               {effective == null
                 ? ' A merchant plan with no fee really is free.'
                 : ' Converted by the Hire-Purchase Act’s own Seventh Schedule formula, so it compares with every other rate on screen.'}
+            </p>
+          </div>
+        ) : null}
+
+        {fit ? (
+          <div
+            className={cn(
+              'col-span-2 rounded-md border px-3 py-2.5',
+              fit.fits
+                ? 'border-[color:var(--gain)]/30 bg-[color:var(--gain)]/[0.06]'
+                : 'border-[color:var(--loss)]/35 bg-[color:var(--loss)]/[0.07]',
+            )}
+          >
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className={cn('text-[12.5px] font-semibold', fit.fits ? 'text-gain' : 'text-loss')}>
+                {fit.fits ? 'This fits' : 'This does not fit'}
+              </span>
+              <span className="text-muted-foreground num text-[11.5px]">
+                {fmt(fit.amount, fit.cur)} against {fmt(fit.availableRM, fit.cur)} of room
+                {fit.fits
+                  ? ` — ${fmt(fit.availableRM - fit.amount, fit.cur)} would be left`
+                  : ` — short by ${fmt(fit.amount - fit.availableRM, fit.cur)}`}
+              </span>
+            </div>
+
+            {/* The middle line is why this panel exists. Read only the statement
+                and the account looks a third used; the instalments still to be
+                billed keep blocking the limit until each month's principal is
+                paid, and no statement prints that total anywhere. */}
+            <div className="mt-2 grid gap-1">
+              {[
+                ['Limit', fit.limit, ''],
+                ['– Billed and unpaid', -fit.revolving, 'text-loss'],
+                ['– Instalments not yet billed', -fit.blocked, 'text-loss'],
+                ['= Available', fit.availableRM, 'font-semibold'],
+              ].map(([label, v, tone], i) => (
+                <div
+                  key={label}
+                  className={cn(
+                    'flex items-baseline justify-between gap-3 text-[11.5px]',
+                    i === 3 && 'border-hairline mt-0.5 border-t pt-1',
+                  )}
+                >
+                  <span className={i === 3 ? 'font-semibold' : 'text-muted-foreground'}>{label}</span>
+                  <span className={cn('num', tone)}>{fmt(Math.abs(v), fit.cur)}</span>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-faint m-0 mt-2 text-[11px] leading-relaxed text-pretty">
+              {fit.fits
+                ? `It would add ${fmt(fit.amount, fit.cur)} of float in the month it was bought, and ${fmt(fit.instalment, fit.cur)} a month to a minimum already at ${fmt(fit.minimum, fit.cur)}.`
+                : `Reading the bill alone, this account looks ${pct1(fit.apparentPct)} used with ${fmt(fit.apparentFree, fit.cur)} free — and this plan would appear to fit. The app can say what a plan would do to the float and to the minimum. Whether to ask for a limit increase is not its business.`}
             </p>
           </div>
         ) : null}
@@ -2337,6 +2414,175 @@ function StatementImportDialog({ prefill }) {
               : payload
                 ? `Import ${payload.rows.length} rows`
                 : 'Import'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+/**
+ * Pay a card.
+ *
+ * FOUR CHOICES, AND ONLY ONE OF THEM IS FREE. Paying the statement in full is the
+ * only one that keeps the interest-free days. The minimum keeps the account
+ * current and starts interest on everything else, including — on most Malaysian
+ * issuers — on new purchases from the day they post, so a card carried once is a
+ * card charging from then on. Paying everything owed clears the unbilled
+ * instalments too, which no statement asks for.
+ *
+ * WHY A RECORDED PAYMENT MATTERS HERE MORE THAN ANYWHERE. A card is the one
+ * commitment whose monthly figure is a guess: for a loan the instalment is the
+ * instalment, but what actually left for a card is whatever was actually paid,
+ * anywhere between the minimum and the whole bill. spendingFor() takes a recorded
+ * payment over the derived minimum for exactly that reason, so this is what makes
+ * the month's residual right rather than plausible.
+ *
+ * NO "PAID FROM" FIELD, DELIBERATELY. The residual is measured from wallet balance
+ * readings, which already capture the money leaving whichever account paid — so a
+ * source stored here would be a second, unchecked copy of a fact the readings
+ * already carry, and `commitment_payments` rightly has no column for it.
+ */
+function CardPaymentDialog({ prefill }) {
+  const { state, closeModal, addCommitmentPayment } = useVantage()
+  const cards = state.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+  const [cardId, setCardId] = useState(String(prefill.commitment_id ?? cards[0]?.id ?? ''))
+  const row = useMemo(
+    () => commitmentRows(state).find(r => r.id === Number(cardId)) || null,
+    [state, cardId],
+  )
+
+  const stated = row?.statement?.closing_balance ?? null
+  const options = row
+    ? [
+        stated != null && {
+          id: 'statement',
+          label: 'The statement balance',
+          rm: stated,
+          why: 'the only choice that keeps the interest-free days',
+        },
+        {
+          id: 'minimum',
+          label: 'The minimum',
+          rm: row.minimum,
+          why: 'keeps the account current, and starts interest on everything else',
+        },
+        {
+          id: 'current',
+          label: 'Everything owed, unbilled included',
+          rm: row.owed,
+          why: 'clears the instalments no statement has asked for yet',
+        },
+        { id: 'custom', label: 'Some other amount', rm: null, why: '' },
+      ].filter(Boolean)
+    : []
+
+  const [choice, setChoice] = useState('statement')
+  const picked = options.find(o => o.id === choice) || options[0]
+  const [custom, setCustom] = useState('')
+  const [date, setDate] = useState(today())
+  const [busy, setBusy] = useState(false)
+
+  const amount = choice === 'custom' ? Number(custom) || 0 : picked?.rm || 0
+  const ready = row && amount > 0 && date
+
+  const save = async () => {
+    if (!ready) return
+    setBusy(true)
+    const ok = await addCommitmentPayment(Number(cardId), {
+      date,
+      amount,
+      note: choice === 'custom' ? '' : picked.label.toLowerCase(),
+    })
+    setBusy(false)
+    if (ok) closeModal()
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[480px]">
+      <DialogHeader>
+        <DialogTitle>Pay this card</DialogTitle>
+        <DialogDescription>
+          What actually left, so the month reads the payment rather than the derived minimum.
+        </DialogDescription>
+      </DialogHeader>
+
+      <Field label="Which card" htmlFor="pay-card">
+        <Select value={cardId} onValueChange={setCardId}>
+          <SelectTrigger id="pay-card" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {cards.map(c => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </Field>
+
+      {row ? (
+        <div className="grid gap-1.5">
+          <span className="eyebrow">How much?</span>
+          {options.map(o => (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setChoice(o.id)}
+              className={cn(
+                'flex items-baseline gap-2.5 rounded-md border px-3 py-2 text-left transition-colors',
+                choice === o.id ? 'border-primary bg-muted/50' : 'border-border hover:bg-muted/30',
+              )}
+            >
+              <span className="flex-1 text-[12.5px]">
+                {o.label}
+                {o.why ? <span className="text-faint block text-[11px]">{o.why}</span> : null}
+              </span>
+              {o.rm != null ? <span className="num text-[12.5px]">{fmt(o.rm, row.cur)}</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="text-faint text-[12px]">Add a card account first.</p>
+      )}
+
+      {choice === 'custom' ? (
+        <Field
+          label="Amount"
+          htmlFor="pay-amount"
+          hint="Anything above the minimum reduces the revolving band first, which is the only band charging the retail rate."
+        >
+          <Input
+            id="pay-amount"
+            className="num"
+            type="number"
+            step="0.01"
+            value={custom}
+            onChange={e => setCustom(e.target.value)}
+          />
+        </Field>
+      ) : null}
+
+      <Field
+        label="Date"
+        htmlFor="pay-date"
+        hint="On or before the due date. A late payment resets the prompt-payment tier and the retail rate goes up with it."
+      >
+        <Input id="pay-date" type="date" value={date} onChange={e => setDate(e.target.value)} />
+      </Field>
+
+      <p className="text-faint m-0 text-[11px] leading-relaxed text-pretty">
+        No account to pay from: the residual is measured from wallet balance readings, which
+        already carry the money leaving. Storing a source here would be a second copy of a fact
+        those readings already hold.
+      </p>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={!ready || busy}>
+          {busy ? 'Recording…' : 'Record the payment'}
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -3257,6 +3503,7 @@ function Modals() {
       {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cardPlan' && <CardPlanDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cardStatement' && <CardStatementDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'cardPayment' && <CardPaymentDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'statementImport' && <StatementImportDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}

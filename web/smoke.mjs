@@ -587,7 +587,11 @@ try {
       'RM 8,719.50', 'a salary is a floor'.replace('a s', 'A s')]],
     ['commitments', ['Committed run rate', 'Falling in', 'Commitments', 'All', 'Recurring',
       'RM 4,051.50']],
-    ['cards', ['Minimums, a month', 'Owed today', 'Actually available', 'The accounts']],
+    // 'never added up' and 'Room, per account' are the anti-summing rule on
+    // screen: headroom is stated per account and no figure here totals it, while
+    // debt and what leaves are summed because those genuinely add.
+    ['cards', ['Minimums, a month', 'Owed today', 'Accounts with a limit', 'The accounts',
+      'Room, per account', 'never added up', 'still blocked by instalments']],
     ['loans', ['Instalments, a month', 'Of that, spent', 'Of that, kept', 'Outstanding']],
     ['expenses', ['Spending · what was actually spent', 'RM 285.30 logged',
       'Logged spend · 12 months', 'Set a target', 'Day by day', 'By group', 'Food',
@@ -745,6 +749,59 @@ try {
     }
 
     console.log(`  drift      ${d.length} gap from the fixture, free-share case detected, residue ignored`)
+  }
+
+  /* ── does a plan fit, against what is actually free ──────────────────────── */
+  {
+    const { planFit, commitmentRows } = await server.ssrLoadModule('/src/lib/calc.js')
+    const card = STATE.commitments.find(c => c.kind === 'REVOLVING')
+    const row = commitmentRows(STATE).find(r => r.id === card.id)
+    if (row.availableRM == null) throw new Error('planFit: the fixture card needs a credit limit')
+
+    // The identity the panel prints: limit − billed − blocked = available.
+    const f = planFit(STATE, card.id, 1)
+    const derived = f.limit - f.revolving - f.blocked
+    if (Math.abs(derived - f.availableRM) > 0.005) {
+      throw new Error(`planFit: ${f.limit} − ${f.revolving} − ${f.blocked} = ${derived}, not ${f.availableRM}`)
+    }
+
+    // Exactly the room fits; a sen more does not. An off-by-one here is the
+    // difference between warning about a plan that fits and clearing one that
+    // does not.
+    if (!planFit(STATE, card.id, f.availableRM).fits) throw new Error('planFit: exact room must fit')
+    if (planFit(STATE, card.id, f.availableRM + 0.01).fits) {
+      throw new Error('planFit: a sen over the room must not fit')
+    }
+
+    // What the bill implies is never tighter than what is actually free: it is
+    // looser by exactly what the instalments are blocking.
+    if (Math.abs(f.apparentFree - f.availableRM - f.blocked) > 0.005) {
+      throw new Error(`planFit: the gap must be exactly what is blocked — ${f.apparentFree} − ${f.availableRM} ≠ ${f.blocked}`)
+    }
+    if (planFit(STATE, STATE.commitments.find(c => c.kind === 'LOAN').id, 1) !== null) {
+      throw new Error('planFit: a loan has no limit and cannot answer a fit')
+    }
+    // And now the case the panel exists for. A contracted plan blocks the limit
+    // as its PRINCIPAL is repaid, while the bill only ever shows what it has
+    // billed — so with a plan running the two figures must diverge, and the
+    // statement view must be the looser one. On a local copy: a plan in the
+    // shared fixture would move the card figures asserted on four screens above.
+    const blocked = JSON.parse(JSON.stringify(STATE))
+    blocked.cardPlans = [{
+      id: 900, commitment_id: card.id, kind: 'EPP', name: 'Fridge', merchant: 'Senheng',
+      amount: 4800, tenure_months: 12, instalment: 400, rate: 0, upfront_fee: 0,
+      purchased_on: ago(40), started_on: ago(40), settled_on: null, status: 'ACTIVE',
+      category: 'THINGS', note: '', source: 'manual',
+    }]
+    const g = planFit(blocked, card.id, 1)
+    if (!(g.blocked > 0)) throw new Error('planFit: an active plan must block part of the limit')
+    if (!(g.apparentFree > g.availableRM + 0.005)) {
+      throw new Error(`planFit: with a plan running the bill must look looser — ${g.apparentFree} vs ${g.availableRM}`)
+    }
+    if (planFit(blocked, card.id, g.apparentFree).fits) {
+      throw new Error('planFit: a plan sized to the free room the bill implies must NOT fit — this is the whole point')
+    }
+    console.log(`  plan fit   ${g.availableRM.toFixed(2)} free vs ${g.apparentFree.toFixed(2)} the bill implies, ${g.blocked.toFixed(2)} blocked`)
   }
 
   // The month is shared, and that is the whole reason six screens are allowed to
@@ -1068,7 +1125,9 @@ try {
 
   // each form must open through the store opener and close again
   const FORMS = [['openInstrument', 'Add instrument'], ['openTransaction', 'Add transaction'], ['openCash', 'Add cash movement'], ['openAssetEntry', 'Add entry'], ['openAsset', 'Add account'], ['openCommitment', 'Add commitment'], ['openIncome', 'Add income source'],
-    ['openIncomeEvent', 'Record a payment'], ['openGoal', 'New goal']]
+    ['openIncomeEvent', 'Record a payment'], ['openGoal', 'New goal'],
+    ['openCardPlan', 'Add an instalment plan'], ['openCardStatement', 'Record a statement'],
+    ['openCardPayment', 'Pay this card'], ['openStatementImport', 'Import a statement']]
   for (const [open, title] of FORMS) {
     await tick(() => ctl[open]())
     if (!document.body.textContent.includes(title)) throw new Error(`${open}() did not render "${title}"`)
