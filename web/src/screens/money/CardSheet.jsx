@@ -55,16 +55,24 @@ function Timeline({ row }) {
   const closedISO = row.statement ? row.statement.statement_date : null
   const dueISO = row.statement ? row.statement.due_date : null
 
+  const today = Date.now()
+  /* SORTED BY DATE, because the dots are positioned by date and the labels are
+     laid out in array order. Left unsorted they disagree the moment today moves
+     past the due date — the dot sits fourth on the line while its label sits
+     second underneath, which reads as a rendering bug rather than as a month
+     further along than you thought. */
   const marks = [
     closedISO && { iso: closedISO, label: 'bill closed', hot: true },
     { iso: null, label: 'today', now: true },
     dueISO && { iso: dueISO, label: `${fmt(row.minimum, row.cur)} minimum`, hot: true },
     { iso: row.cycle.closesOn, label: 'next closes' },
     { iso: row.cycle.dueOn, label: 'and is due' },
-  ].filter(Boolean)
+  ]
+    .filter(Boolean)
+    .map(m => ({ ...m, t: m.iso ? at(m.iso) : today }))
+    .sort((a, b) => a.t - b.t)
 
-  const today = Date.now()
-  const times = marks.map(m => (m.iso ? at(m.iso) : today))
+  const times = marks.map(m => m.t)
   const start = Math.min(...times)
   const end = Math.max(...times)
   const span = end - start || 1
@@ -93,8 +101,11 @@ function Timeline({ row }) {
       <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1">
         {marks.map((m, i) => (
           <span key={i} className="text-[10.5px] leading-tight">
-            <span className={m.now ? 'text-loss font-semibold' : 'num'}>
-              {m.iso ? dfmt(m.iso) : 'today'}
+            {/* The date on top, the word underneath — "today / today" reads as a
+                bug, and the canvas shows the date because knowing WHERE today
+                falls between the two dates either side of it is the point. */}
+            <span className={m.now ? 'num text-loss font-semibold' : 'num'}>
+              {m.iso ? dfmt(m.iso) : dfmt(new Date().toISOString().slice(0, 10))}
             </span>
             <span className="text-faint block">{m.label}</span>
           </span>
