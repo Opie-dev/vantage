@@ -25,6 +25,11 @@
  *   DELETE /api/commitments/:id            refused once payments exist; end it instead
  *   POST   /api/commitments/:id/payments   a deviation from the derived schedule
  *   DELETE /api/commitments/:id/payments/:paymentId
+ *   POST   /api/commitments/:id/plans      an EPP, balance transfer or cash instalment
+ *   PATCH  /api/commitments/:id/plans/:planId
+ *   DELETE /api/commitments/:id/plans/:planId
+ *   POST   /api/commitments/:id/statements one bill; upserts on the statement date
+ *   DELETE /api/commitments/:id/statements/:statementId
  *   POST   /api/income                     salary, freelance — what arrives
  *   PATCH  /api/income/:id
  *   DELETE /api/income/:id                 refused once payments exist; end it instead

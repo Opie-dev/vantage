@@ -13,6 +13,8 @@ const commitments = require('../models/commitments.model');
 const expensesModel = require('../models/expenses.model');
 const brokerPositions = require('../models/brokerPositions.model');
 const commitmentPayments = require('../models/commitmentPayments.model');
+const cardPlans = require('../models/cardPlans.model');
+const cardStatements = require('../models/cardStatements.model');
 const income = require('../models/income.model');
 const snapshots = require('../models/snapshots.model');
 const fundMetrics = require('../models/fundMetrics.model');
@@ -40,6 +42,13 @@ async function getState() {
     expenses: await expensesModel.listAll(),
     brokerPositions: await brokerPositions.listAll(),
     commitmentPayments: await commitmentPayments.listAll(),
+    // The derivable half of a card. How many instalments have been paid is NOT
+    // stored — calc.js works it out from the start date and the tenure, exactly as
+    // it does for a loan. See cards-plan.md §5.
+    cardPlans: await cardPlans.listAll(),
+    // Dated readings of what a card owed. The float needs `owed` at TWO dates, and
+    // a mutable balance column can only ever answer for today.
+    cardStatements: await cardStatements.listAll(),
     // What arrives. Net pay is NOT stored: it is gross less the deducted half
     // of the statutory block, derived on the client so the two column groups
     // can never be conflated into one wrong figure.

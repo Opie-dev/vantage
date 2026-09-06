@@ -9,18 +9,21 @@ const insert = ({
   kind, name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
   creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  statementDay, limitRelease,
   amount, everyMonths, sortOrder,
 }) => one(
   `INSERT INTO commitments
      (kind,name,lender,currency,due_day,note,
       principal,rate,rate_type,term_months,started_on,instalment,
       credit_limit,balance,balance_as_of,apr,min_payment_pct,min_payment_floor,
+      statement_day,limit_release,
       amount,every_months,sort_order)
-   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
    RETURNING *`,
   kind, name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
   creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  statementDay, limitRelease,
   amount, everyMonths, sortOrder);
 
 /** `kind` is not updatable: it decides which columns the shape check requires,
@@ -29,6 +32,7 @@ const update = (id, {
   name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
   creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  statementDay, limitRelease,
   amount, everyMonths, active, endedOn, sortOrder,
 }) => run(
   `UPDATE commitments SET
@@ -36,11 +40,13 @@ const update = (id, {
      principal=$6, rate=$7, rate_type=$8, term_months=$9, started_on=$10, instalment=$11,
      credit_limit=$12, balance=$13, balance_as_of=$14, apr=$15,
      min_payment_pct=$16, min_payment_floor=$17,
-     amount=$18, every_months=$19, active=$20, ended_on=$21, sort_order=$22
-   WHERE id=$23`,
+     statement_day=$18, limit_release=$19,
+     amount=$20, every_months=$21, active=$22, ended_on=$23, sort_order=$24
+   WHERE id=$25`,
   name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
   creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  statementDay, limitRelease,
   amount, everyMonths, active, endedOn, sortOrder, id);
 
 const remove = id => run(`DELETE FROM commitments WHERE id=$1`, id);
