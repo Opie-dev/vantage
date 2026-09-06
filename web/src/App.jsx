@@ -50,6 +50,7 @@ import {
 } from 'lucide-react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 // Every form in the app opens as a right-hand side panel rather than a centred
 // dialog. The Sheet primitives are aliased to the Dialog names they replace so
@@ -85,6 +86,7 @@ import {
   GOAL_NEEDS_INSTRUMENT,
   goalIncomeIsNet,
   planEffectiveRate,
+  previewStatementImport,
   startFromMonthsLeft,
 } from '@/lib/calc'
 import {
@@ -1854,6 +1856,461 @@ function CardStatementDialog({ prefill }) {
   )
 }
 
+/* ── statement import ─────────────────────────────────────────────────────── */
+
+/**
+ * One merchant the statement names and no rule explains.
+ *
+ * The pattern starts as the whole description and is editable, because that is
+ * where the leverage is: sixteen Setel rows are one decision if the pattern is
+ * `SETEL`, and sixteen decisions if it is the full line with its station code.
+ * The count beside it re-reads this statement as you type, so the reach of a
+ * shorter pattern is visible before it is saved rather than after.
+ */
+function UndecidedMerchant({ row, rows, targets }) {
+  const { saveMerchantRule } = useVantage()
+  const [f, setF] = useState({
+    pattern: row.description,
+    action: 'EXPENSE',
+    category: 'GROCERIES',
+    commitment_id: '',
+  })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  const pattern = f.pattern.trim()
+  const covers = pattern.length >= 3
+    ? rows.filter(
+        r =>
+          r.kind === 'retail' &&
+          r.spending_candidate !== false &&
+          String(r.description || '').toUpperCase().startsWith(pattern.toUpperCase()),
+      ).length
+    : 0
+  const ready =
+    pattern.length >= 3 &&
+    (f.action === 'EXPENSE' ? !!f.category : f.action === 'COMMITMENT' ? !!f.commitment_id : true)
+
+  const save = async () => {
+    if (!ready) return
+    setBusy(true)
+    await saveMerchantRule({
+      pattern,
+      action: f.action,
+      category: f.action === 'EXPENSE' ? f.category : undefined,
+      commitment_id: f.action === 'COMMITMENT' ? Number(f.commitment_id) : undefined,
+    })
+    setBusy(false)
+    // No local reset: a saved rule reloads state, the preview re-runs, and this
+    // row disappears because it is no longer undecided.
+  }
+
+  return (
+    <div className="border-hairline grid gap-2 border-t py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="num text-[12px]">{row.description}</span>
+        <span className="text-muted-foreground num text-[11px]">
+          ×{row.rows} · {fmt(row.total)}
+        </span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-[1.4fr_1fr_1.4fr_auto]">
+        <Input
+          aria-label={`Pattern for ${row.description}`}
+          value={f.pattern}
+          onChange={e => set('pattern', e.target.value)}
+        />
+        <Select value={f.action} onValueChange={v => set('action', v)}>
+          <SelectTrigger aria-label="What it is">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="EXPENSE">Spending</SelectItem>
+            <SelectItem value="COMMITMENT">Already a commitment</SelectItem>
+            <SelectItem value="IGNORE">Not spending</SelectItem>
+          </SelectContent>
+        </Select>
+        {f.action === 'EXPENSE' ? (
+          <Select value={f.category} onValueChange={v => set('category', v)}>
+            <SelectTrigger aria-label="Category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPENSE_GROUPS.map(g => (
+                <SelectGroup key={g.group}>
+                  <SelectLabel>{g.label}</SelectLabel>
+                  {g.categories.map(c => (
+                    <SelectItem key={c} value={c}>
+                      {EXPENSE_LABEL[c]}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : f.action === 'COMMITMENT' ? (
+          <Select value={f.commitment_id} onValueChange={v => set('commitment_id', v)}>
+            <SelectTrigger aria-label="Which commitment">
+              <SelectValue placeholder="Which one" />
+            </SelectTrigger>
+            <SelectContent>
+              {targets.map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <p className="text-faint self-center text-[11px]">Seen, and booked as nothing.</p>
+        )}
+        <Button size="sm" variant="secondary" onClick={save} disabled={!ready || busy}>
+          {busy ? 'Saving…' : 'Decide'}
+        </Button>
+      </div>
+      {pattern.length >= 3 && covers > 1 ? (
+        <p className="text-faint text-[11px]">
+          This pattern covers {covers} rows on this statement.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Import a statement the parser has already read.
+ *
+ * WHY THIS TAKES JSON AND NOT A PDF. `sync/parse_maybank_statement.py` owns the
+ * extraction, and it is the only thing that does: it needs `pdftotext -table`,
+ * which a browser does not have, and a second extractor written in JS could
+ * disagree with the first about a column — which is the exact failure the gates
+ * at the bottom of that file exist to catch. So the flow is: run the parser,
+ * bring its JSON here, and decide what it found.
+ *
+ *     python sync/parse_maybank_statement.py statement.pdf > statement.json
+ *
+ * NOTHING IS WRITTEN UNTIL THE LAST BUTTON. The gates are the parser's own
+ * arithmetic against figures the bank printed on the same page; a failed one
+ * stops the import here, and the server re-runs the minimum gate before writing
+ * regardless, because a claim that arrives over HTTP is not a claim that has been
+ * checked.
+ */
+function StatementImportDialog({ prefill }) {
+  const { state, closeModal, importStatement } = useVantage()
+  const cards = state.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+  // A rule can only point at something already counted elsewhere, and a card is
+  // not that — a charge on a statement is not a payment of it.
+  const targets = state.commitments.filter(c => c.kind !== 'REVOLVING' && c.active)
+
+  const [cardId, setCardId] = useState(String(prefill.commitment_id ?? cards[0]?.id ?? ''))
+  const [raw, setRaw] = useState('')
+  const [payload, setPayload] = useState(null)
+  const [readError, setReadError] = useState(null)
+  const [report, setReport] = useState(null)
+  const [busy, setBusy] = useState(false)
+
+  const read = text => {
+    setRaw(text)
+    setReadError(null)
+    if (!text.trim()) {
+      setPayload(null)
+      return
+    }
+    try {
+      const j = JSON.parse(text)
+      const statement = j?.statement
+      if (!statement?.statement_date || !statement?.due_date) {
+        throw new Error('that JSON has no statement dates in it — is it the parser’s output?')
+      }
+      setPayload({
+        statement,
+        rows: Array.isArray(j.rows) ? j.rows : [],
+        gates: Array.isArray(j.gates) ? j.gates : [],
+      })
+    } catch (e) {
+      setPayload(null)
+      setReadError(e.message)
+    }
+  }
+
+  const onFile = async e => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    read(await file.text())
+  }
+
+  const gates = payload?.gates || []
+  const failed = gates.filter(g => !g.ok)
+  const view = payload ? previewStatementImport(payload.rows, state.merchantRules || []) : null
+  const carrying = (payload?.statement?.cards || []).filter(c => c.balance > 0)
+  const summary = carrying[carrying.length - 1] || null
+
+  const run = async () => {
+    if (!payload || !cardId || failed.length) return
+    setBusy(true)
+    const out = await importStatement({
+      card_id: Number(cardId),
+      statement: payload.statement,
+      rows: payload.rows,
+    })
+    setBusy(false)
+    if (out) setReport(out)
+  }
+
+  if (report) {
+    return (
+      <DialogContent className="sm:max-w-[720px]">
+        <DialogHeader>
+          <DialogTitle>Imported</DialogTitle>
+          <DialogDescription>
+            Statement {report.statement.statement_date}, closing{' '}
+            {fmt(report.statement.closing_balance)}. The header alone makes this month&rsquo;s
+            spending figure exact — the float reads two closing balances and nothing else.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-1.5 text-[12px]">
+          <div className="flex justify-between gap-3">
+            <span>Booked as spending</span>
+            <span className="num">
+              {report.booked.rows} · {fmt(report.booked.rm)}
+            </span>
+          </div>
+          {report.alreadyImported ? (
+            <div className="text-muted-foreground flex justify-between gap-3">
+              <span>Already there</span>
+              <span className="num">{report.alreadyImported}</span>
+            </div>
+          ) : null}
+          {report.ignored ? (
+            <div className="text-muted-foreground flex justify-between gap-3">
+              <span>Not spending</span>
+              <span className="num">{report.ignored}</span>
+            </div>
+          ) : null}
+          {report.matchedToCommitments.map((m, i) => (
+            <div key={i} className="text-muted-foreground flex justify-between gap-3">
+              <span>
+                {m.description} — already {m.as}
+              </span>
+              <span className="num">{fmt(m.amount)}</span>
+            </div>
+          ))}
+        </div>
+
+        {report.unmatched.length ? (
+          <Alert>
+            <AlertTitle>
+              {report.unmatched.length} merchant(s) still undecided
+            </AlertTitle>
+            <AlertDescription>
+              Nothing was booked for them, so they sit outside the log rather than inside it
+              wrongly. Decide them under Statement merchants in Settings and import the same file
+              again — the rows that already landed cannot land twice.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <p className="text-faint text-[11px]">Nothing left to decide.</p>
+        )}
+
+        <DialogFooter>
+          <Button onClick={closeModal}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    )
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[720px]">
+      <DialogHeader>
+        <DialogTitle>Import a statement</DialogTitle>
+        <DialogDescription>
+          Nothing is written until you confirm. Run the parser over the PDF first — it needs
+          pdftotext, which this browser does not have, and one extractor is safer than two that
+          can disagree.
+        </DialogDescription>
+      </DialogHeader>
+
+      <pre className="bg-muted text-faint overflow-x-auto rounded-md p-2.5 text-[11px]">
+        python sync/parse_maybank_statement.py statement.pdf &gt; statement.json
+      </pre>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Which card" htmlFor="si-card">
+          <Select value={cardId} onValueChange={setCardId}>
+            <SelectTrigger id="si-card" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {cards.map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="The parser's JSON" htmlFor="si-file" hint="Or paste it below.">
+          <Input id="si-file" type="file" accept=".json,application/json" onChange={onFile} />
+        </Field>
+      </div>
+
+      <Field label="Pasted" htmlFor="si-raw">
+        <textarea
+          id="si-raw"
+          className="border-input bg-transparent num h-24 w-full rounded-md border p-2 text-[11px]"
+          placeholder='{ "statement": { … }, "gates": [ … ], "rows": [ … ] }'
+          value={raw}
+          onChange={e => read(e.target.value)}
+        />
+      </Field>
+
+      {readError ? (
+        <Alert variant="destructive">
+          <AlertTitle>That did not read</AlertTitle>
+          <AlertDescription>{readError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {payload ? (
+        <>
+          <div className="grid gap-1">
+            <span className="eyebrow">Checks</span>
+            <p className="text-faint text-[11px]">
+              The parser&rsquo;s own arithmetic, against figures the bank printed on the same
+              document. Any one failing stops the import. The server re-runs the minimum before it
+              writes anything, whatever this says.
+            </p>
+            {gates.length ? (
+              gates.map(g => (
+                <div key={g.gate} className="flex flex-wrap justify-between gap-2 text-[12px]">
+                  <span>
+                    <Badge
+                      variant={g.ok ? 'gain' : 'loss'}
+                      className="mr-1.5 px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase"
+                    >
+                      {g.ok ? 'pass' : 'fail'}
+                    </Badge>
+                    {g.how}
+                  </span>
+                  <span className="num text-muted-foreground">
+                    {fmt(g.derived)} vs {fmt(g.expected)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-faint text-[11px]">
+                This payload carries no gates. The server still refuses an import whose minimum
+                does not add up.
+              </p>
+            )}
+          </div>
+
+          {summary ? (
+            <div className="grid gap-1">
+              <span className="eyebrow">Recorded without asking</span>
+              <div className="flex justify-between gap-3 text-[12px]">
+                <span>
+                  The statement itself · {payload.statement.statement_date}, due{' '}
+                  {payload.statement.due_date}
+                </span>
+                <span className="num">{fmt(summary.balance)}</span>
+              </div>
+              {summary.minimum != null ? (
+                <div className="text-muted-foreground flex justify-between gap-3 text-[12px]">
+                  <span>Minimum as printed</span>
+                  <span className="num">{fmt(summary.minimum)}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="grid gap-1">
+            <span className="eyebrow">The rows</span>
+            <div className="flex justify-between gap-3 text-[12px]">
+              <span>Instalment billing — a plan&rsquo;s, not a purchase</span>
+              <span className="num">
+                {view.instalments.rows} · {fmt(view.instalments.rm)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3 text-[12px]">
+              <span>Not spending — payments, cash-outs, ignored merchants</span>
+              <span className="num">
+                {view.notSpending.rows} · {fmt(view.notSpending.rm)}
+              </span>
+            </div>
+            {view.known.map(k => (
+              <div key={k.pattern} className="flex justify-between gap-3 text-[12px]">
+                <span className="num">
+                  {k.pattern} → {EXPENSE_LABEL[k.category] || k.category}
+                </span>
+                <span className="num">
+                  ×{k.rows} · {fmt(k.total)}
+                </span>
+              </div>
+            ))}
+            {view.asCommitment.map((m, i) => (
+              <div key={i} className="text-muted-foreground flex justify-between gap-3 text-[12px]">
+                <span className="num">
+                  {m.description} — already {m.as}
+                </span>
+                <span className="num">{fmt(m.amount)}</span>
+              </div>
+            ))}
+            {view.asCommitment.length ? (
+              <p className="text-faint text-[11px]">
+                Already subtracted from income on the Money screen. Logging them here would count
+                them twice.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="eyebrow">The statement does not say who</span>
+              <Badge
+                variant={view.undecided.length ? 'neutral' : 'gain'}
+                className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase"
+              >
+                {view.undecided.length
+                  ? `${view.undecided.length} to decide`
+                  : 'nothing to decide'}
+              </Badge>
+            </div>
+            <p className="text-faint text-[11px]">
+              Decided once, remembered after. Anything left undecided imports as nothing rather
+              than as a guess — a wrong category is read as fact on Expenses and nothing would
+              ever flag it.
+            </p>
+            {view.undecided.map(u => (
+              <UndecidedMerchant
+                key={u.description}
+                row={u}
+                rows={payload.rows}
+                targets={targets}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={run} disabled={!payload || !cardId || failed.length > 0 || busy}>
+          {busy
+            ? 'Importing…'
+            : failed.length
+              ? 'A check failed'
+              : payload
+                ? `Import ${payload.rows.length} rows`
+                : 'Import'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 function CommitmentDialog({ prefill }) {
   const { closeModal, addCommitment, updateCommitment } = useVantage()
   const editing = prefill.id != null
@@ -2768,6 +3225,7 @@ function Modals() {
       {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cardPlan' && <CardPlanDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cardStatement' && <CardStatementDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'statementImport' && <StatementImportDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'goal' && <GoalDialog />}

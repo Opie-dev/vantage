@@ -2869,6 +2869,95 @@ export function owedOn(S, cardId, dateISO) {
   return s ? s.closing_balance : null
 }
 
+/** Mirrors matchRule in statementIngest.service.js — prefix match, case-blind. */
+function matchStatementRule(sortedRules, description) {
+  const d = (description || '').toUpperCase()
+  return sortedRules.find(r => d.startsWith(String(r.pattern || '').toUpperCase())) || null
+}
+
+/**
+ * What importing a parsed statement would do, given the rules already decided.
+ *
+ * A PREVIEW, NOT THE DECISION. statementIngest.service.js matches again on the
+ * server's own copy of the rules and its answer is the one that lands. This
+ * exists so the import screen can show the shape of an import before anything is
+ * written, which is what makes confirming mean something.
+ *
+ * It mirrors that service deliberately, including the ORDER of the two skips: an
+ * instalment line is a plan's billing rather than a purchase, and a credit is a
+ * payment. Neither is ever spending, whatever a rule says, so both are taken out
+ * before a rule is consulted. Getting that order wrong here would show a card
+ * repayment about to be booked as living costs — the double-count the whole
+ * screen exists to prevent.
+ *
+ * @param {Array<object>} rows   the parser's `rows`, untouched
+ * @param {Array<object>} rules  merchantRules from state
+ * @returns {{instalments:{rows:number, rm:number}, notSpending:{rows:number, rm:number},
+ *   asCommitment:Array<{description:string, amount:number, as:string}>,
+ *   known:Array<{pattern:string, category:string, rows:number, total:number}>,
+ *   undecided:Array<{description:string, rows:number, total:number}>}}
+ */
+export function previewStatementImport(rows, rules) {
+  const r2 = n => Math.round(n * 100) / 100
+  // Longest pattern first, so a specific rule beats a general one. The server
+  // reads its rules through an index ordered the same way.
+  const sorted = [...(rules || [])].sort(
+    (a, b) => String(b.pattern || '').length - String(a.pattern || '').length,
+  )
+  const instalments = []
+  const notSpending = []
+  const asCommitment = []
+  const known = new Map()
+  const undecided = new Map()
+
+  for (const r of rows || []) {
+    if (r.kind === 'instalment') {
+      instalments.push(r)
+      continue
+    }
+    if (r.kind !== 'retail' || r.spending_candidate === false) {
+      notSpending.push(r)
+      continue
+    }
+    const rule = matchStatementRule(sorted, r.description)
+    if (!rule) {
+      const u = undecided.get(r.description) || { description: r.description, rows: 0, total: 0 }
+      u.rows += 1
+      u.total = r2(u.total + (r.amount || 0))
+      undecided.set(r.description, u)
+      continue
+    }
+    if (rule.action === 'COMMITMENT') {
+      asCommitment.push({ description: r.description, amount: r.amount, as: rule.commitment_name })
+      continue
+    }
+    if (rule.action === 'IGNORE') {
+      notSpending.push(r)
+      continue
+    }
+    const g = known.get(rule.pattern) || {
+      pattern: rule.pattern,
+      category: rule.category,
+      rows: 0,
+      total: 0,
+    }
+    g.rows += 1
+    g.total = r2(g.total + (r.amount || 0))
+    known.set(rule.pattern, g)
+  }
+
+  const sum = a => r2(a.reduce((t, r) => t + (r.amount || 0), 0))
+  return {
+    instalments: { rows: instalments.length, rm: sum(instalments) },
+    notSpending: { rows: notSpending.length, rm: sum(notSpending) },
+    asCommitment,
+    // Biggest gap in the log first, so the most expensive thing to keep ignoring
+    // is the first decision offered — the same order the server reports in.
+    known: [...known.values()].sort((a, b) => b.total - a.total),
+    undecided: [...undecided.values()].sort((a, b) => b.total - a.total),
+  }
+}
+
 /**
  * One row per active commitment, with everything the Money screen needs.
  *

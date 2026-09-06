@@ -256,6 +256,38 @@ export const addCardStatement = (cardId, body) =>
 export const deleteCardStatement = (cardId, statementId) =>
   send('DELETE', `/api/commitments/${cardId}/statements/${statementId}`)
 
+/* ── statement import ─────────────────────────────────────────────────────── */
+
+/**
+ * Record a whole parsed statement — the header, and the transactions a merchant
+ * rule already accounts for.
+ *
+ * The body is exactly what `sync/parse_maybank_statement.py` prints, with the
+ * card it belongs to added. That script owns the PDF and nothing here re-parses
+ * one: a second extractor written in JS could disagree with the first, and two
+ * extractors that disagree about a column is the failure the gates exist to
+ * catch. The browser's job is to show what was parsed and let it be decided.
+ *
+ * WHAT LANDS. The header always — it is load-bearing on its own, because the
+ * float reads two closing balances and nothing else, so importing it alone makes
+ * the month's spending figure exact. Retail rows land only where a rule already
+ * says what they are; everything else comes back unbooked in `unmatched`.
+ *
+ * The server re-runs the BNM 13.1 minimum gate before writing and refuses the
+ * whole import if it does not add up — nothing is written, not even the header.
+ * Importing the same file twice books nothing new: each row hashes to a unique
+ * `ext_id` and the statement upserts on its date.
+ *
+ * @param {{card_id:number, statement:object, rows:Array<object>, note?:string}} body
+ *   `statement` and `rows` pass through untouched from the parser's JSON.
+ * @returns {Promise<{statement:object, booked:{rows:number, rm:number},
+ *   alreadyImported:number,
+ *   matchedToCommitments:Array<{description:string, amount:number, as:string}>,
+ *   ignored:number,
+ *   unmatched:Array<{description:string, rows:number, total:number}>}>}
+ */
+export const ingestStatement = body => send('POST', '/api/ingest/statement', body)
+
 /* ── income ───────────────────────────────────────────────────────────────── */
 
 /**
@@ -368,6 +400,7 @@ export default {
   deleteIncomeSource,
   addIncomeEvent,
   deleteIncomeEvent,
+  ingestStatement,
   refreshPrices,
   setManualPrice,
   saveSnapshot,

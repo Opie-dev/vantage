@@ -33,7 +33,19 @@ for (const k of ['Event', 'CustomEvent', 'EventTarget', 'UIEvent', 'MouseEvent',
   'KeyboardEvent', 'FocusEvent', 'InputEvent', 'DOMException', 'Node', 'Element', 'HTMLElement']) {
   if (window[k]) def(k, window[k])
 }
-window.matchMedia = q => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false })
+// jsdom ships no matchMedia. Answer min-width queries against the window it does
+// have — 1024x768 by default — rather than a flat `false`, because the rail
+// derives its default state from `(min-width: 1024px)`: a stub that always says
+// no collapses the rail to icons and hides the brand and every tab label this
+// file goes on to assert on, which reads as "the shell did not render".
+window.matchMedia = q => {
+  const min = /min-width:\s*(\d+)px/.exec(q)
+  return {
+    matches: min ? window.innerWidth >= Number(min[1]) : false,
+    media: q, addEventListener() {}, removeEventListener() {},
+    addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false,
+  }
+}
 window.HTMLElement.prototype.scrollIntoView = () => {}
 window.HTMLElement.prototype.hasPointerCapture = () => false
 window.HTMLElement.prototype.setPointerCapture = () => {}
@@ -435,6 +447,60 @@ try {
     console.log(`  ${id.padEnd(10)} ok (${panes[0].textContent.trim().slice(0, 48) || '<graphical>'})`)
   }
   await tick(() => ctl.setTab('dashboard'))
+
+  /* ── what an import would do, before anything is written ─────────────────── */
+  {
+    const { previewStatementImport } = await server.ssrLoadModule('/src/lib/calc.js')
+    const rules = [
+      { pattern: 'SETEL', action: 'EXPENSE', category: 'FUEL' },
+      { pattern: 'SETEL FUEL PASSTHROUGH KL', action: 'EXPENSE', category: 'PARKING' },
+      { pattern: 'MY TNB', action: 'COMMITMENT', commitment_id: 4, commitment_name: 'Electricity' },
+      { pattern: 'PAYMENT', action: 'IGNORE', category: null },
+    ]
+    const rows = [
+      { kind: 'retail', description: 'SETEL FUEL PASSTHROUGH', amount: 60 },
+      { kind: 'retail', description: 'SETEL FUEL PASSTHROUGH', amount: 42.07 },
+      { kind: 'retail', description: 'SETEL FUEL PASSTHROUGH KL', amount: 10 },
+      { kind: 'retail', description: 'MY TNB-EC', amount: 61 },
+      { kind: 'retail', description: 'NSK SELAYANG', amount: 377.35 },
+      { kind: 'retail', description: 'GATEWAY XYZ', amount: 12.5 },
+      { kind: 'retail', description: 'GATEWAY XYZ', amount: 7.5 },
+      { kind: 'instalment', description: 'EZYPAY PLUS 3/12', amount: 400 },
+      { kind: 'credit', description: 'PAYMENT - THANK YOU', amount: 1375.33 },
+      { kind: 'retail', description: 'CASH OUT', amount: 500, spending_candidate: false },
+    ]
+    const v = previewStatementImport(rows, rules)
+
+    // A plan's billing is not a purchase.
+    if (v.instalments.rows !== 1 || v.instalments.rm !== 400)
+      throw new Error('import preview: an instalment line was treated as spending')
+
+    // The credit and the cash-out, taken out BEFORE any rule is consulted —
+    // which is why the IGNORE rule on 'PAYMENT' never has to fire for the credit.
+    if (v.notSpending.rows !== 2 || v.notSpending.rm !== 1875.33)
+      throw new Error(`import preview: notSpending is ${v.notSpending.rows}/${v.notSpending.rm}`)
+
+    // Longest pattern wins: the KL row goes to PARKING, not to the FUEL rule
+    // that also matches its prefix.
+    if (v.known.length !== 2) throw new Error(`import preview: ${v.known.length} known groups`)
+    if (v.known[0].pattern !== 'SETEL' || v.known[0].rows !== 2 || v.known[0].total !== 102.07)
+      throw new Error('import preview: the general fuel rule did not group its two rows')
+    if (v.known[1].pattern !== 'SETEL FUEL PASSTHROUGH KL' || v.known[1].category !== 'PARKING')
+      throw new Error('import preview: the specific rule lost to the general one')
+
+    // Already counted on Money — recorded as seen, booked as nothing.
+    if (v.asCommitment.length !== 1 || v.asCommitment[0].as !== 'Electricity')
+      throw new Error('import preview: a commitment row would have been double-counted')
+
+    // Undecided, biggest gap in the log first.
+    if (v.undecided.length !== 2 || v.undecided[0].description !== 'NSK SELAYANG')
+      throw new Error('import preview: undecided merchants are not worst-first')
+    if (v.undecided[1].rows !== 2 || v.undecided[1].total !== 20)
+      throw new Error('import preview: repeated undecided rows were not summed')
+
+    console.log(`  import     preview ok (${v.known.length} known, ${v.undecided.length} to decide)`)
+  }
+
 
   // The screens above only have to render SOMETHING, which a fixture with no
   // income satisfies while every forward-looking surface silently returns null.
