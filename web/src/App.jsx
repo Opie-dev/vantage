@@ -222,7 +222,7 @@ function PrivateToggle() {
  * inside it was the failure mode of doing this with two independent mechanisms.
  */
 function SideNav() {
-  const { state, railCollapsed, toggleRail } = useVantage()
+  const { state, railCollapsed } = useVantage()
   const wide = !railCollapsed
 
   return (
@@ -235,33 +235,19 @@ function SideNav() {
       <div
         className={cn(
           'flex h-[60px] shrink-0 items-center border-b',
-          wide ? 'justify-between px-4' : 'justify-center',
+          wide ? 'px-4' : 'justify-center',
         )}
       >
-        {wide ? (
-          <div>
-            <div className="num text-[19px] leading-none font-semibold tracking-[0.04em]">
+        <div className="num text-[17px] leading-none font-semibold tracking-[0.04em] lg:text-[19px]">
+          {wide ? (
+            <>
               Vantage
-            </div>
-            <div className="eyebrow mt-1.5">personal finance</div>
-          </div>
-        ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toggleRail}
-              aria-label={wide ? 'Collapse the sidebar' : 'Expand the sidebar'}
-              aria-expanded={wide}
-            >
-              {wide ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {wide ? 'Collapse to icons' : 'Expand the sidebar'}
-          </TooltipContent>
-        </Tooltip>
+              <div className="eyebrow mt-1.5">personal finance</div>
+            </>
+          ) : (
+            'V'
+          )}
+        </div>
       </div>
 
       <TabsList
@@ -314,12 +300,34 @@ function SideNav() {
 
 /** Where you are, and the three things you can do from anywhere. */
 function TopBar() {
-  const { tab, refreshPrices, pricesPending, syncMoomoo, syncPending } = useVantage()
+  const { tab, refreshPrices, pricesPending, syncMoomoo, syncPending, railCollapsed, toggleRail } =
+    useVantage()
   const current = TABS.find(t => t.id === tab)
+  const wide = !railCollapsed
 
   return (
     <header className="bg-background/85 sticky top-0 z-20 border-b backdrop-blur-md">
       <div className="flex h-[60px] w-full flex-wrap items-center gap-x-3 gap-y-2 px-[clamp(14px,2.4vw,28px)]">
+        {/* Beside the name of the screen it is making room for, rather than in the
+            rail's own header — the thing you are trading away is the labels next
+            to these titles, and the control now sits where that trade is read. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleRail}
+              aria-label={wide ? 'Collapse the sidebar' : 'Expand the sidebar'}
+              aria-expanded={wide}
+              className="-ml-1.5"
+            >
+              {wide ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {wide ? 'Collapse the sidebar' : 'Expand the sidebar'}
+          </TooltipContent>
+        </Tooltip>
         <h1 className="text-[16px] font-semibold tracking-[-0.01em]">{current ? current.label : 'Vantage'}</h1>
           <div className="flex-1" />
           <Tooltip>
