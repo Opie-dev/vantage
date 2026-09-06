@@ -587,11 +587,13 @@ try {
       'RM 8,719.50', 'a salary is a floor'.replace('a s', 'A s')]],
     ['commitments', ['Committed run rate', 'Falling in', 'Commitments', 'All', 'Recurring',
       'RM 4,051.50']],
-    // 'never added up' and 'Room, per account' are the anti-summing rule on
-    // screen: headroom is stated per account and no figure here totals it, while
-    // debt and what leaves are summed because those genuinely add.
-    ['cards', ['Minimums, a month', 'Owed today', 'Accounts with a limit', 'The accounts',
-      'Room, per account', 'never added up', 'still blocked by instalments']],
+    // 'never added' is the anti-summing rule on screen: what is free is stated
+    // per account and no figure here totals it, while what is committed and
+    // what leaves are summed because those genuinely add. 'Carrying' with no
+    // badge beside it is the fixture's own state — a balance reading and no
+    // bill proves nothing either way.
+    ['cards', ['Committed across every card', 'Due in the next 30 days', 'Actually available',
+      'Due next', 'Carrying', 'never added']],
     ['loans', ['Instalments, a month', 'Of that, spent', 'Of that, kept', 'Outstanding']],
     ['expenses', ['Spending · what was actually spent', 'RM 285.30 logged',
       'Logged spend · 12 months', 'Set a target', 'Day by day', 'By group', 'Food',
@@ -663,6 +665,40 @@ try {
     }
 
     console.log(`  axis       ${a} vs ${b} distinguishable, ${c} vs ${d} distinguishable`)
+  }
+
+  // The words a card row is built from. Asserted on the formatters because the
+  // row prints them inside longer strings, and "22nd" reading "22th" is the
+  // kind of thing a rendered-text assertion would sail past.
+  {
+    const { ordinal, dfmtMonth, monthOf, availabilityTone, stateCaption } =
+      await server.ssrLoadModule('/src/lib/format.js')
+    const want = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 11: '11th', 12: '12th', 13: '13th',
+      21: '21st', 22: '22nd', 23: '23rd', 31: '31st' }
+    for (const [n, s] of Object.entries(want)) {
+      if (ordinal(Number(n)) !== s) throw new Error(`ordinal(${n}) read ${ordinal(Number(n))}, not ${s}`)
+    }
+    if (ordinal(null) !== '—') throw new Error('ordinal: no day recorded must read as a dash')
+    if (ordinal(-1) !== 'last day') throw new Error('ordinal: -1 is the last-day convention')
+    if (dfmtMonth('2026-07-07') !== '7 July') throw new Error(`dfmtMonth read ${dfmtMonth('2026-07-07')}`)
+    if (monthOf('2026-08-26') !== 'August') throw new Error(`monthOf read ${monthOf('2026-08-26')}`)
+    const tones = [[null, 'text-faint'], [2.45, 'text-gain'], [60, 'text-cash'], [81.25, 'text-loss']]
+    for (const [pct, cls] of tones) {
+      if (availabilityTone(pct) !== cls) throw new Error(`availabilityTone(${pct}) read ${availabilityTone(pct)}, not ${cls}`)
+    }
+    // Number words, and the verb agreeing with them.
+    const captions = [
+      [stateCaption({ unknownNoPayment: 1 }), 'one account has no payment recorded'],
+      [stateCaption({ carrying: 1, settled: 1 }), 'one account carries · one settles in full'],
+      [stateCaption({ carrying: 2, late: 1, settled: 3, unknownOneBill: 1, unknownNoBill: 2 }),
+        'two accounts carry · one paid late · three settle in full · one has one bill so far · two have no bill yet'],
+      [stateCaption({ unknownNoPayment: 1 }, { overdueRM: 5092.49, overdueISO: '2026-08-26' }),
+        'one account has no payment recorded · RM 5,092.49 of it fell due on 26 Aug with no payment recorded'],
+    ]
+    for (const [got, exp] of captions) {
+      if (got !== exp) throw new Error(`stateCaption read "${got}", not "${exp}"`)
+    }
+    console.log(`  card words ${ordinal(22)}, ${dfmtMonth('2026-07-07')}, ${monthOf('2026-08-26')}, captions agree`)
   }
 
   // The allocation donut, scoped three ways.
@@ -1042,6 +1078,362 @@ try {
     console.log(`  card float ${f.rm.toFixed(2)} from two readings and ${f.payments.length} payment, no transactions`)
   }
 
+  /* ── what a card's bills prove, and every figure that follows ────────────── */
+  //
+  // Calc-level, on local copies, with `nowISO` passed explicitly everywhere:
+  // the live Maybank figures below are checked against two fixed dates and
+  // must not move with the wall clock. The CIMB copy is relative to today, as
+  // the rest of the fixture is, and is given today's date by name.
+  {
+    const { cardState, commitmentRows, commitmentsTotal, moneyByDay, cardFloat, planFit, addDaysISO } =
+      await server.ssrLoadModule('/src/lib/calc.js')
+    const { stateCaption, monthOf, fmt } = await server.ssrLoadModule('/src/lib/format.js')
+    const card = STATE.commitments.find(c => c.kind === 'REVOLVING')
+    const today = isoOf(NOW)
+    const copy = () => JSON.parse(JSON.stringify(STATE))
+    const fail = (name, got, want) =>
+      new Error(`card state: ${name} read ${JSON.stringify(got)}, not ${JSON.stringify(want)}`)
+    const same = (name, got, want) => { if (got !== want) throw fail(name, got, want) }
+    // A calendar note carries its money as numbers, formatted only when drawn
+    // (so private mode can mask it); read here the way Calendar.jsx reads it.
+    const noteText = n => (Array.isArray(n) ? n.map(p => (typeof p === 'number' ? fmt(p, 'MYR') : p)).join('') : n)
+    const near = (name, got, want) => {
+      if (got == null || Math.abs(got - want) > 0.005) throw fail(name, got, want)
+    }
+    const stmt = (id, statement_date, due_date, closing_balance, extra = {}) => ({
+      id, commitment_id: card.id, statement_date, due_date, closing_balance, minimum_due: 50,
+      interest_charged: 0, fees_charged: 0, note: '', source: 'manual', ...extra,
+    })
+    const pay = (id, date, amount) => ({
+      id, commitment_id: card.id, date, amount, extra_principal: 0, note: '', source: 'manual',
+    })
+    const withBills = (statements, payments = []) => {
+      const S = copy()
+      S.cardStatements = statements
+      S.commitmentPayments = payments
+      return S
+    }
+    const verdict = S => {
+      const r = cardState(S, card, { nowISO: today })
+      return `${r.state}/${r.evidence}`
+    }
+
+    // Every row of the decision table, first match wins. `s1` is live (closed
+    // ten days ago, due in ten), `s0` the bill before it (due twenty days ago);
+    // `past` is a lone bill past due AND past the four-day grace.
+    const s1 = stmt(820, ago(10), ago(-10), 1000)
+    const s0 = stmt(821, ago(40), ago(20), 800)
+    const past = stmt(822, ago(30), ago(10), 1000)
+    const table = [
+      ['no statements', STATE, 'UNKNOWN/NO_STATEMENTS'],
+      ['first bill', withBills([s1]), 'UNKNOWN/FIRST_BILL'],
+      ['previous settled', withBills([s1, s0], [pay(720, ago(25), 800)]), 'SETTLED/PREVIOUS_SETTLED'],
+      ['previous carried, partial', withBills([s1, s0], [pay(720, ago(25), 300)]), 'CARRYING/PREVIOUS_CARRIED'],
+      ['previous carried, paid late', withBills([s1, s0], [pay(720, ago(12), 800)]), 'CARRYING/PREVIOUS_CARRIED'],
+      ['previous unpaid', withBills([s1, s0]), 'UNKNOWN/PREVIOUS_UNPAID'],
+      ['paid on time', withBills([s1, s0], [pay(720, ago(25), 800), pay(721, ago(2), 1000)]), 'SETTLED/PAID_ON_TIME'],
+      ['paid in grace', withBills([past], [pay(721, addDaysISO(ago(10), 3), 1000)]), 'SETTLED/PAID_IN_GRACE'],
+      ['paid late', withBills([past], [pay(721, addDaysISO(ago(10), 10), 1000)]), 'SETTLED/PAID_LATE'],
+      ['partial', withBills([past], [pay(721, ago(9), 500)]), 'CARRYING/PARTIAL'],
+      ['no payment recorded', withBills([past]), 'UNKNOWN/NO_PAYMENT_RECORDED'],
+      ['interest billed', withBills([{ ...s1, interest_charged: 5 }, s0]), 'CARRYING/INTEREST_BILLED'],
+      // An imported row writes interest_charged: 0 unconditionally, so a figure
+      // on one is not evidence — and must never make a card CARRYING.
+      ['imported interest', withBills([{ ...s1, interest_charged: 5, source: 'import' }, s0]), 'UNKNOWN/PREVIOUS_UNPAID'],
+      // Interest on the bill BEFORE says the one before that was carried — a
+      // cycle too early to speak to the live bill (the corrected 6b).
+      ['interest on the bill before', withBills([s1, { ...s0, interest_charged: 5 }], [pay(720, ago(25), 800)]), 'SETTLED/PREVIOUS_SETTLED'],
+      // And a hand-keyed bill printing interest, paid in full by its due date,
+      // is SETTLED — never CARRYING.
+      ['interest then paid', withBills([{ ...past, interest_charged: 5 }], [pay(721, ago(12), 1000)]), 'SETTLED/PAID_ON_TIME'],
+    ]
+    for (const [name, S, want] of table) same(name, verdict(S), want)
+
+    // The carried base is the whole unpaid bill, net of payments: 500 on
+    // 5,092.49 past due and grace carries 4,592.49, costing 57.41 a month at 15%.
+    const partial = withBills([stmt(823, ago(30), ago(10), 5092.49)], [pay(721, ago(9), 500)])
+    partial.commitments = partial.commitments.map(c => (c.id === card.id ? { ...c, apr: 15 } : c))
+    const pr = commitmentRows(partial, { nowISO: today }).find(r => r.id === card.id)
+    same('partial verdict', `${pr.state}/${pr.evidence}`, 'CARRYING/PARTIAL')
+    near('partial carried', pr.carried, 4592.49)
+    same('partial cost', pr.costOfCarrying.toFixed(2), '57.41')
+    near('partial band 1', pr.bandPct[0], (4592.49 / 15000) * 100)
+    near('partial band 2', pr.bandPct[1], 0)
+
+    // Minimum met: payments cover the minimum but not the bill, so nothing more
+    // is demanded on the due date — and it is said, not printed as RM 0.00.
+    const met = withBills([{ ...s1, minimum_due: 100 }], [pay(721, ago(3), 100)])
+    const mr = commitmentRows(met, { nowISO: today }).find(r => r.id === card.id)
+    if (!(mr.dueNext.met && mr.dueNext.rm === 0 && mr.dueNext.atLeast === false && mr.dueNext.basis === 'BILL')) {
+      throw fail('minimum met', mr.dueNext, { rm: 0, met: true, atLeast: false, basis: 'BILL' })
+    }
+
+    // Settled is settled: two payments whose float sum lands a hair under the
+    // bill (4,320.40 + 0.70 is 4,321.099999…) still clear it, and the cleared
+    // bill leaves nothing billed and unpaid — so the due figure moves to the
+    // next cycle rather than reading as a met minimum on an open bill.
+    const drift = withBills([stmt(824, ago(10), ago(-10), 4321.10)], [pay(721, ago(8), 4320.40), pay(722, ago(7), 0.70)])
+    const dr = commitmentRows(drift, { nowISO: today }).find(r => r.id === card.id)
+    same('drift verdict', `${dr.state}/${dr.evidence}`, 'SETTLED/PAID_ON_TIME')
+    same('drift billedUnpaid', dr.billedUnpaid, 0)
+    same('drift dueNext.basis', dr.dueNext.basis, 'CYCLE')
+    same('drift dueNext.rm', dr.dueNext.rm, null)
+
+    // A partial past the due date and its grace is decided: the balance is
+    // carried, and what leaves next is the next bill's minimum on the next
+    // cycle's date — never "minimum met" or "RM 0.00" against a date gone by.
+    const covered = withBills([stmt(825, ago(30), ago(10), 5092.49, { minimum_due: 1838.83 })], [pay(721, ago(15), 2000)])
+    const cr0 = commitmentRows(covered, { nowISO: today }).find(r => r.id === card.id)
+    same('covered verdict', `${cr0.state}/${cr0.evidence}`, 'CARRYING/PARTIAL')
+    same('covered dueNext.basis', cr0.dueNext.basis, 'CYCLE')
+    same('covered dueNext.met', cr0.dueNext.met, false)
+    if (!(cr0.dueNext.rm > 0)) throw fail('covered dueNext.rm', cr0.dueNext.rm, 'the next minimum')
+    same('covered dueNext.atLeast', cr0.dueNext.atLeast, true)
+    same('partial dueNext.basis', pr.dueNext.basis, 'CYCLE')
+
+    // A plan bought after the bill closed is unbilled in full: none of it is
+    // inside the closing balance, so the retail base the minimum reads is the
+    // whole bill (5% of 1,000 plus the 100 instalment now contracted = 150).
+    const after = withBills([stmt(826, ago(30), ago(10), 1000, { minimum_due: null })])
+    after.cardPlans = [{
+      id: 915, commitment_id: card.id, kind: 'EPP', name: 'Bought after the close', merchant: '', amount: 1200,
+      tenure_months: 12, instalment: 100, rate: 0, upfront_fee: 0, purchased_on: ago(20), started_on: ago(20),
+      settled_on: null, status: 'ACTIVE', category: 'OTHER', note: '', source: 'manual',
+    }]
+    const ar = commitmentRows(after, { nowISO: today }).find(r => r.id === card.id)
+    same('plan after close instalmentsBilled', ar.instalmentsBilled, 0)
+    near('plan after close retailUnpaid', ar.retailUnpaid, 1000)
+    near('plan after close unbilled', ar.unbilled, 1200)
+    near('plan after close derivedMinimum', ar.derivedMinimum, 150)
+
+    // A minimum of nothing is nothing due: no "at least RM 0.00" on the row
+    // and no estimated event of RM 0.00 on the calendar.
+    const nothing = copy()
+    nothing.commitments = nothing.commitments.map(c =>
+      c.id === card.id ? { ...c, balance: 0, balance_as_of: null, statement_day: 6 } : c)
+    const nr = commitmentRows(nothing, { nowISO: today }).find(r => r.id === card.id)
+    same('nothing dueNext.rm', nr.dueNext.rm, null)
+    same('nothing dueNext.atLeast', nr.dueNext.atLeast, false)
+    const [ny, nm] = today.split('-').map(Number)
+    const nothingDue = Object.values(moneyByDay(nothing, ny, nm - 1, today)).flat().find(e => e.key === `cr${card.id}`)
+    if (nothingDue) throw fail('nothing calendar', nothingDue, 'no due event for a minimum of nothing')
+
+    // ── the live Maybank account, at two fixed dates ──────────────────────────
+    const live = copy()
+    live.commitments = [{
+      id: 19, kind: 'REVOLVING', name: 'Maybank card account', lender: 'Maybank', currency: 'MYR',
+      due_day: 26, statement_day: 6, note: '', principal: null, rate: null, rate_type: null,
+      term_months: null, started_on: null, instalment: null, credit_limit: 15000, balance: 3424.91,
+      balance_as_of: '2026-08-06', apr: 15, min_payment_pct: 5, min_payment_floor: 25, amount: null,
+      every_months: 1, limit_release: 'PROGRESSIVE', asset_id: null, collected_by_id: null,
+      active: true, ended_on: null, sort_order: 9,
+    }]
+    live.cardStatements = [{ id: 830, commitment_id: 19, statement_date: '2026-08-06', due_date: '2026-08-26',
+      closing_balance: 5092.49, minimum_due: 1838.83, interest_charged: 0, fees_charged: 0, note: '', source: 'import' }]
+    live.commitmentPayments = []
+    const plan = (id, name, amount, tenure_months, instalment, started_on) => ({
+      id, commitment_id: 19, kind: 'EPP', name, merchant: '', amount, tenure_months, instalment, rate: 0,
+      upfront_fee: 0, purchased_on: started_on, started_on, settled_on: null, status: 'ACTIVE',
+      category: 'OTHER', note: '', source: 'manual',
+    })
+    live.cardPlans = [
+      plan(910, 'EzyCash', 7000.02, 6, 1166.67, '2026-05-07'),
+      plan(911, 'EzyPay Plus', 2896.20, 12, 263.07, '2026-04-07'),
+      plan(912, 'BJAK', 2854.08, 12, 237.84, '2026-03-07'),
+    ]
+    const dates = [
+      ['2026-09-06', { verdict: 'UNKNOWN/NO_PAYMENT_RECORDED', days: -11, daysOfFloat: 20, stale: true,
+        staleDays: 31, stated: false, counts: { unknownNoPayment: 1 }, overdueRM: 5092.49, overdueISO: '2026-08-26',
+        caption: 'one account has no payment recorded · RM 5,092.49 of it fell due on 26 Aug with no payment recorded' }],
+      ['2026-08-20', { verdict: 'UNKNOWN/FIRST_BILL', days: 6, daysOfFloat: 37, stale: false,
+        staleDays: null, stated: true, counts: { unknownOneBill: 1 }, overdueRM: 0, overdueISO: null,
+        caption: 'one account has one bill so far' }],
+    ]
+    for (const [nowISO, want] of dates) {
+      const tag = k => `Maybank ${nowISO} ${k}`
+      const r = commitmentRows(live, { nowISO }).find(x => x.id === 19)
+      same(tag('verdict'), `${r.state}/${r.evidence}`, want.verdict)
+      near(tag('instalmentsBilled'), r.instalmentsBilled, 1667.58)
+      near(tag('billedUnpaid'), r.billedUnpaid, 5092.49)
+      near(tag('retailUnpaid'), r.retailUnpaid, 3424.91)
+      same(tag('carried'), r.carried, null)
+      near(tag('unbilled'), r.unbilled, 7269.45)
+      near(tag('blocked'), r.blocked, 7095.69)
+      near(tag('owed'), r.owed, 12361.94)
+      near(tag('billed'), r.billed, 5092.49)
+      near(tag('availableRM'), r.availableRM, 2811.82)
+      same(tag('utilisationPct'), r.utilisationPct.toFixed(2), '81.25')
+      near(tag('apparentFree'), r.apparentFree, 9907.51)
+      same(tag('apparentPct'), r.apparentPct.toFixed(2), '33.95')
+      same(tag('bandPct'), r.bandPct.map(v => v.toFixed(2)).join(' '), '0.00 33.95 47.30')
+      near(tag('releasePerMonth'), r.releasePerMonth, 1645.86)
+      same(tag('minimum limb'), r.minimumDetail.limb, 'PCT')
+      same(tag('derivedMinimum'), r.derivedMinimum.toFixed(2), '1838.83')
+      same(tag('minimumIsStated'), r.minimumIsStated, want.stated)
+      same(tag('minimum'), r.minimum.toFixed(2), '1838.83')
+      same(tag('costOfCarrying'), r.costOfCarrying, null)
+      same(tag('interestThisMonth'), r.interestThisMonth, 0)
+      same(tag('principalThisMonth'), r.principalThisMonth.toFixed(2), '1838.83')
+      same(tag('cycle'), `${r.cycle.closesOn} ${r.cycle.dueOn} ${r.cycle.daysOfFloat} ${r.cycle.graceDays}`,
+        `2026-09-06 2026-09-26 ${want.daysOfFloat} 20`)
+      near(tag('dueNext.rm'), r.dueNext.rm, 1838.83)
+      same(tag('dueNext.iso'), r.dueNext.iso, '2026-08-26')
+      same(tag('dueNext.days'), r.dueNext.days, want.days)
+      same(tag('dueNext.atLeast'), r.dueNext.atLeast, true)
+      same(tag('dueNext.basis'), r.dueNext.basis, 'BILL')
+      same(tag('stale'), r.stale, want.stale)
+      same(tag('staleDays'), r.staleDays, want.staleDays)
+      same(tag('balanceNewer'), r.balanceNewer, false)
+      // The identities the screen prints.
+      near(tag('owed = billed + unbilled'), r.owed, r.billed + r.unbilled)
+      near(tag('available = limit − billedUnpaid − blocked'), r.availableRM, 15000 - r.billedUnpaid - r.blocked)
+      // Nothing may print the old figures: interest on an unproven balance, or
+      // the plan arithmetic run at today's date.
+      for (const bad of [42.81, 6125.26, 9026.78, 10694.36, 4457.68]) {
+        for (const v of [r.interestThisMonth, r.owed, r.availableRM, r.unbilled, r.blocked, r.carried || 0]) {
+          if (Math.abs(v - bad) < 0.005) throw fail(tag(`must not print ${bad}`), v, 'anything else')
+        }
+      }
+      const t = commitmentsTotal(live, { kinds: ['REVOLVING'], nowISO })
+      near(tag('billedRM'), t.billedRM, 5092.49)
+      near(tag('unbilledRM'), t.unbilledRM, 7269.45)
+      near(tag('owedRM'), t.owedRM, 12361.94)
+      near(tag('due30RM'), t.due30RM, 1838.83)
+      same(tag('due30AtLeast'), t.due30AtLeast, true)
+      const counts = { carrying: 0, late: 0, settled: 0, unknownNoPayment: 0, unknownOneBill: 0, unknownNoBill: 0, ...want.counts }
+      same(tag('counts'), JSON.stringify(t.counts), JSON.stringify(counts))
+      near(tag('overdueRM'), t.overdueRM, want.overdueRM)
+      same(tag('overdueISO'), t.overdueISO, want.overdueISO)
+      same(tag('caption'), stateCaption(t.counts, t), want.caption)
+      const pf = planFit(live, 19, 1, { nowISO })
+      near(tag('planFit.billedUnpaid'), pf.billedUnpaid, 5092.49)
+      near(tag('planFit.apparentFree'), pf.apparentFree, 9907.51)
+      near(tag('planFit.availableRM'), pf.availableRM, 2811.82)
+    }
+    // The calendar: August's due day is the printed minimum with the whole bill
+    // named and no payment recorded; September's is derived, by the PCT limb.
+    const aug = (moneyByDay(live, 2026, 7, '2026-09-06')[26] || []).find(e => e.key === 'cr19')
+    if (!aug) throw fail('Maybank calendar Aug 26', null, 'a due event')
+    near('Maybank Aug 26 amount', aug.amount, 1838.83)
+    same('Maybank Aug 26 state', aug.state, 'due')
+    near('Maybank Aug 26 clearAmount', aug.clearAmount, 5092.49)
+    if (!noteText(aug.note).includes('the whole bill is RM 5,092.49, and no payment is recorded')) {
+      throw fail('Maybank Aug 26 note', noteText(aug.note), '…the whole bill is RM 5,092.49, and no payment is recorded')
+    }
+    const sep = (moneyByDay(live, 2026, 8, '2026-09-06')[26] || []).find(e => e.key === 'cr19')
+    if (!sep) throw fail('Maybank calendar Sep 26', null, 'an estimated event')
+    same('Maybank Sep 26 amount', sep.amount.toFixed(2), '1838.83')
+    same('Maybank Sep 26 state', sep.state, 'estimated')
+    if (!sep.note.startsWith('derived: 5% of the revolving balance')) throw fail('Maybank Sep 26 note', sep.note, 'the PCT note')
+
+    // ── the shared state does not move ───────────────────────────────────────
+    // Card 3 has a balance and no bill: UNKNOWN, its minimum still 117 (5% of
+    // 2,340), which is what keeps 'RM 4,051.50' and 'RM 4,668.00' where the
+    // screens above asserted them.
+    const shared = commitmentsTotal(STATE, { kinds: ['REVOLVING'], nowISO: today })
+    near('shared monthlyOutRM', shared.monthlyOutRM, 117)
+    const c3 = shared.rows.find(r => r.id === card.id)
+    same('shared verdict', `${c3.state}/${c3.evidence}`, 'UNKNOWN/NO_STATEMENTS')
+    same('shared basis', c3.basis, 'READING')
+    near('shared owed', c3.owed, 2340)
+    near('shared dueNext.rm', c3.dueNext.rm, 117)
+    same('shared dueNext.iso', c3.dueNext.iso, null)
+    same('shared dueNext.atLeast', c3.dueNext.atLeast, true)
+    same('shared interestThisMonth', c3.interestThisMonth, 0)
+    same('shared costOfCarrying', c3.costOfCarrying, null)
+    near('shared apparentFree − availableRM = blocked', c3.apparentFree - c3.availableRM, c3.blocked)
+    same('shared counts', JSON.stringify(shared.counts),
+      JSON.stringify({ carrying: 0, late: 0, settled: 0, unknownNoPayment: 0, unknownOneBill: 0, unknownNoBill: 1 }))
+
+    // ── a card that settles every cycle ──────────────────────────────────────
+    const closed = ago(2), due = ago(-22), prevClosed = ago(33), prevDue = ago(9)
+    const cimb = copy()
+    cimb.commitments.push({
+      id: 5, kind: 'REVOLVING', name: 'CIMB Platinum', lender: 'CIMB', currency: 'MYR',
+      due_day: Number(due.slice(8, 10)), statement_day: Number(closed.slice(8, 10)), note: '',
+      principal: null, rate: null, rate_type: null, term_months: null, started_on: null, instalment: null,
+      credit_limit: 25000, balance: 0, balance_as_of: closed, apr: 17, min_payment_pct: 5,
+      min_payment_floor: 50, amount: null, every_months: 1, limit_release: 'PROGRESSIVE',
+      asset_id: null, collected_by_id: null, active: true, ended_on: null, sort_order: 5,
+    })
+    cimb.cardStatements = [
+      { id: 810, commitment_id: 5, statement_date: closed, due_date: due, closing_balance: 612.40,
+        minimum_due: 50, interest_charged: 0, fees_charged: 0, note: '', source: 'import' },
+      { id: 811, commitment_id: 5, statement_date: prevClosed, due_date: prevDue, closing_balance: 588.10,
+        minimum_due: 50, interest_charged: 0, fees_charged: 0, note: '', source: 'import' },
+    ]
+    cimb.commitmentPayments = [{ id: 710, commitment_id: 5, date: ago(12), amount: 588.10,
+      extra_principal: 0, note: '', source: 'manual' }]
+    const cr = commitmentRows(cimb, { nowISO: today }).find(r => r.id === 5)
+    same('CIMB verdict', `${cr.state}/${cr.evidence}`, 'SETTLED/PREVIOUS_SETTLED')
+    near('CIMB billedUnpaid', cr.billedUnpaid, 612.40)
+    same('CIMB carried', cr.carried, 0)
+    same('CIMB bandPct', cr.bandPct.map(v => v.toFixed(2)).join(' '), '0.00 2.45 0.00')
+    same('CIMB unbilled', cr.unbilled, 0)
+    same('CIMB blocked', cr.blocked, 0)
+    near('CIMB owed', cr.owed, 612.40)
+    near('CIMB availableRM', cr.availableRM, 24387.60)
+    near('CIMB apparentFree', cr.apparentFree, 24387.60)
+    same('CIMB minimum', cr.minimum, 50)
+    same('CIMB minimumIsStated', cr.minimumIsStated, true)
+    same('CIMB minimum limb', cr.minimumDetail.limb, 'FLOOR')
+    near('CIMB dueNext.rm', cr.dueNext.rm, 612.40)
+    same('CIMB dueNext.days', cr.dueNext.days, 22)
+    same('CIMB dueNext.atLeast', cr.dueNext.atLeast, false)
+    same('CIMB costOfCarrying', cr.costOfCarrying, 0)
+    same('CIMB interestThisMonth', cr.interestThisMonth, 0)
+    same('CIMB staleDays', cr.staleDays, null)
+    same('CIMB stale', cr.stale, false)
+    same('CIMB bill.timing', cr.bill.timing, null)
+    same('CIMB prevBill.timing', cr.prevBill.timing, 'ON_TIME')
+    const ct = commitmentsTotal(cimb, { kinds: ['REVOLVING'], nowISO: today })
+    near('CIMB billedRM', ct.billedRM, 2952.40)
+    near('CIMB due30RM', ct.due30RM, 612.40)
+    same('CIMB due30AtLeast', ct.due30AtLeast, false)
+    same('CIMB caption', stateCaption(ct.counts, ct), 'one account settles in full · one has no bill yet')
+    // The calendar on its due day carries the WHOLE bill, because the account
+    // settles — and what clears it is the same figure.
+    const [dy, dm] = due.split('-').map(Number)
+    const ev = (moneyByDay(cimb, dy, dm - 1, today)[Number(due.slice(8, 10))] || []).find(e => e.key === 'cr5')
+    if (!ev) throw fail('CIMB calendar', null, 'a due event')
+    near('CIMB calendar amount', ev.amount, 612.40)
+    same('CIMB calendar state', ev.state, 'due')
+    near('CIMB calendar clearAmount', ev.clearAmount, 612.40)
+    if (!noteText(ev.note).includes('as this account settles in full — the minimum would be RM 50.00')) {
+      throw fail('CIMB calendar note', noteText(ev.note), '…as this account settles in full — the minimum would be RM 50.00')
+    }
+    // The float speaks in the settled voice, from the bill before — not from
+    // whether the window's payments happen to add up.
+    const cf = cardFloat(cimb, 5, { nowISO: today })
+    near('CIMB float rm', cf.rm, 612.40)
+    same('CIMB float voice', cf.voice, 'SETTLED')
+    same('CIMB float range', `${cf.rangeStartISO} ${cf.to}`, `${ago(32)} ${closed}`)
+    same('CIMB float paysISO', cf.paysISO, due)
+    same('CIMB float paysMonth', cf.paysMonth, monthOf(due))
+    same('CIMB float livedMonth', cf.livedMonth, monthOf(ago(18)))
+    same('CIMB float payments', cf.payments.length, 1)
+    // The same 588.10 five days after the due date is inside the window and
+    // still late: the balance was cleared, the interest-free period was not kept.
+    const lateCopy = JSON.parse(JSON.stringify(cimb))
+    lateCopy.commitmentPayments = [{ ...cimb.commitmentPayments[0], date: addDaysISO(prevDue, 5) }]
+    const lf = cardFloat(lateCopy, 5, { nowISO: today })
+    same('CIMB late voice', lf.voice, 'CARRYING')
+    same('CIMB late prevBill.timing', lf.prevBill.timing, 'LATE')
+    near('CIMB late rm', lf.rm, 612.40)
+    const lr = commitmentRows(lateCopy, { nowISO: today }).find(r => r.id === 5)
+    same('CIMB late verdict', `${lr.state}/${lr.evidence}`, 'CARRYING/PREVIOUS_CARRIED')
+    near('CIMB late carried', lr.carried, 612.40)
+    // And with no payment recorded at all, the voice is neither.
+    const noPay = JSON.parse(JSON.stringify(cimb))
+    noPay.commitmentPayments = []
+    const uf = cardFloat(noPay, 5, { nowISO: today })
+    same('CIMB unknown voice', uf.voice, 'UNKNOWN')
+    same('CIMB unknown paidRM', uf.paidRM, 0)
+    near('CIMB unknown rm', uf.rm, 612.40 - 588.10)
+
+    console.log(`  card state ${table.length} verdicts; Maybank 12,361.94 committed, 2,811.82 free at both dates; CIMB settles`)
+  }
+
   /* ── a row never offers an action its screen cannot perform ──────────────── */
   {
     const { commitmentRows } = await server.ssrLoadModule('/src/lib/calc.js')
@@ -1065,6 +1457,188 @@ try {
       throw new Error('row actions: Credit cards must still offer to add a plan')
     }
     console.log(`  row actions Commitments hands ${handoff} row(s) to the screen that owns them`)
+  }
+
+  /* ── the account row is the control, and the actions inside it are not ──── */
+  // Every card account is one row that opens its sheet. The plus inside the row
+  // must open the plan form WITHOUT opening the sheet — a click that did both
+  // would put a form on top of a panel the owner never asked for.
+  {
+    await tick(() => ctl.setTab('cards'))
+    const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+    const sheets = () => [...document.querySelectorAll('[data-slot="sheet-content"]')]
+    const rowsOf = () => [...pane().querySelectorAll('[role="button"][aria-label^="Open "]')]
+    const revolving = STATE.commitments.filter(c => c.kind === 'REVOLVING' && c.active).length
+    if (rowsOf().length !== revolving) {
+      throw new Error(`cards: ${rowsOf().length} account rows for ${revolving} card account(s)`)
+    }
+
+    await tick(() => rowsOf()[0].querySelector('[aria-label^="Add an instalment plan to"]').click())
+    if (!document.body.textContent.includes('Add an instalment plan')) {
+      throw new Error('cards: the plus inside a row did not open the plan form')
+    }
+    if (sheets().some(s => s.textContent.includes('Committed on this account'))) {
+      throw new Error('cards: the plus inside a row opened the account sheet as well')
+    }
+    await tick(() => ctl.closeModal())
+
+    const openSheet = async row => {
+      await tick(() => row.click())
+      const sheet = sheets().find(s => s.textContent.includes('Committed on this account'))
+      if (!sheet) throw new Error(`cards: clicking ${row.getAttribute('aria-label')} opened no account sheet`)
+      return sheet
+    }
+    const closeSheet = async () => {
+      await tick(() => document.querySelector('[data-slot="sheet-content"] button[type="button"]')?.click())
+      if (sheets().length) throw new Error('cards: the account sheet did not close')
+    }
+    const expectSheet = (sheet, who, needles) => {
+      for (const n of needles) {
+        if (!sheet.textContent.includes(n)) throw new Error(`cards sheet (${who}): missing "${n}"`)
+      }
+    }
+    // The float headline is the one figure whose tone is the voice's: loss
+    // only where a carried balance is proven, muted where the float is money
+    // waiting to leave the wallet. Found by its size class, which no other
+    // span in the sheet carries.
+    const floatHeadline = sheet =>
+      [...sheet.querySelectorAll('span')].find(el => el.classList.contains('text-[26px]'))
+
+    // The fixture's own card has no bill: the cost is an em dash, not a zero,
+    // and the sentence under it says a balance alone cannot prove carrying.
+    expectSheet(await openSheet(rowsOf()[0]), 'no bill', [
+      'Pay this card',
+      'Cost of carrying',
+      '—',
+      'no bill recorded — carrying cannot be read from a balance alone',
+    ])
+    await closeSheet()
+
+    // A card that settles every cycle, rendered beside the fixture's own. The
+    // stub hands the store the same STATE object on every reload, and React
+    // ignores a state set to the object it already holds — so the swap goes in
+    // through a fresh copy, and the restore through the original reference.
+    const closed = ago(2), due = ago(-22), prevClosed = ago(33), prevDue = ago(9)
+    const stub = globalThis.fetch
+    globalThis.fetch = async path => ({
+      ok: true, status: 200, statusText: 'OK',
+      json: async () => (String(path).includes('/api/state') ? { ...STATE } : { ok: true }),
+    })
+    STATE.commitments.push({
+      id: 5, kind: 'REVOLVING', name: 'CIMB Platinum', lender: 'CIMB', currency: 'MYR',
+      due_day: Number(due.slice(8, 10)), statement_day: Number(closed.slice(8, 10)), note: '',
+      principal: null, rate: null, rate_type: null, term_months: null, started_on: null, instalment: null,
+      credit_limit: 25000, balance: 0, balance_as_of: closed, apr: 17, min_payment_pct: 5,
+      min_payment_floor: 50, amount: null, every_months: 1, limit_release: 'PROGRESSIVE',
+      asset_id: null, collected_by_id: null, active: true, ended_on: null, sort_order: 5,
+    })
+    STATE.cardStatements = [
+      { id: 810, commitment_id: 5, statement_date: closed, due_date: due, closing_balance: 612.40,
+        minimum_due: 50, interest_charged: 0, fees_charged: 0, note: '', source: 'import' },
+      { id: 811, commitment_id: 5, statement_date: prevClosed, due_date: prevDue, closing_balance: 588.10,
+        minimum_due: 50, interest_charged: 0, fees_charged: 0, note: '', source: 'import' },
+    ]
+    STATE.commitmentPayments = [{ id: 710, commitment_id: 5, date: ago(12), amount: 588.10,
+      extra_principal: 0, note: '', source: 'manual' }]
+    await act(async () => { await ctl.reload() })
+    try {
+      if (rowsOf().length !== revolving + 1) {
+        throw new Error(`cards: ${rowsOf().length} account rows after adding a second account`)
+      }
+      const text = pane().textContent
+      // The badge is the previous bill paid in full and on time; the figure is the
+      // whole live bill on its own due date, because a settling account pays all
+      // of it — and 'Two limits' proves the two rooms were named, not added.
+      for (const n of ['Paid in full', 'RM 612.40 · in 22 days', 'Two limits, not one pool.']) {
+        if (!text.includes(n)) throw new Error(`cards (settled account): missing "${n}"`)
+      }
+      // Its sheet: the cost is an em dash because nothing is carried, and the
+      // float speaks in the settled voice — spending waiting to leave the
+      // wallet, not debt, so the headline is not painted as a loss.
+      const cimbRow = () => rowsOf().find(r => r.getAttribute('aria-label') === 'Open CIMB Platinum')
+      if (!cimbRow()) throw new Error('cards: no row for the settled account')
+      const settledSheet = await openSheet(cimbRow())
+      expectSheet(settledSheet, 'settled account', [
+        'Cost of carrying',
+        'nothing is carried, so there is no cost',
+        'A card settled every cycle still carries float',
+        'Spent on the card in ',
+        'Paid off it on ',
+        'RM 612.40 DUE IN 22 DAYS',
+        'never used',
+      ])
+      const settledHeadline = floatHeadline(settledSheet)
+      if (!settledHeadline) throw new Error('cards sheet (settled account): no float headline')
+      if (settledHeadline.classList.contains('text-loss')) {
+        throw new Error('cards sheet (settled account): the float of a settled card is painted as a loss')
+      }
+      await closeSheet()
+
+      // The same account with a PARTIAL payment on the bill before: a balance
+      // came into the live cycle, so the badge, the cost and the float all
+      // turn — the lead is the carrying voice and the headline is a loss.
+      STATE.commitmentPayments[0].amount = 300
+      await act(async () => { await ctl.reload() })
+      const carryingSheet = await openSheet(cimbRow())
+      expectSheet(carryingSheet, 'carrying account', [
+        'Two closing balances.',
+        'RM 300.00 was paid off it',
+        '17.0% on the revolving band only',
+        'RM 50.00 DUE IN 22 DAYS',
+      ])
+      if (carryingSheet.textContent.includes('nothing is carried, so there is no cost')) {
+        throw new Error('cards sheet (carrying account): still reads as settled')
+      }
+      const carryingHeadline = floatHeadline(carryingSheet)
+      if (!carryingHeadline?.classList.contains('text-loss')) {
+        throw new Error('cards sheet (carrying account): the float of a carried balance is not a loss')
+      }
+      await closeSheet()
+
+      // The 30-day figure is a loss only while something leaves: with CIMB's
+      // whole bill inside the month it is red, and on the fixture alone (a card
+      // with no statement day has no date to fall due on) it is not.
+      const due30 = () => [...pane().querySelectorAll('div')].find(el => el.classList.contains('text-[22px]'))
+      if (!due30()?.classList.contains('text-loss')) {
+        throw new Error('cards: RM 612.40 due inside the month is not painted as a loss')
+      }
+
+      // The sheet lists the plans, so the sheet is where a plan is edited or
+      // removed — the row on Credit cards no longer carries a plan list at all.
+      STATE.cardPlans = [{
+        id: 916, commitment_id: 5, kind: 'EPP', name: 'Sofa on EPP', merchant: '', amount: 1200,
+        tenure_months: 12, instalment: 100, rate: 0, upfront_fee: 0, purchased_on: ago(1), started_on: ago(1),
+        settled_on: null, status: 'ACTIVE', category: 'OTHER', note: '', source: 'manual',
+      }]
+      await act(async () => { await ctl.reload() })
+      const planSheet = await openSheet(cimbRow())
+      for (const label of ['Edit Sofa on EPP', 'Remove Sofa on EPP']) {
+        if (!planSheet.querySelector(`[aria-label="${label}"]`)) {
+          throw new Error(`cards sheet (plans): no "${label}" action`)
+        }
+      }
+      await tick(() => planSheet.querySelector('[aria-label="Edit Sofa on EPP"]').click())
+      if (!document.body.textContent.includes('Edit the plan')) {
+        throw new Error('cards sheet (plans): the pencil did not open the plan for editing')
+      }
+      await tick(() => ctl.closeModal())
+      await closeSheet()
+    } finally {
+      STATE.commitments = STATE.commitments.filter(c => c.id !== 5)
+      delete STATE.cardStatements
+      delete STATE.cardPlans
+      STATE.commitmentPayments = []
+      globalThis.fetch = stub
+      await act(async () => { await ctl.reload() })
+    }
+    if (rowsOf().length !== revolving) throw new Error('cards: the settled account did not restore')
+    {
+      const due30 = [...pane().querySelectorAll('div')].find(el => el.classList.contains('text-[22px]'))
+      if (!due30 || due30.classList.contains('text-loss')) {
+        throw new Error('cards: nothing due in 30 days is painted as a loss')
+      }
+    }
+    console.log('  cards      one row per account opens its sheet; the plus inside it does not; CIMB settles, then carries; plans edit from the sheet')
   }
 
   // The month is shared, and that is the whole reason six screens are allowed to

@@ -27,7 +27,7 @@ import { ChevronRightIcon, FileTextIcon, PencilIcon, PlusIcon, TrashIcon } from 
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { fmt, pct1 } from '@/lib/format'
+import { dfmt, fmt, ordinal, pct1 } from '@/lib/format'
 
 import { KIND_COLOR, Meta, RowAction } from './parts'
 
@@ -91,11 +91,17 @@ function CardPlans({ r, onEditPlan, onRemovePlan }) {
 
       <div className="border-hairline flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2">
         <div className="min-w-[190px] flex-1">
-          <span className="text-muted-foreground text-[12px]">5% of the revolving balance</span>{' '}
+          {/* The account's own percentage and floor, not a fixed "5%": BNM 13.1
+              sets the shape of the minimum and the issuer sets the figures. */}
+          <span className="text-muted-foreground text-[12px]">
+            {r.minimumDetail.limb === 'FLOOR'
+              ? `the ${fmt(r.minimumDetail.floor, r.cur)} floor`
+              : `${r.minimumDetail.pct}% of the revolving balance`}
+          </span>{' '}
           <span className="text-faint text-[11px]">· instalments out of the base first</span>
         </div>
         <div className="num text-faint w-[112px] shrink-0 text-right text-[12.5px]">
-          {fmt(r.revolving, r.cur)}
+          {fmt(r.minimumDetail.revolving, r.cur)}
         </div>
         <div className="num w-[92px] shrink-0 text-right text-[12.5px]">
           {fmt(Math.max(r.minimum - r.instalments, 0), r.cur)}
@@ -113,7 +119,6 @@ function CardPlans({ r, onEditPlan, onRemovePlan }) {
  * come back only as each month's principal is paid.
  */
 function CardHeadroom({ r }) {
-  const apparent = r.commitment.credit_limit - r.revolving - r.planOutstanding
   const hidden = r.availableRM != null && r.blocked > 0
   if (!hidden) return null
   return (
@@ -124,11 +129,11 @@ function CardHeadroom({ r }) {
         </b>{' '}
         on this limit. <span className="num">{fmt(r.blocked, r.cur)}</span> of instalment principal is
         still blocking it and is released only as each month&rsquo;s share is paid.
-        {apparent > r.availableRM ? (
+        {r.apparentFree != null && r.apparentFree > r.availableRM ? (
           <>
             {' '}
             <span className="text-faint">
-              The balance alone would suggest {fmt(apparent, r.cur)}.
+              The bill alone would suggest {fmt(r.apparentFree, r.cur)}.
             </span>
           </>
         ) : null}
@@ -158,7 +163,10 @@ export default function CommitmentRow({
 
       <div className="min-w-[200px] flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          {r.kind === 'REVOLVING' ? (
+          {/* The name opens the sheet only where a screen passed one to open.
+              Commitments shows the card row without a sheet, and a button that
+              called an undefined callback there threw on the click. */}
+          {r.kind === 'REVOLVING' && onOpenSheet ? (
             <button
               type="button"
               onClick={() => onOpenSheet(r.id)}
@@ -224,22 +232,22 @@ export default function CommitmentRow({
                 </>
               ) : null}{' '}
               · <span className="num">{r.quoted}%</span> if carried
-              {r.planOutstanding > 0 ? (
+              {r.unbilled > 0 ? (
                 <>
                   {' '}
-                  · <span className="num">{fmt(r.revolving, r.cur)}</span> revolving,{' '}
-                  <span className="num">{fmt(r.planOutstanding, r.cur)}</span> in{' '}
+                  · <span className="num">{fmt(r.billed, r.cur)}</span> billed,{' '}
+                  <span className="num">{fmt(r.unbilled, r.cur)}</span> in{' '}
                   {r.plans.length} plan{r.plans.length === 1 ? '' : 's'}
                 </>
               ) : null}
               {r.cycle ? (
                 <>
                   {' '}
-                  · closes {r.cycle.closesOn.slice(8)}
+                  · closes {ordinal(c.statement_day)}
                   {r.cycle.daysOfFloat != null ? (
                     <>
                       , anything bought today is due{' '}
-                      <span className="num">{r.cycle.dueOn}</span>
+                      <span className="num">{dfmt(r.cycle.dueOn)}</span>
                     </>
                   ) : null}
                 </>

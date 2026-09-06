@@ -207,3 +207,22 @@
 @utility cell {
   padding: 0.5rem 0.625rem;
 }
+
+/* The three bands of a card's limit, in one bar: what is proven carried, what
+   is billed and unpaid, and the instalment principal not yet billed. The third
+   is hatched because it is the claim the bar exists to make — that band appears
+   on no statement, and a solid fill would let it pass for something billed. */
+@utility band-1 {
+  background: var(--loss);
+}
+@utility band-2 {
+  background: color-mix(in srgb, var(--loss) 62%, var(--card));
+}
+@utility band-3 {
+  background: color-mix(in srgb, var(--loss) 30%, var(--card));
+  background-image: repeating-linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--loss) 45%, transparent) 0 2px,
+    transparent 2px 6px
+  );
+}

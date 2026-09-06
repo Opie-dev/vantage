@@ -325,6 +325,14 @@ function DayCell({ state, day, cards, incomeRM, due, money, selected, isToday, o
  * happened, but it moved no money you could spend, so it shows without a sign
  * and stays out of every total.
  */
+/**
+ * A card note arrives as parts, with the money in it as numbers: calc.js holds
+ * no formatting state, so the figure is formatted here, where private mode is
+ * read at the moment of drawing rather than the moment the month was derived.
+ */
+const noteText = note =>
+  Array.isArray(note) ? note.map(p => (typeof p === 'number' ? fmt(p, 'MYR') : p)).join('') : note
+
 function MoneyBlock({ events }) {
   if (!events || !events.length) return null
   return (
@@ -360,7 +368,16 @@ function MoneyBlock({ events }) {
                       : `${e.state === 'estimated' ? '≈ ' : ''}${flow ? (e.dir > 0 ? '+' : '−') : ''}${fmt(e.amount, 'MYR')}`}
                   </span>
                 </div>
-                {e.note ? <p className="text-faint text-[11px] leading-relaxed">{e.note}</p> : null}
+                {e.note ? <p className="text-faint text-[11px] leading-relaxed">{noteText(e.note)}</p> : null}
+                {/* The amount above is what leaves on the day — the minimum
+                    where a balance is carried or nothing is proven. The whole
+                    bill is named alongside, because paying only the minimum is
+                    the choice that starts interest on everything else. */}
+                {e.clearAmount != null && e.clearAmount > e.amount + 0.005 ? (
+                  <p className="text-faint text-[11px] leading-relaxed">
+                    {fmt(e.clearAmount, 'MYR')} clears the bill
+                  </p>
+                ) : null}
               </div>
             )
           })}

@@ -1820,7 +1820,7 @@ function CardPlanDialog({ prefill }) {
             <div className="mt-2 grid gap-1">
               {[
                 ['Limit', fit.limit, ''],
-                ['– Billed and unpaid', -fit.revolving, 'text-loss'],
+                ['– Billed and unpaid', -fit.billedUnpaid, 'text-loss'],
                 ['– Instalments not yet billed', -fit.blocked, 'text-loss'],
                 ['= Available', fit.availableRM, 'font-semibold'],
               ].map(([label, v, tone], i) => (
@@ -2494,13 +2494,21 @@ function CardPaymentDialog({ prefill }) {
     [state, cardId],
   )
 
-  const stated = row?.statement?.closing_balance ?? null
+  // Offered only while something of the bill is still unpaid: a bill already
+  // recorded paid in full has nothing left to pay, and an option worth RM 0.00
+  // that can never be saved is a trap, not a choice.
   const options = row
     ? [
-        stated != null && {
+        row.statement && row.billedUnpaid > 0 && {
           id: 'statement',
-          label: 'The statement balance',
-          rm: stated,
+          // What is still owed on the bill, not what it printed: a payment
+          // already recorded against it has left, and paying the printed figure
+          // again would pay it twice.
+          label:
+            row.bill?.paidRM > 0
+              ? 'The statement balance, less what is recorded paid'
+              : 'The statement balance',
+          rm: row.billedUnpaid,
           why: 'the only choice that keeps the interest-free days',
         },
         {
@@ -2520,12 +2528,15 @@ function CardPaymentDialog({ prefill }) {
     : []
 
   const [choice, setChoice] = useState('statement')
+  // What is actually selected: the first option when the chosen one is not on
+  // offer for this card, so the highlight and the amount never disagree.
   const picked = options.find(o => o.id === choice) || options[0]
+  const pick = picked?.id
   const [custom, setCustom] = useState('')
   const [date, setDate] = useState(today())
   const [busy, setBusy] = useState(false)
 
-  const amount = choice === 'custom' ? Number(custom) || 0 : picked?.rm || 0
+  const amount = pick === 'custom' ? Number(custom) || 0 : picked?.rm || 0
   const ready = row && amount > 0 && date
 
   const save = async () => {
@@ -2534,7 +2545,7 @@ function CardPaymentDialog({ prefill }) {
     const ok = await addCommitmentPayment(Number(cardId), {
       date,
       amount,
-      note: choice === 'custom' ? '' : picked.label.toLowerCase(),
+      note: pick === 'custom' ? '' : picked.label.toLowerCase(),
     })
     setBusy(false)
     if (ok) closeModal()
@@ -2574,7 +2585,7 @@ function CardPaymentDialog({ prefill }) {
               onClick={() => setChoice(o.id)}
               className={cn(
                 'flex items-baseline gap-2.5 rounded-md border px-3 py-2 text-left transition-colors',
-                choice === o.id ? 'border-primary bg-muted/50' : 'border-border hover:bg-muted/30',
+                pick === o.id ? 'border-primary bg-muted/50' : 'border-border hover:bg-muted/30',
               )}
             >
               <span className="flex-1 text-[12.5px]">
@@ -2589,7 +2600,7 @@ function CardPaymentDialog({ prefill }) {
         <p className="text-faint text-[12px]">Add a card account first.</p>
       )}
 
-      {choice === 'custom' ? (
+      {pick === 'custom' ? (
         <Field
           label="Amount"
           htmlFor="pay-amount"

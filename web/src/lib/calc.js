@@ -28,6 +28,13 @@
  * its first argument and is pure — no module-level mutable state.
  */
 
+// The one thing borrowed from the formatters: a calendar note that names a bill
+// has to print its date the way the screen does, and the month a card cycle was
+// lived in is a word, not a number. Never money — the money formatter reads the
+// private-mode flag, and a figure formatted here would be frozen at whatever
+// that flag said when the memo ran.
+import { dfmt, monthOf } from './format'
+
 /** Empty-but-valid state, so a screen can render before the first fetch lands. */
 export const EMPTY_STATE = {
   instruments: [],
@@ -2760,6 +2767,10 @@ export function planRows(S, card, nowISO = isoOf(Date.now())) {
         endsOn: addMonthsISO(p.started_on, tenure),
         monthlyOut: dead ? 0 : p.instalment || 0,
         blocked: dead ? 0 : onSettlement ? p.amount || 0 : principalLeft,
+        // What a month hands back to the limit under PROGRESSIVE release: one
+        // instalment's share of the PRINCIPAL, which is what the limit reads,
+        // not what is paid. Under ON_SETTLEMENT nothing comes back until the end.
+        principalPerMonth: dead || !tenure || onSettlement ? 0 : (p.amount || 0) / tenure,
         // What a "0%" plan actually costs, converted the way every other rate in
         // this app is. An upfront fee of F on P over n months is a flat charge.
         effective: planEffectiveRate(p),
@@ -2774,7 +2785,7 @@ export function planRows(S, card, nowISO = isoOf(Date.now())) {
 }
 
 /** Add whole months to a YYYY-MM-DD, clamping the day into a shorter month. */
-function addMonthsISO(iso, months) {
+export function addMonthsISO(iso, months) {
   if (!iso) return null
   const [y, m, d] = iso.split('-').map(Number)
   const idx = y * MONTHS + (m - 1) + months
@@ -2783,6 +2794,24 @@ function addMonthsISO(iso, months) {
   const day = Math.min(d, new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate())
   return `${yy}-${String(mm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
+
+/**
+ * BNM/RH/PD 028-141 para 13.3: at least four calendar days' grace after the due
+ * date before a payment is late. A bill stays "open" until that grace has run,
+ * and a payment inside it clears the bill without the late mark — though not,
+ * as the sheet says, with the interest-free period intact.
+ */
+export const GRACE_DAYS = 4
+export const addDaysISO = (iso, n) => isoOf(msOf(iso) + n * DAY)
+/** Whole days from `a` to `b`, negative when `b` is the earlier date. */
+export const daysBetween = (a, b) => Math.round((msOf(b) - msOf(a)) / DAY)
+/**
+ * Whether a statement's printed interest is evidence of anything. Statements are
+ * imported with interest_charged: 0 written unconditionally
+ * (src/services/statementIngest.service.js), so on an imported row the field is
+ * unknown, not zero. Only a hand-keyed figure is evidence.
+ */
+export const realInterest = s => s.source !== 'import' && Number(s.interest_charged) > 0
 
 /**
  * The true cost of an instalment plan, as a reducing-balance rate.
@@ -2824,16 +2853,29 @@ export function planEffectiveRate(p) {
  * The floor is issuer practice and not a rule — `RM50` appears in the policy
  * document only inside a worked example — so it is per card: BSN 50, Maybank 25.
  */
-export function cardMinimum(c, rows = []) {
+export function cardMinimumDetail(c, rows = []) {
   const revolving = c.balance || 0
   const instalments = rows.reduce((t, r) => t + r.monthlyOut, 0)
   const billed = revolving + instalments
-  if (billed <= 0) return 0
-  const pct = (c.min_payment_pct == null ? 5 : c.min_payment_pct) / 100
+  const pct = c.min_payment_pct == null ? 5 : c.min_payment_pct
   const floor = c.min_payment_floor == null ? 50 : c.min_payment_floor
+  const detail = { pct, floor, instalments, revolving }
+  if (billed <= 0) return { rm: 0, limb: 'NONE', ...detail }
+  const formula = (revolving * pct) / 100 + instalments
   // Never more than what is actually billed: a floor above a nearly-cleared card
   // would demand money the bank has not asked for.
-  return Math.min(Math.max(revolving * pct + instalments, floor), billed)
+  if (billed < Math.max(formula, floor)) return { rm: billed, limb: 'BILLED', ...detail }
+  if (floor > formula) return { rm: floor, limb: 'FLOOR', ...detail }
+  return { rm: formula, limb: 'PCT', ...detail }
+}
+
+/**
+ * The figure alone. `limb` says which rule bound: PCT is 13.1(a)+(b), FLOOR the
+ * issuer floor, BILLED the cap at what is billed, NONE nothing billed — and the
+ * sheet's minimum note names it, so the reader knows why the number is what it is.
+ */
+export function cardMinimum(c, rows = []) {
+  return cardMinimumDetail(c, rows).rm
 }
 
 /**
@@ -2879,6 +2921,9 @@ export function cardCycle(c, nowISO = isoOf(Date.now())) {
     // statement day exists for.
     daysOfFloat: Math.round((msOf(due) - msOf(nowISO)) / DAY),
     daysToClose: Math.round((msOf(closes) - msOf(nowISO)) / DAY),
+    // Statement to due date: the interest-free period itself, which BNM 18.2
+    // says is at least twenty days — and only while nothing is carried forward.
+    graceDays: Math.round((msOf(due) - msOf(closes)) / DAY),
   }
 }
 
@@ -2898,6 +2943,290 @@ export function liveStatement(S, cardId, nowISO = isoOf(Date.now())) {
   // outranking the derived figure the moment it stops being the live one —
   // otherwise a card sits showing last month's demand forever.
   return { ...s, live: s.due_date >= nowISO }
+}
+
+/**
+ * Payments recorded on a card strictly after `fromExclusive` and up to
+ * `toInclusive`, oldest first.
+ *
+ * One helper for both readers — billFor and cardFloat — because the edges of
+ * the window are the rule that matters: a payment ON a closing date is already
+ * inside the balance that close reported, so it belongs to the window before
+ * and never to both. Two filters would be two chances to get that edge wrong.
+ */
+export function paidBetween(S, cardId, fromExclusive, toInclusive) {
+  const payments = (S.commitmentPayments || [])
+    .filter(p => p.commitment_id === cardId && p.date > fromExclusive && p.date <= toInclusive)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.id || 0) - (b.id || 0)))
+  return { payments, amount: payments.reduce((t, p) => t + (p.amount || 0), 0) }
+}
+
+/**
+ * What happened to one bill: what was paid against it, whether that cleared
+ * it, and how many days after the due date it did.
+ *
+ * `until` is today for the latest bill and the next close for an older one —
+ * a payment after the next close belongs to that bill, whatever it was for.
+ * `timing` is read against BNM 13.3's four days: ON_TIME, IN_GRACE, or LATE,
+ * and LATE is what costs the following cycle its interest-free period.
+ */
+export function billFor(S, stmt, { until = isoOf(Date.now()) } = {}) {
+  const { payments, amount: paidRM } = paidBetween(S, stmt.commitment_id, stmt.statement_date, until)
+  const closing = stmt.closing_balance || 0
+  let run = 0
+  // A bill for nothing, or a credit balance, asks for nothing: it is settled the
+  // day it closes, and no payment is needed to prove it.
+  let settledOn = closing <= 0.005 ? stmt.statement_date : null
+  for (const p of payments) {
+    run += p.amount || 0
+    if (settledOn == null && run >= closing - 0.005) settledOn = p.date
+  }
+  const lateDays = settledOn ? Math.max(daysBetween(stmt.due_date, settledOn), 0) : null
+  return {
+    stmt,
+    payments,
+    paidRM,
+    // Settled means nothing is billed and unpaid. The sen of tolerance that
+    // settles a bill above must clamp this too, or two payments whose float
+    // sum lands a hair under the closing balance leave a bill both settled and
+    // carrying a trillionth of a ringgit — and every reader of this figure
+    // would call that bill open.
+    billedUnpaid: settledOn != null ? 0 : Math.max(closing - paidRM, 0),
+    settled: settledOn != null,
+    settledOn,
+    lateDays,
+    timing: settledOn == null ? null : lateDays === 0 ? 'ON_TIME' : lateDays <= GRACE_DAYS ? 'IN_GRACE' : 'LATE',
+  }
+}
+
+/**
+ * What leaves a card next, and when. One derivation for the row stat, the
+ * sheet's due pill, the calendar's due day and the header's 30-day figure, so
+ * four places cannot disagree about the same account.
+ *
+ * `atLeast` is the honesty flag: where nothing is proven, the minimum is the
+ * one obligation BNM 13.1 lets the data state, and the copy says "at least".
+ */
+export function dueNextFor(row, nowISO) {
+  const { state, statement: s, bill, cycle, derivedMinimum, open } = row
+  // A partial payment past the due date and its grace has been decided
+  // against: the balance is carried, and what leaves next is the next bill's
+  // minimum, not what was left of the old one. A bill nothing is recorded
+  // against stays on its own date, because that date is the fact being stated.
+  const carriedPast = state === 'CARRYING' && !open
+  if (s && bill && bill.billedUnpaid > 0 && !carriedPast) {
+    // What leaves on this bill's due date: the whole bill where the account
+    // settles, the minimum where it carries — and only the minimum where nothing
+    // is proven, because 13.1 is the one obligation the data can state.
+    const target = state === 'SETTLED' ? s.closing_balance : (s.minimum_due ?? derivedMinimum)
+    const rm = Math.max(Math.min(target, s.closing_balance) - bill.paidRM, 0)
+    const days = daysBetween(nowISO, s.due_date)
+    // Payments already cover the minimum but not the bill. Nothing more is
+    // demanded on the due date, and "RM 0.00 due" would read as an empty bill
+    // rather than a met minimum on a bill still carrying a balance.
+    if (rm <= 0.005 && bill.paidRM > 0) {
+      return { rm: 0, met: true, iso: s.due_date, days, atLeast: false, basis: 'BILL' }
+    }
+    return { rm, met: false, iso: s.due_date, days, atLeast: state === 'UNKNOWN', basis: 'BILL' }
+  }
+  // No open bill: the next cycle. A settling card's next bill is whatever it
+  // spends, which nothing here can know; a carrying or unproven card owes at
+  // least the derived minimum.
+  const iso = cycle ? cycle.dueOn : null
+  const days = iso ? daysBetween(nowISO, iso) : null
+  // A minimum of nothing is nothing due: "at least RM 0.00" is a promise of
+  // no money, and the row reads the next close instead.
+  const rm = state === 'SETTLED' || !(derivedMinimum > 0.005) ? null : derivedMinimum
+  return { rm, met: false, iso, days, atLeast: rm != null, basis: 'CYCLE' }
+}
+
+/**
+ * What a card's bills and payments PROVE about it, and every figure that
+ * follows from the verdict.
+ *
+ * THREE STATES, AND THE THIRD IS NOT A FAILURE. CARRYING means a balance was
+ * carried forward and the retail balance accrues from posting (BNM 18.2);
+ * SETTLED means nothing was, so the live bill is float; UNKNOWN means the data
+ * cannot say — payments are recorded by hand, so a missing one is not evidence
+ * of non-payment, and the screen must not paint interest or a clean bill on the
+ * strength of an absence. The old row charged apr/12 on the balance regardless,
+ * which invented RM 42.81 a month on a bill nobody had proven carried.
+ *
+ * Payment evidence comes first. Printed interest counts only on the live bill:
+ * interest on the bill BEFORE proves the one before that was carried — one
+ * cycle too early to say anything about the live one. And an imported row's
+ * interest_charged is unknown, not zero (see realInterest).
+ *
+ * THE PLANS ARE READ AS OF THE BILL, not today. An instalment billed on the
+ * statement is inside its closing balance; run the plan arithmetic at today's
+ * date and, after instalmentsPaid() ticks on the anniversary, that instalment is
+ * in the bill and gone from the plan — counted in neither figure. Reading the
+ * plans as of the statement date is what makes billed + unbilled add up.
+ *
+ * The carried base is the WHOLE unpaid bill, net of payments. An unpaid
+ * instalment line is past due like anything else, and 13.4 allocates a payment
+ * to the highest-rate balance first — so a retail-first figure understated the
+ * cost. The retail split survives only as the base of the derived minimum,
+ * because 13.1 needs it.
+ */
+export function cardState(S, c, { nowISO = isoOf(Date.now()) } = {}) {
+  // Every bill recorded for this card, newest first — the sheet lists them, and
+  // their count is what says how much history the float actually has.
+  const statements = (S.cardStatements || [])
+    .filter(x => x.commitment_id === c.id)
+    .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))
+  const S1 = liveStatement(S, c.id, nowISO)
+  const S0 = S1 ? statements.find(x => x.statement_date < S1.statement_date) || null : null
+  const bill = S1 ? billFor(S, S1, { until: nowISO }) : null
+  const prevBill = S0 ? billFor(S, S0, { until: S1.statement_date }) : null
+  const live = !!S1 && S1.live
+  // Still "open" inside the 13.3 grace: nothing can be said against a bill the
+  // customer is still allowed to pay.
+  const open = !!S1 && (live || nowISO <= addDaysISO(S1.due_date, GRACE_DAYS))
+
+  let state = 'UNKNOWN'
+  let evidence = 'NO_STATEMENTS'
+  if (S1) {
+    if (bill.settled) {
+      state = 'SETTLED'
+      evidence = { ON_TIME: 'PAID_ON_TIME', IN_GRACE: 'PAID_IN_GRACE', LATE: 'PAID_LATE' }[bill.timing]
+    } else if (!open) {
+      // Past due and past grace. A recorded payment smaller than the bill is a
+      // carried balance; no payment at all is an absence, not a fact.
+      state = bill.paidRM > 0 ? 'CARRYING' : 'UNKNOWN'
+      evidence = bill.paidRM > 0 ? 'PARTIAL' : 'NO_PAYMENT_RECORDED'
+    } else if (realInterest(S1)) {
+      // The live bill itself prints finance charges, which proves the previous
+      // balance was carried into this cycle.
+      state = 'CARRYING'
+      evidence = 'INTEREST_BILLED'
+    } else if (!S0) {
+      evidence = 'FIRST_BILL'
+    } else if (prevBill.settled && prevBill.timing !== 'LATE') {
+      state = 'SETTLED'
+      evidence = 'PREVIOUS_SETTLED'
+    } else if (prevBill.paidRM > 0) {
+      // A partial on the bill before, or paid in full but late — either way a
+      // balance came into this cycle and the interest-free period is gone.
+      state = 'CARRYING'
+      evidence = 'PREVIOUS_CARRIED'
+    } else {
+      evidence = 'PREVIOUS_UNPAID'
+    }
+  }
+
+  // What the figures rest on. A balance reading is a reading, not a bill: it
+  // can size the figures but never prove a state.
+  const basis = S1 ? 'STATEMENT' : c.balance_as_of || c.balance != null ? 'READING' : 'NONE'
+  const plansNow = planRows(S, c, nowISO)
+  const plansAt = basis === 'STATEMENT' ? planRows(S, c, S1.statement_date) : plansNow
+  const sumOf = (rows, f) => rows.reduce((t, r) => t + f(r), 0)
+
+  const closing = S1 ? S1.closing_balance || 0 : 0
+  const billedUnpaid = basis === 'STATEMENT' ? bill.billedUnpaid : basis === 'READING' ? c.balance || 0 : 0
+  // Only a plan that had billed an instalment by the close is inside the bill:
+  // one bought after it closed is unbilled in full, and counting its instalment
+  // here would take it out of the retail base the minimum is read from.
+  const instalmentsBilled =
+    basis === 'STATEMENT' ? sumOf(plansAt, p => (p.paid > 0 ? p.monthlyOut : 0)) : 0
+  // 13.1 settles the instalments at 100% first, so what is left unpaid of a
+  // bill is retail before it is instalment. Read by the derived minimum only.
+  const retailUnpaid =
+    basis === 'STATEMENT' ? Math.min(billedUnpaid, Math.max(closing - instalmentsBilled, 0)) : billedUnpaid
+  const carried = state === 'CARRYING' ? billedUnpaid : state === 'SETTLED' ? 0 : null
+  const billedInterestFree = billedUnpaid - (carried || 0)
+  const unbilled = sumOf(plansAt, p => p.outstanding)
+  const blocked = sumOf(plansAt, p => p.blocked)
+  const owed = billedUnpaid + unbilled
+  const usedAgainstLimit = billedUnpaid + blocked
+  const limit = c.credit_limit || null
+  // What the statement alone implies. It knows nothing of instalments not yet
+  // billed, so it is never tighter than the real figure.
+  const apparentUsed = basis === 'STATEMENT' ? closing : basis === 'READING' ? c.balance || 0 : null
+  const apparentFree = limit && apparentUsed != null ? limit - apparentUsed : null
+  const apparentPct = limit && apparentUsed != null ? (apparentUsed / limit) * 100 : null
+  const releasePerMonth = sumOf(plansNow, p => p.principalPerMonth)
+  const clampPct = v => (limit ? Math.min(Math.max((v / limit) * 100, 0), 100) : 0)
+  const bandPct = [carried || 0, billedInterestFree, blocked].map(clampPct)
+
+  const minimumDetail = cardMinimumDetail({ ...c, balance: retailUnpaid }, plansNow)
+  const derivedMinimum = minimumDetail.rm
+  // The bank's own figure beats ours. Two limbs of BNM 13.1 — anything past
+  // due, and any overlimit excess — are things this app cannot see, so a
+  // printed minimum is a fact where the formula is only a floor on a floor.
+  const minimumIsStated = !!(S1 && live && S1.minimum_due != null)
+  const minimum = minimumIsStated ? S1.minimum_due : derivedMinimum
+  // The cost of revolving, and ONLY where revolving is proven. A settled card
+  // costs nothing; an unproven one has no figure, not a zero.
+  const costOfCarrying =
+    state === 'CARRYING' ? (carried * (c.apr || 0)) / 100 / MONTHS : state === 'SETTLED' ? 0 : null
+  const interestThisMonth = costOfCarrying || 0
+
+  // Age is measured from the bill while there is one, and hidden while it is
+  // live: a bill that has not fallen due is not old, whatever the reading says.
+  const newest = [S1 ? S1.statement_date : null, c.balance_as_of].filter(Boolean).sort().pop() || null
+  const staleDays = live ? null : newest ? daysBetween(newest, nowISO) : null
+  // A newer bill has closed at the bank and is not here. Fires on the closing
+  // day itself: the bill exists from that day, whether or not it was imported.
+  const stale = !!S1 && nowISO >= addMonthsISO(S1.statement_date, 1)
+  // A reading after the bill closed. It moves no figure — a bill is settled by
+  // a recorded payment, not by a reading — but the caption says it is there.
+  const balanceNewer = !!(c.balance_as_of && S1 && c.balance_as_of > S1.statement_date)
+
+  const partial = { state, statement: S1, bill, cycle: cardCycle(c, nowISO), derivedMinimum, open }
+  return {
+    // The clock every figure here was read against, so a screen adding a
+    // sentence of its own reads the same day and not its local one.
+    nowISO,
+    state,
+    evidence,
+    basis,
+    live,
+    open,
+    stale,
+    balanceNewer,
+    statement: S1,
+    previousStatement: S0,
+    statements,
+    bill,
+    prevBill,
+    plans: plansNow,
+    plansAt,
+    billedUnpaid,
+    instalmentsBilled,
+    retailUnpaid,
+    carried,
+    billedInterestFree,
+    unbilled,
+    blocked,
+    billed: billedUnpaid,
+    owed,
+    usedAgainstLimit,
+    availableRM: limit ? limit - usedAgainstLimit : null,
+    utilisationPct: limit ? (usedAgainstLimit / limit) * 100 : null,
+    apparentFree,
+    apparentPct,
+    releasePerMonth,
+    bandPct,
+    minimumDetail,
+    derivedMinimum,
+    minimumIsStated,
+    minimum,
+    monthlyOut: minimum,
+    costOfCarrying,
+    interestThisMonth,
+    principalThisMonth: Math.max(minimum - interestThisMonth, 0),
+    // Kept for the screens that still read them; nothing new should. `revolving`
+    // is the carried figure where proven and the retail split where not.
+    revolving: carried ?? retailUnpaid,
+    planOutstanding: unbilled,
+    instalments: sumOf(plansNow, p => p.monthlyOut),
+    cycle: partial.cycle,
+    dueNext: dueNextFor(partial, nowISO),
+    staleDays,
+    effective: c.apr,
+    quoted: c.apr,
+  }
 }
 
 /**
@@ -3045,64 +3374,12 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
       }
 
       if (c.kind === 'REVOLVING') {
-        const plans = planRows(S, c, nowISO)
-        const revolving = c.balance || 0
-        const planOutstanding = plans.reduce((t, p) => t + p.outstanding, 0)
-        const instalments = plans.reduce((t, p) => t + p.monthlyOut, 0)
-        const derived = cardMinimum(c, plans)
-
-        // The bank's own figure beats ours. Two limbs of BNM 13.1 — anything past
-        // due, and any overlimit excess — are things this app cannot see, so a
-        // printed minimum is a fact where the formula is only a floor on a floor.
-        const stmt = liveStatement(S, c.id, nowISO)
-        const stated = stmt && stmt.live && stmt.minimum_due != null
-        const minimum = stated ? stmt.minimum_due : derived
-
-        // APR runs on the revolving balance ALONE. A 0% instalment plan costs
-        // nothing to hold, and charging the card's rate against it — which is what
-        // folding plans into `balance` used to do — invents an expense.
-        const monthlyInterest = (revolving * (c.apr || 0)) / 100 / MONTHS
-
-        // What the plans are still holding off the limit, which is not what they
-        // still owe: under PROGRESSIVE release only the principal share comes back.
-        const blocked = plans.reduce((t, p) => t + p.blocked, 0)
-        const committed = revolving + planOutstanding
-        const usedAgainstLimit = revolving + blocked
-
-        return {
-          ...base,
-          plans,
-          monthlyOut: minimum,
-          // What the card owes in total, plans included — the figure the old
-          // single `balance` column was being asked to carry on its own.
-          owed: committed,
-          revolving,
-          planOutstanding,
-          instalments,
-          minimum,
-          minimumIsStated: !!stated,
-          derivedMinimum: derived,
-          statement: stmt,
-          // Every bill recorded for this card, newest first — the sheet lists them,
-          // and their count is what says how much history the float actually has.
-          statements: (S.cardStatements || [])
-            .filter(x => x.commitment_id === c.id)
-            .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1)),
-          cycle: cardCycle(c, nowISO),
-          // Only if the balance is carried — what it costs to revolve, not a
-          // charge already incurred.
-          interestThisMonth: monthlyInterest,
-          principalThisMonth: Math.max(minimum - monthlyInterest, 0),
-          utilisationPct: c.credit_limit ? (usedAgainstLimit / c.credit_limit) * 100 : null,
-          // The number no statement prints. A bill showing a third of the limit
-          // used can sit on an account with almost nothing left, because the
-          // instalments not yet billed are still blocking it.
-          availableRM: c.credit_limit ? c.credit_limit - usedAgainstLimit : null,
-          blocked,
-          staleDays: c.balance_as_of ? Math.round((msOf(nowISO) - msOf(c.balance_as_of)) / DAY) : null,
-          effective: c.apr,
-          quoted: c.apr,
-        }
+        // Everything a card row carries comes from one derivation, so the row,
+        // the sheet, the calendar and the header cannot disagree about the same
+        // account. Interest is charged there only where a carried balance is
+        // PROVEN — the old unconditional apr/12 on the balance is gone, because
+        // it invented a monthly cost on bills nobody had shown were carried.
+        return { ...base, ...cardState(S, c, { nowISO }) }
       }
 
       // RECURRING — no balance, and every ringgit of it is spent.
@@ -3153,12 +3430,42 @@ export function commitmentsTotal(S, opts = {}) {
   const all = commitmentRows(S, opts)
   const rows = kinds ? all.filter(r => kinds.includes(r.kind)) : all
   const sum = f => rows.reduce((t, r) => t + toRM(S, f(r) || 0, r.cur), 0)
+
+  // The card figures. Debt and what leaves are summed because those genuinely
+  // add; headroom is never totalled here, because two limits are not one pool.
+  const cards = rows.filter(r => r.kind === 'REVOLVING')
+  const sumCards = f => cards.reduce((t, r) => t + toRM(S, f(r) || 0, r.cur), 0)
+  // What leaves for cards by a month from now, keyed to each bill's own due
+  // date. A settling card contributes its whole live bill and an overdue bill
+  // is still money due by then — the tile answers "what money leaves", not
+  // "what is the least the bank would accept".
+  const due30 = cards.filter(
+    r => r.dueNext.rm != null && r.dueNext.days != null && r.dueNext.days <= 30)
+  // An overdue bill with nothing recorded against it: the caption names the
+  // whole bill, because that is the thing no payment is recorded against.
+  const overdue = cards.filter(
+    r => r.state === 'UNKNOWN' && r.dueNext.basis === 'BILL' && r.dueNext.days < 0)
+  const count = f => cards.filter(f).length
   return {
     rows,
     monthlyOutRM: sum(r => r.monthlyOut),
     owedRM: sum(r => r.owed),
     interestPerMonthRM: sum(r => r.interestThisMonth),
     principalPerMonthRM: sum(r => r.principalThisMonth),
+    billedRM: sumCards(r => r.billed),
+    unbilledRM: sumCards(r => r.unbilled),
+    due30RM: due30.reduce((t, r) => t + toRM(S, r.dueNext.rm, r.cur), 0),
+    due30AtLeast: due30.some(r => r.dueNext.atLeast),
+    counts: {
+      carrying: count(r => r.state === 'CARRYING'),
+      late: count(r => r.state === 'SETTLED' && r.bill && r.bill.timing === 'LATE'),
+      settled: count(r => r.state === 'SETTLED' && !(r.bill && r.bill.timing === 'LATE')),
+      unknownNoPayment: count(r => r.evidence === 'NO_PAYMENT_RECORDED' || r.evidence === 'PREVIOUS_UNPAID'),
+      unknownOneBill: count(r => r.evidence === 'FIRST_BILL'),
+      unknownNoBill: count(r => r.evidence === 'NO_STATEMENTS'),
+    },
+    overdueRM: overdue.reduce((t, r) => t + toRM(S, r.billedUnpaid, r.cur), 0),
+    overdueISO: overdue.map(r => r.dueNext.iso).sort()[0] || null,
   }
 }
 
@@ -3383,8 +3690,8 @@ export function loanEquity(S, commitment, opts = {}) {
  * Returns null and the screen says what is missing rather than drawing a figure
  * that cannot mean anything yet.
  */
-export function cardFloat(S, cardId) {
-  const row = commitmentRows(S).find(r => r.id === cardId && r.kind === 'REVOLVING')
+export function cardFloat(S, cardId, { nowISO = isoOf(Date.now()) } = {}) {
+  const row = commitmentRows(S, { nowISO }).find(r => r.id === cardId && r.kind === 'REVOLVING')
   if (!row) return null
   const [closed, previous] = row.statements || []
   if (!closed || !previous) {
@@ -3393,15 +3700,25 @@ export function cardFloat(S, cardId) {
 
   const from = previous.statement_date
   const to = closed.statement_date
-  // Payments recorded strictly after the earlier close and up to the later one.
-  // Strictly after, because a payment ON the closing date is already inside the
-  // balance that close reported.
-  const paid = (S.commitmentPayments || [])
-    .filter(p => p.commitment_id === cardId && p.date > from && p.date <= to)
-  const paidRM = paid.reduce((t, p) => t + toRM(S, p.amount || 0, row.cur), 0)
+  // Payments recorded strictly after the earlier close and up to the later one
+  // — the same window billFor reads, so the two cannot disagree about a payment.
+  const { payments, amount: paidRM } = paidBetween(S, cardId, from, to)
 
   const owedBefore = previous.closing_balance
   const owedAfter = closed.closing_balance
+
+  // Which voice the panel speaks in is decided by what happened to the bill
+  // before, not by whether the window's payments happen to add up to it: a
+  // payment after the due date but before the next close is inside the window
+  // and is still not "in full and on time". billFor already knows the timing,
+  // and one rule for the badge and the voice means the two cannot disagree.
+  const prevBill = billFor(S, previous, { until: to })
+  const voice =
+    prevBill.settled && prevBill.timing !== 'LATE'
+      ? 'SETTLED'
+      : prevBill.settled || prevBill.paidRM > 0 || realInterest(closed)
+        ? 'CARRYING'
+        : 'UNKNOWN'
 
   return {
     rm: owedAfter - owedBefore + paidRM,
@@ -3411,8 +3728,16 @@ export function cardFloat(S, cardId) {
     owedBefore,
     owedAfter,
     paidRM,
-    payments: paid,
+    payments,
     cur: row.cur,
+    voice,
+    prevBill,
+    // The window in prose: the day after the earlier close to the later one,
+    // the month in the middle of it, and the month its bill falls due.
+    rangeStartISO: addDaysISO(from, 1),
+    livedMonth: monthOf(isoOf((msOf(from) + msOf(to)) / 2)),
+    paysISO: closed.due_date,
+    paysMonth: monthOf(closed.due_date),
   }
 }
 
@@ -3443,15 +3768,16 @@ export function planFit(S, cardId, amount, opts = {}) {
     cur: row.cur,
     limit,
     revolving: row.revolving,
+    billedUnpaid: row.billedUnpaid,
     blocked: row.blocked,
     availableRM: row.availableRM,
     minimum: row.minimum,
-    // What the STATEMENT ALONE implies: the limit less what has been billed and
-    // not paid. It knows nothing of instalments not yet billed, so it is never
-    // tighter than the real figure and is looser by exactly `blocked`. Kept
-    // beside availableRM so a screen can show both and name the gap.
-    apparentFree: limit - row.revolving,
-    apparentPct: limit ? (row.revolving / limit) * 100 : 0,
+    // What the STATEMENT ALONE implies: the limit less the bill it printed —
+    // or, with no bill, less the balance recorded. It knows nothing of
+    // instalments not yet billed, so it is never tighter than the real figure.
+    // Kept beside availableRM so a screen can show both and name the gap.
+    apparentFree: row.apparentFree ?? limit - row.billedUnpaid,
+    apparentPct: row.apparentPct ?? (limit ? (row.billedUnpaid / limit) * 100 : 0),
   }
 }
 
@@ -3735,6 +4061,11 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     })
   }
 
+  // The card rows, derived once: what a due day costs is the row's own due
+  // figure, and computing it here again would be a second copy of that rule.
+  const cardRows = new Map(
+    commitmentRows(S, { nowISO }).filter(r => r.kind === 'REVOLVING').map(r => [r.id, r]))
+
   for (const c of S.commitments || []) {
     if (!c.active || paidCommitments.has(c.id)) continue
     const day = dueDayIn(year, monthIndex, c.due_day)
@@ -3745,38 +4076,73 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
       if (s.left <= 0) continue
       put(day, { key: `cl${c.id}`, dir: -1, label: c.name, amount: s.instalment, state: 'due', domain: 'OWED' })
     } else if (c.kind === 'REVOLVING') {
-      const plans = planRows(S, c, nowISO)
-      // A statement covering this due date turns the amount from a guess into a
-      // fact — the bank did the arithmetic and printed it.
+      const row = cardRows.get(c.id)
+      if (!row) continue
+      // A statement whose due date falls in this month turns the amount from a
+      // guess into a fact — the bank did the arithmetic and printed it.
       // `monthKey` is the local STRING for this month, not the module-level
       // helper of the same name — it is shadowed throughout this function.
       const stmt = (S.cardStatements || [])
         .filter(s => s.commitment_id === c.id && s.due_date.slice(0, 7) === monthKey)
         .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))[0]
 
-      if (stmt && stmt.minimum_due != null) {
+      if (stmt) {
+        // The latest bill reads the row's own due figure: the whole bill where
+        // the account settles, the minimum where it carries or nothing is
+        // proven, less what is recorded paid — and nothing at all once it is
+        // cleared. An older bill is history; its printed minimum is what was
+        // asked, and the month is only reachable by stepping back.
+        const latest = !!row.statement && row.statement.statement_date === stmt.statement_date
+        const amount = latest
+          ? row.dueNext.basis === 'BILL' ? row.dueNext.rm : 0
+          : stmt.minimum_due ?? row.derivedMinimum
+        if (amount > 0.005) {
+          // The note is parts, not a string: a number in it is money the
+          // calendar formats when it draws, so private mode masks it like every
+          // other figure — this module holds no formatting state to read.
+          const on = dfmt(stmt.statement_date)
+          const whole = stmt.closing_balance
+          const note = !latest
+            ? [`the minimum on the statement of ${on} — the whole bill was `, whole]
+            : row.state === 'CARRYING'
+              ? [`the minimum on the statement of ${on} — the whole bill is `, whole]
+              : row.state === 'SETTLED'
+                ? [
+                    `the whole bill of ${on}, as this account settles in full — the minimum would be `,
+                    stmt.minimum_due ?? row.derivedMinimum,
+                  ]
+                : [`the minimum on the statement of ${on}; the whole bill is `, whole, ', and no payment is recorded']
+          put(dayOf(stmt.due_date), {
+            key: `cr${c.id}`,
+            dir: -1,
+            label: c.name,
+            amount,
+            state: 'due',
+            domain: 'OWED',
+            // What would clear the bill outright, for the calendar to name
+            // under the due figure when it is more than what leaves. For the
+            // latest bill that is what is still owed after recorded payments,
+            // not what was printed; an older bill has no payments to net.
+            clearAmount: latest ? row.billedUnpaid : stmt.closing_balance,
+            note,
+          })
+        }
+      } else if (row.derivedMinimum > 0.005) {
+        // A minimum of nothing is no event, as it is for a bill already cleared.
+        const { limb, pct, floor } = row.minimumDetail
         put(day, {
           key: `cr${c.id}`,
           dir: -1,
           label: c.name,
-          amount: stmt.minimum_due,
-          state: 'due',
-          domain: 'OWED',
-          // The screen formats it; calc.js does not know about currencies here.
-          clearAmount: stmt.closing_balance,
-          note: `minimum on the statement of ${stmt.statement_date}`,
-        })
-      } else {
-        put(day, {
-          key: `cr${c.id}`,
-          dir: -1,
-          label: c.name,
-          amount: cardMinimum(c, plans),
+          amount: row.derivedMinimum,
           state: 'estimated',
           domain: 'OWED',
-          note: plans.length
-            ? 'derived: 5% of the revolving balance plus every contracted instalment — the statement decides the rest'
-            : 'minimum on the last balance you recorded — the statement decides the rest',
+          note:
+            limb === 'PCT'
+              ? `derived: ${pct}% of the revolving balance plus every contracted instalment — the statement decides the rest`
+              : limb === 'FLOOR'
+                ? ['the ', floor, ' floor — the statement decides the rest']
+                : 'minimum on the last balance you recorded — the statement decides the rest',
         })
       }
 
