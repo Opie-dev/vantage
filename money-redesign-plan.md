@@ -133,16 +133,21 @@ The canvas shows **Outstanding principal RM 39,000.00** — straight-line, half 
 84 paid — and feeds it into Total owed.
 
 `loanSchedule()` (`calc.js:2600`) does not produce that. For FLAT it sets
-`owedIsInstalments: true` and reports the instalments still to run — 42 × 1,149.57 =
-**RM 48,281.94** — precisely because interest is charged on the original principal for the whole
-term, so any principal figure implies a settlement quote that needs a Rule-of-78 rebate this app
-does not model.
+`owedIsInstalments: true` and reports the instalments still to run — **RM 48,282.00** — precisely
+because interest is charged on the original principal for the whole term, so any principal figure
+implies a settlement quote that needs a Rule-of-78 rebate this app does not model.
 
-Net worth moves **RM 9,281.94** depending on which convention wins. The canvas already says the
+Note the sen. The loan sheet asks for amount financed, rate, rate type, term and first payment,
+and no instalment — so the instalment is derived, `(78,000 + 18,564) / 84 = 1,149.5714…`, and
+`left × instalment` is 42 × that, not 42 × the 1,149.57 on screen. Multiplying the rounded display
+gives 48,281.94 and is wrong by six sen, which is the same mistake as §2.4 in miniature: a figure
+derived from what was printed rather than from what it was printed from.
+
+Net worth moves **RM 9,282.00** depending on which convention wins. The canvas already says the
 right thing in prose — *"Any settlement figure shown would be an estimate, never a quote"* — so
 this is only a matter of making the headline agree with the paragraph under it.
 
-**Recommendation.** Keep `owedIsInstalments`. Show RM 48,281.94 as owed, and show the
+**Recommendation.** Keep `owedIsInstalments`. Show RM 48,282.00 as owed, and show the
 straight-line principal, if at all, as a clearly secondary figure that never enters a total.
 
 ---
@@ -278,7 +283,7 @@ come out of it rather than being typed.
   only have one in the sidebar. The Commitments page already shows the pair side by side and
   explains the RM 40.00 gap well — that treatment may simply be the answer, promoted.
 - **Whether a FLAT loan has an "outstanding principal" at all** (§2.7). Saying no is more honest
-  and makes net worth RM 9,281.94 worse. Saying yes requires modelling the rebate.
+  and makes net worth RM 9,282.00 worse. Saying yes requires modelling the rebate.
 - **Where a daily FX rate comes from** (§4c). Storing the pair is easy; sourcing it is not, and a
   wrong rate kept forever is worse than one global rate that is visibly approximate.
 
