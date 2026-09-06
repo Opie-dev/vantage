@@ -320,7 +320,7 @@ easy half; the open question in §6 is where a daily rate comes from, and a wron
 is worse than one global rate that is visibly approximate. It wants a decision before it wants
 code.
 
-**Phase 7 — Expenses.** Mostly shipped: `spendingFor`, `expensesFor` and `expenseHistory` already
+**Phase 7 — Expenses.** **Done** (#33). Mostly shipped: `spendingFor`, `expensesFor` and `expenseHistory` already
 produce everything on the page. What is new is the group drill-down and the "two bases, and the
 gap between them" panel — which is the most valuable thing on that screen and the cheapest,
 because both figures already exist.

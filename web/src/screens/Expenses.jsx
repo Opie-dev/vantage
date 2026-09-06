@@ -478,16 +478,148 @@ function FilterSelect({ name, value, onChange, items, disabled, width }) {
   )
 }
 
+/**
+ * Two bases, and the gap between them.
+ *
+ * THE LOG SAYS ONE THING AND THE BANK SAYS ANOTHER, and both are measured, so the
+ * difference is not an opinion — it is the spending that never got typed in.
+ * expenses-plan.md §3 is the whole argument: an expense log gets abandoned and
+ * then silently under-reports, and the only defence is a second figure derived
+ * from something nobody has to maintain. That figure is the residual, and this is
+ * where the two are put beside each other.
+ *
+ * COVERAGE IS ON OVERVIEW TOO, AND DELIBERATELY. There it sits against the
+ * measured statement; here it sits against the itemised list it is checking. The
+ * two are the same call — one expensesFor() for one shared month — so they cannot
+ * disagree, which is what made splitting them across screens safe at all.
+ *
+ * A NEGATIVE GAP IS NOT GOOD NEWS. More logged than actually left points at a
+ * double entry or an expense filed in the wrong month, not at thrift, and the
+ * copy says so rather than showing a reassuring green number.
+ */
+function TwoBases({ ex, onAddReading, readings }) {
+  const spend = ex.spend
+  if (spend.reason || ex.unloggedRM == null) return null
+
+  const over = ex.unloggedRM < 0
+  const rows = [
+    { label: 'What the log says', rm: ex.loggedInWindowRM, note: `${ex.count} entries you typed` },
+    {
+      label: 'What the wallet says',
+      rm: spend.spentRM,
+      note: 'income, less commitments and savings, plus what the buffer gave up',
+    },
+    {
+      label: over ? 'Logged but never left' : 'Never logged',
+      rm: Math.abs(ex.unloggedRM),
+      note: over
+        ? 'more typed in than actually left — a double entry, or a month filed wrongly'
+        : 'real spending with no entry behind it — cash, small taps, things forgotten',
+      tone: over ? 'text-loss' : 'text-muted-foreground',
+    },
+  ]
+
+  return (
+    <div className="border-hairline border-t px-4 py-4">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <span className="eyebrow">Two bases, and the gap between them</span>
+        {ex.coveragePct != null ? (
+          <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+            {pct1(ex.coveragePct)} covered
+          </Badge>
+        ) : null}
+      </div>
+      <div className="grid gap-1.5">
+        {rows.map((r, i) => (
+          <div
+            key={r.label}
+            className={`flex items-baseline justify-between gap-3 text-[12.5px] ${
+              i === 2 ? 'border-hairline border-t pt-1.5 font-semibold' : ''
+            }`}
+          >
+            <span className={i === 2 ? '' : 'text-muted-foreground'}>
+              {r.label}
+              <span className="text-faint block text-[11px] font-normal">{r.note}</span>
+            </span>
+            <span className={`num ${r.tone || ''}`}>{fmt(r.rm, 'MYR')}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-faint m-0 mt-2.5 max-w-[74ch] text-[11.5px] leading-relaxed text-pretty">
+        Both figures are measured, so neither is an estimate of the other. The residual stays on
+        this screen rather than being replaced by the log precisely because the log can go stale and
+        the residual cannot — it is derived from balances you would have anyway.
+      </p>
+
+      {readings.length ? (
+        <div className="border-hairline mt-3 border-t pt-3">
+          <div className="mb-1.5 flex flex-wrap items-center gap-2">
+            <span className="eyebrow">What you hold liquid</span>
+            <span className="text-faint text-[11px]">the readings the residual is measured against</span>
+            <div className="ml-auto">
+              <Button variant="outline" size="sm" onClick={onAddReading}>
+                Add a reading
+              </Button>
+            </div>
+          </div>
+          {readings.map(r => (
+            <div
+              key={r.id}
+              className="flex flex-wrap items-baseline justify-between gap-2 text-[12.5px]"
+            >
+              <span>
+                {r.name}
+                <span className="text-faint ml-1.5 text-[11px]">read {dfmt(r.date)}</span>
+              </span>
+              <span className="num">{fmt(r.amount, r.currency)}</span>
+            </div>
+          ))}
+          <p className="text-faint m-0 mt-2 max-w-[74ch] text-[11.5px] leading-relaxed text-pretty">
+            The window above is bracketed by two of these, not by the calendar month — which is why
+            it can run to {spend.days} days. Let them go stale and this whole screen degrades to
+            saying so, rather than to a plausible wrong figure.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 const ALL = '__all__'
 
 export default function Expenses() {
-  const { state, moneyMonth, setMoneyMonth, setTab, openExpense, deleteExpense, setPreference } =
-    useVantage()
+  const {
+    state,
+    moneyMonth,
+    setMoneyMonth,
+    setTab,
+    openExpense,
+    openAssetEntry,
+    deleteExpense,
+    setPreference,
+  } = useVantage()
   const { y, m } = moneyMonth
   // Its own call now, where Money used to pass one down. Pure and month-scoped,
   // so Overview computing it too costs a little work and cannot disagree.
   const ex = useMemo(() => expensesFor(state, y, m), [state, y, m])
   const onMonth = (year, monthIndex) => setMoneyMonth({ y: year, m: monthIndex })
+
+  // The readings the residual is measured against, newest first. Only WALLET
+  // accounts: money into ASB is a destination, not your pocket, so a reading
+  // there would close nothing.
+  const readings = useMemo(() => {
+    const wallets = new Map(
+      (state.assets || [])
+        .filter(a => !a.archived && a.liquidity === 'WALLET')
+        .map(a => [a.id, a]),
+    )
+    return (state.assetEntries || [])
+      .filter(e => e.type === 'BALANCE' && wallets.has(e.asset_id))
+      .map(e => ({ ...e, name: wallets.get(e.asset_id).name, currency: wallets.get(e.asset_id).currency }))
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .slice(0, 4)
+  }, [state])
   const [query, setQuery] = useState('')
   const [pick, setPick] = useState({ group: null, category: null })
   const [sort, setSort] = useState('amount')
@@ -725,6 +857,8 @@ export default function Expenses() {
           ) : null}
         </div>
       ) : null}
+
+      <TwoBases ex={ex} onAddReading={() => openAssetEntry({ type: 'BALANCE' })} readings={readings} />
 
       {ex.count ? (
         <div className="px-4 py-4">

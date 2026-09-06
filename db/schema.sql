@@ -94,7 +94,7 @@ CREATE TABLE public.assets (
     liquidity text DEFAULT 'SAVINGS'::text NOT NULL,
     CONSTRAINT assets_fiscal_year_check CHECK ((fiscal_year ~ '^\d{2}-\d{2}$'::text)),
     CONSTRAINT assets_illiquid_is_item_check CHECK (((liquidity <> 'ILLIQUID'::text) OR (kind = 'ITEM'::text))),
-    CONSTRAINT assets_item_shape_check CHECK (((kind <> 'ITEM'::text) OR (((liquidity = 'ILLIQUID'::text) AND (rate_basis = 'NONE'::text)) AND (unit_cap IS NULL)))),
+    CONSTRAINT assets_item_shape_check CHECK (((kind <> 'ITEM'::text) OR ((liquidity = 'ILLIQUID'::text) AND (rate_basis = 'NONE'::text) AND (unit_cap IS NULL)))),
     CONSTRAINT assets_kind_check CHECK ((kind = ANY (ARRAY['SAVINGS'::text, 'ITEM'::text]))),
     CONSTRAINT assets_liquidity_check CHECK ((liquidity = ANY (ARRAY['WALLET'::text, 'SAVINGS'::text, 'LOCKED'::text, 'ILLIQUID'::text]))),
     CONSTRAINT assets_rate_basis_check CHECK ((rate_basis = ANY (ARRAY['MIN_MONTHLY'::text, 'MADB'::text, 'NONE'::text]))),
@@ -303,9 +303,9 @@ CREATE TABLE public.commitments (
     limit_release text,
     asset_id integer,
     collected_by_id integer,
+    CONSTRAINT commitments_asset_is_loan_check CHECK (((asset_id IS NULL) OR (kind = 'LOAN'::text))),
     CONSTRAINT commitments_collected_is_recurring_check CHECK (((collected_by_id IS NULL) OR (kind = 'RECURRING'::text))),
     CONSTRAINT commitments_collected_not_self_check CHECK (((collected_by_id IS NULL) OR (collected_by_id <> id))),
-    CONSTRAINT commitments_asset_is_loan_check CHECK (((asset_id IS NULL) OR (kind = 'LOAN'::text))),
     CONSTRAINT commitments_due_day_check CHECK (((due_day IS NULL) OR ((due_day >= 1) AND (due_day <= 31)))),
     CONSTRAINT commitments_kind_check CHECK ((kind = ANY (ARRAY['LOAN'::text, 'REVOLVING'::text, 'RECURRING'::text]))),
     CONSTRAINT commitments_limit_release_check CHECK (((limit_release IS NULL) OR (limit_release = ANY (ARRAY['PROGRESSIVE'::text, 'ON_SETTLEMENT'::text])))),
@@ -327,6 +327,20 @@ COMMENT ON COLUMN public.commitments.credit_limit IS 'Belongs to the ACCOUNT, no
 --
 
 COMMENT ON COLUMN public.commitments.min_payment_floor IS 'Issuer practice, not regulation. BSN 50, Maybank 25. BNM 13.1 mandates no floor.';
+
+
+--
+-- Name: COLUMN commitments.asset_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.commitments.asset_id IS 'What this loan bought, if it is tracked. Nullable on purpose: a loan with nothing linked counts only the debt, and the Loans screen says so.';
+
+
+--
+-- Name: COLUMN commitments.collected_by_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.commitments.collected_by_id IS 'The REVOLVING account that collects this recurring charge, if a card does. Adds no money to the month — the charge is still counted once, on Commitments. It says which day the money actually leaves.';
 
 
 --
@@ -979,6 +993,20 @@ CREATE INDEX commitment_payments_lookup_idx ON public.commitment_payments USING 
 
 
 --
+-- Name: commitments_asset_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX commitments_asset_idx ON public.commitments USING btree (asset_id);
+
+
+--
+-- Name: commitments_collected_by_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX commitments_collected_by_idx ON public.commitments USING btree (collected_by_id);
+
+
+--
 -- Name: declared_rates_product_year_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1004,20 +1032,6 @@ CREATE INDEX fund_distributions_lookup_idx ON public.fund_distributions USING bt
 --
 
 CREATE INDEX income_events_lookup_idx ON public.income_events USING btree (source_id, date DESC);
-
-
---
--- Name: commitments_asset_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX commitments_asset_idx ON public.commitments USING btree (asset_id);
-
-
---
--- Name: commitments_collected_by_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX commitments_collected_by_idx ON public.commitments USING btree (collected_by_id);
 
 
 --
@@ -1073,6 +1087,22 @@ ALTER TABLE ONLY public.cash_movements
 
 ALTER TABLE ONLY public.commitment_payments
     ADD CONSTRAINT commitment_payments_commitment_id_fkey FOREIGN KEY (commitment_id) REFERENCES public.commitments(id);
+
+
+--
+-- Name: commitments commitments_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.commitments
+    ADD CONSTRAINT commitments_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES public.assets(id) ON DELETE SET NULL;
+
+
+--
+-- Name: commitments commitments_collected_by_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.commitments
+    ADD CONSTRAINT commitments_collected_by_id_fkey FOREIGN KEY (collected_by_id) REFERENCES public.commitments(id) ON DELETE SET NULL;
 
 
 --
@@ -1145,22 +1175,6 @@ ALTER TABLE ONLY public.merchant_rules
 
 ALTER TABLE ONLY public.prices
     ADD CONSTRAINT prices_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
-
-
---
--- Name: commitments commitments_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.commitments
-    ADD CONSTRAINT commitments_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES public.assets(id) ON DELETE SET NULL;
-
-
---
--- Name: commitments commitments_collected_by_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.commitments
-    ADD CONSTRAINT commitments_collected_by_id_fkey FOREIGN KEY (collected_by_id) REFERENCES public.commitments(id) ON DELETE SET NULL;
 
 
 --
