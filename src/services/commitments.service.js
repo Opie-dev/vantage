@@ -56,6 +56,13 @@ function checkDueDay(v) {
  * this layer exists to name the field instead of returning a constraint name.
  */
 function checkShape(kind, f) {
+  // Only a loan buys a thing. A card or a recurring charge pointing at an asset
+  // is meaningless, and meaningless is how a wrong net worth starts — the same
+  // rule as commitments_asset_is_loan_check, checked here so the refusal carries
+  // a sentence rather than a constraint name.
+  if (f.asset_id != null && kind !== 'LOAN') {
+    throw badRequest(`a ${kind} does not buy anything — only a loan can be linked to an asset`);
+  }
   if (kind === 'LOAN') {
     // Either will do, because each gives the other. A hire-purchase statement
     // shows the instalment and never the amount financed, so demanding the
@@ -150,6 +157,9 @@ async function create(body) {
     min_payment_floor: body.min_payment_floor ?? 50,
     statement_day: body.statement_day ?? null,
     limit_release: body.limit_release ?? null,
+    // What the loan bought, if it is tracked. Only a LOAN may carry one —
+    // checkShape enforces it, as does commitments_asset_is_loan_check.
+    asset_id: body.asset_id ?? null,
     amount: body.amount ?? null,
     every_months: body.every_months ?? 1,
     sort_order: body.sort_order ?? 0,
@@ -165,7 +175,7 @@ async function create(body) {
     termMonths: f.term_months, startedOn: f.started_on, instalment: f.instalment,
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
-    statementDay: f.statement_day, limitRelease: f.limit_release,
+    statementDay: f.statement_day, limitRelease: f.limit_release, assetId: f.asset_id,
     amount: f.amount, everyMonths: f.every_months, sortOrder: f.sort_order,
   });
 }
@@ -205,6 +215,7 @@ async function update(id, body) {
     min_payment_floor: body.min_payment_floor ?? c.min_payment_floor,
     statement_day: body.statement_day === undefined ? c.statement_day : body.statement_day,
     limit_release: body.limit_release === undefined ? c.limit_release : body.limit_release,
+    asset_id: body.asset_id === undefined ? c.asset_id : body.asset_id,
     amount: body.amount === undefined ? c.amount : body.amount,
     every_months: body.every_months ?? c.every_months,
     active: body.active === undefined ? c.active : body.active,
@@ -226,7 +237,7 @@ async function update(id, body) {
     termMonths: f.term_months, startedOn: f.started_on, instalment: f.instalment,
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
-    statementDay: f.statement_day, limitRelease: f.limit_release,
+    statementDay: f.statement_day, limitRelease: f.limit_release, assetId: f.asset_id,
     amount: f.amount, everyMonths: f.every_months,
     active: f.active, endedOn: f.ended_on, sortOrder: f.sort_order,
   });

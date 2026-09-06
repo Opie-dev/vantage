@@ -93,8 +93,10 @@ CREATE TABLE public.assets (
     product_id text,
     liquidity text DEFAULT 'SAVINGS'::text NOT NULL,
     CONSTRAINT assets_fiscal_year_check CHECK ((fiscal_year ~ '^\d{2}-\d{2}$'::text)),
-    CONSTRAINT assets_kind_check CHECK ((kind = 'SAVINGS'::text)),
-    CONSTRAINT assets_liquidity_check CHECK ((liquidity = ANY (ARRAY['WALLET'::text, 'SAVINGS'::text, 'LOCKED'::text]))),
+    CONSTRAINT assets_illiquid_is_item_check CHECK (((liquidity <> 'ILLIQUID'::text) OR (kind = 'ITEM'::text))),
+    CONSTRAINT assets_item_shape_check CHECK (((kind <> 'ITEM'::text) OR (((liquidity = 'ILLIQUID'::text) AND (rate_basis = 'NONE'::text)) AND (unit_cap IS NULL)))),
+    CONSTRAINT assets_kind_check CHECK ((kind = ANY (ARRAY['SAVINGS'::text, 'ITEM'::text]))),
+    CONSTRAINT assets_liquidity_check CHECK ((liquidity = ANY (ARRAY['WALLET'::text, 'SAVINGS'::text, 'LOCKED'::text, 'ILLIQUID'::text]))),
     CONSTRAINT assets_rate_basis_check CHECK ((rate_basis = ANY (ARRAY['MIN_MONTHLY'::text, 'MADB'::text, 'NONE'::text]))),
     CONSTRAINT assets_rate_quote_check CHECK ((rate_quote = ANY (ARRAY['PERCENT'::text, 'SEN_PER_UNIT'::text])))
 );
@@ -299,6 +301,8 @@ CREATE TABLE public.commitments (
     sort_order integer DEFAULT 0 NOT NULL,
     statement_day integer,
     limit_release text,
+    asset_id integer,
+    CONSTRAINT commitments_asset_is_loan_check CHECK (((asset_id IS NULL) OR (kind = 'LOAN'::text))),
     CONSTRAINT commitments_due_day_check CHECK (((due_day IS NULL) OR ((due_day >= 1) AND (due_day <= 31)))),
     CONSTRAINT commitments_kind_check CHECK ((kind = ANY (ARRAY['LOAN'::text, 'REVOLVING'::text, 'RECURRING'::text]))),
     CONSTRAINT commitments_limit_release_check CHECK (((limit_release IS NULL) OR (limit_release = ANY (ARRAY['PROGRESSIVE'::text, 'ON_SETTLEMENT'::text])))),
@@ -1000,6 +1004,13 @@ CREATE INDEX income_events_lookup_idx ON public.income_events USING btree (sourc
 
 
 --
+-- Name: commitments_asset_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX commitments_asset_idx ON public.commitments USING btree (asset_id);
+
+
+--
 -- Name: merchant_rules_match_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1124,6 +1135,14 @@ ALTER TABLE ONLY public.merchant_rules
 
 ALTER TABLE ONLY public.prices
     ADD CONSTRAINT prices_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+
+
+--
+-- Name: commitments commitments_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.commitments
+    ADD CONSTRAINT commitments_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES public.assets(id) ON DELETE SET NULL;
 
 
 --

@@ -15,9 +15,17 @@ const assets = require('../models/assets.model');
 const assetEntries = require('../models/assetEntries.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 
-/** Mirrors the assets_kind_check constraint in the migration. COMMODITY and ITEM
- *  are designed but not yet permitted — nothing can write their columns. */
-const KINDS = ['SAVINGS'];
+/**
+ * Mirrors assets_kind_check.
+ *
+ *   SAVINGS  a pot of money that may declare a rate — ASB, Tabung Haji, EPF.
+ *   ITEM     a thing a loan bought. It earns nothing, cannot be spent, and its
+ *            value is asserted rather than accumulated. See the migration header
+ *            for why all three of those are enforced rather than trusted.
+ *
+ * COMMODITY is still designed and still not permitted.
+ */
+const KINDS = ['SAVINGS', 'ITEM'];
 /**
  * Mirrors assets_rate_basis_check.
  *
@@ -45,8 +53,30 @@ const RATE_QUOTES = ['PERCENT', 'SEN_PER_UNIT'];
  *   SAVINGS  a destination. Money in is money out of pocket.
  *   LOCKED   cannot be reached before a condition is met. Counted in net worth,
  *            never counted as within reach.
+ *   ILLIQUID not money at all — a house, a car. Counted in net worth and never
+ *            within reach, like LOCKED, but kept apart from it: LOCKED is money
+ *            you may not touch YET, and one bucket meaning both would make
+ *            "locked" on the Assets screen answer two different questions. Only
+ *            an ITEM may carry it, which the schema enforces both ways.
  */
-const LIQUIDITIES = ['WALLET', 'SAVINGS', 'LOCKED'];
+const LIQUIDITIES = ['WALLET', 'SAVINGS', 'LOCKED', 'ILLIQUID'];
+
+/**
+ * The three things that are true of an item and of nothing else here.
+ *
+ * Mirrors assets_item_shape_check and assets_illiquid_is_item_check. Returns the
+ * message explaining the refusal, or null when the shape is fine.
+ */
+function itemShapeProblem({ kind, liquidity, rate_basis, unit_cap }) {
+  if (kind === 'ITEM') {
+    if (liquidity !== 'ILLIQUID') return 'an item is ILLIQUID — it is a thing, not money you can reach';
+    if (rate_basis !== 'NONE') return 'an item declares no rate: set rate_basis to NONE';
+    if (unit_cap != null) return 'an item has no unit cap';
+    return null;
+  }
+  if (liquidity === 'ILLIQUID') return 'only an ITEM can be ILLIQUID';
+  return null;
+}
 
 /** Mirrors asset_entries_type_check. */
 const ENTRY_TYPES = ['DEPOSIT', 'WITHDRAW', 'DISTRIBUTION', 'FEE', 'BALANCE'];
@@ -122,6 +152,8 @@ async function create({
   if (!LIQUIDITIES.includes(liquidity)) {
     throw badRequest(`liquidity must be one of: ${LIQUIDITIES.join(', ')}`);
   }
+  const shape = itemShapeProblem({ kind, liquidity, rate_basis, unit_cap });
+  if (shape) throw badRequest(shape);
   if (!FISCAL_RE.test(fiscal_year)) throw badRequest('fiscal_year must be MM-DD, e.g. 12-31');
   // A cap is a progress bar, never a validation — reinvested distributions and
   // inherited units can legitimately carry a balance past ASB's 300,000.
@@ -171,6 +203,11 @@ async function update(id, body) {
   if (!LIQUIDITIES.includes(liquidity)) {
     throw badRequest(`liquidity must be one of: ${LIQUIDITIES.join(', ')}`);
   }
+  // `kind` cannot be changed, so it comes off the stored row: an edit that
+  // relaxed an item into a savings account would leave a valuation history
+  // behind a rate estimator that has no business running over it.
+  const shape = itemShapeProblem({ kind: asset.kind, liquidity, rate_basis, unit_cap });
+  if (shape) throw badRequest(shape);
 
   await assets.update(id, {
     name: String(name).trim(), currency, institution, accountRef: account_ref,
@@ -226,10 +263,19 @@ async function addEntry(assetId, { type, date, amount, note = '', source = 'manu
   // was read and what the ledger derived is unexplained, and for a current
   // account it is mostly spending. Keeping readings out of savings accounts keeps
   // that invariant true where it is load-bearing.
-  if (type === 'BALANCE' && asset.liquidity !== 'WALLET') {
+  // An ITEM is the exception, and for the opposite reason the rule exists: a
+  // reading on a savings account breaks the ledger invariant, while for a house
+  // or a car the reading IS the ledger. There is no running sum of deposits to
+  // contradict — there is only what someone last said it was worth.
+  if (type === 'BALANCE' && asset.kind !== 'ITEM' && asset.liquidity !== 'WALLET') {
     throw badRequest(
       `a balance reading only makes sense on an account you spend from — set ${asset.name}'s ` +
       'reachability to WALLET first, or record a deposit or withdrawal instead');
+  }
+  if (asset.kind === 'ITEM' && type !== 'BALANCE') {
+    throw badRequest(
+      `${asset.name} is a thing, not an account: record what it is worth as a valuation, ` +
+      'not a deposit or a withdrawal');
   }
   if (!nonNegative(amount)) throw badRequest('amount must be a number of zero or more');
   checkDate(date, 'date');

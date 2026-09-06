@@ -147,6 +147,10 @@ const SCREENS = {
 
 /* ── shell pieces ─────────────────────────────────────────────────────────── */
 
+/** Radix Select refuses an empty string as a value, so "nothing chosen" needs a
+ *  sentinel that is never a real id. */
+const NONE = '__none__'
+
 /** One per TABS entry. Kept here rather than in the store: the store holds data,
  *  and which glyph a screen wears is a presentation choice. */
 const NAV_ICON = {
@@ -2589,8 +2593,117 @@ function CardPaymentDialog({ prefill }) {
   )
 }
 
+/**
+ * Something a loan bought.
+ *
+ * A SEPARATE FORM, NOT A MODE OF AssetDialog. That form is built around a
+ * catalogue of Malaysian funds, their declared-rate histories and a distribution
+ * estimator — none of which a house has. Bending it would mean hiding two thirds
+ * of its fields and defending three impossible states; this asks the four things
+ * an item actually has and sets the rest from the schema's own rules.
+ *
+ * THE VALUATION IS PART OF CREATING IT. An item with no valuation is worth
+ * nothing, and an item worth nothing understates net worth by exactly as much as
+ * not tracking it at all — so the date and the figure are asked here rather than
+ * left as a second step someone might not take.
+ */
+function ItemDialog({ prefill }) {
+  const { closeModal, addItem } = useVantage()
+  const [f, setF] = useState({
+    name: prefill.name || '',
+    slug: prefill.slug || '',
+    value: '',
+    valued_on: today(),
+  })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  // Typed once. A slug nobody sees is a field nobody should have to fill.
+  const slug =
+    f.slug.trim() ||
+    f.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const ready = f.name.trim() && slug && Number(f.value) > 0 && f.valued_on
+
+  const save = async () => {
+    if (!ready) return
+    setBusy(true)
+    const ok = await addItem({
+      name: f.name.trim(),
+      slug,
+      value: Number(f.value),
+      valued_on: f.valued_on,
+    })
+    setBusy(false)
+    if (ok) closeModal()
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[440px]">
+      <DialogHeader>
+        <DialogTitle>Add something a loan bought</DialogTitle>
+        <DialogDescription>
+          A house, a car. Tracking the loan without the thing understates net worth by the whole
+          value of the thing.
+        </DialogDescription>
+      </DialogHeader>
+
+      <Field label="What is it" htmlFor="item-name">
+        <Input
+          id="item-name"
+          placeholder="The house"
+          value={f.name}
+          onChange={e => set('name', e.target.value)}
+        />
+      </Field>
+
+      <Field
+        label="What is it worth"
+        htmlFor="item-value"
+        hint="Whatever you would put on it today. Nothing here appreciates it for you."
+      >
+        <Input
+          id="item-value"
+          className="num"
+          type="number"
+          step="0.01"
+          value={f.value}
+          onChange={e => set('value', e.target.value)}
+        />
+      </Field>
+
+      <Field
+        label="Valued on"
+        htmlFor="item-date"
+        hint="Kept and shown beside the figure, so a stale valuation reads as stale rather than as a fact."
+      >
+        <Input
+          id="item-date"
+          type="date"
+          value={f.valued_on}
+          onChange={e => set('valued_on', e.target.value)}
+        />
+      </Field>
+
+      <p className="text-faint m-0 text-[11px] leading-relaxed text-pretty">
+        It earns no rate, never counts as money within reach, and its value is replaced rather than
+        added to — record a newer valuation any time and the old one stays as history. Link it to
+        the loan that bought it on the loan itself.
+      </p>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={!ready || busy}>
+          {busy ? 'Adding…' : 'Add it'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 function CommitmentDialog({ prefill }) {
-  const { closeModal, addCommitment, updateCommitment } = useVantage()
+  const { state, closeModal, addCommitment, updateCommitment, openItem } = useVantage()
   const editing = prefill.id != null
   // Not saved anywhere. It only computes started_on, which is what is stored.
   const [monthsLeft, setMonthsLeft] = useState('')
@@ -2598,7 +2711,9 @@ function CommitmentDialog({ prefill }) {
   // never hidden behind a disclosure the reader has no reason to open.
   const [showRate, setShowRate] = useState(prefill.rate != null)
   const str = (v, fallback = '') => (v == null ? fallback : String(v))
+  const items = state.assets.filter(a => a.kind === 'ITEM' && !a.archived)
   const [f, setF] = useState({
+    asset_id: prefill.asset_id == null ? '' : String(prefill.asset_id),
     kind: prefill.kind || 'LOAN',
     name: str(prefill.name),
     lender: str(prefill.lender),
@@ -2651,6 +2766,10 @@ function CommitmentDialog({ prefill }) {
             term_months: num(f.term_months),
             started_on: f.started_on,
             instalment: num(f.instalment),
+            // Optional, and it stays optional. A loan with nothing linked counts
+            // only the debt, which the Loans screen says out loud rather than
+            // absorbing quietly.
+            asset_id: f.asset_id === '' ? null : Number(f.asset_id),
           }
         : f.kind === 'REVOLVING'
           ? {
@@ -2724,6 +2843,31 @@ function CommitmentDialog({ prefill }) {
 
         {f.kind === 'LOAN' ? (
           <>
+            <Field
+              label="What did it buy?"
+              htmlFor="cm-asset"
+              className="col-span-2"
+              hint="Tracking a mortgage without tracking the house understates net worth by the whole value of the house. Leaving this empty is allowed, and the Loans screen says so rather than absorbing the omission."
+            >
+              <div className="flex gap-2">
+                <Select value={f.asset_id} onValueChange={v => set('asset_id', v === NONE ? '' : v)}>
+                  <SelectTrigger id="cm-asset" className="w-full">
+                    <SelectValue placeholder="Nothing tracked — count only the debt" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Nothing tracked — count only the debt</SelectItem>
+                    {items.map(a => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={() => openItem()}>
+                  New
+                </Button>
+              </div>
+            </Field>
             <Field
               label="Monthly instalment"
               htmlFor="cm-inst"
@@ -3504,6 +3648,7 @@ function Modals() {
       {modal?.kind === 'cardPlan' && <CardPlanDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cardStatement' && <CardStatementDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'cardPayment' && <CardPaymentDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'item' && <ItemDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'statementImport' && <StatementImportDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}
