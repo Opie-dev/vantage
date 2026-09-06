@@ -82,6 +82,7 @@ import {
   GOAL_KIND,
   GOAL_NEEDS_INSTRUMENT,
   goalIncomeIsNet,
+  planEffectiveRate,
   startFromMonthsLeft,
 } from '@/lib/calc'
 import {
@@ -101,7 +102,7 @@ import LockScreen from '@/components/LockScreen'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 import { TABS, useVantage } from '@/lib/store'
-import { dtfmt, today } from '@/lib/format'
+import { dtfmt, fmt, pct1, today } from '@/lib/format'
 
 import Dashboard from '@/screens/Dashboard'
 import Portfolio from '@/screens/Portfolio'
@@ -1435,6 +1436,330 @@ function AssetEntryDialog({ prefill }) {
  * as numbers and every input here is a string, so they are converted on the way
  * in rather than each field having to cope with both.
  */
+/**
+ * An instalment plan on a card — the derivable half of it.
+ *
+ * FIVE FIELDS AND TODAY'S DATE do the rest, exactly as they do for a loan: how
+ * many instalments have been paid, what is left, when it ends and what it is
+ * blocking off the limit are all derived. You never type an instalment twice.
+ *
+ * The two dates are separate on purpose. A purchase made after the bill closed
+ * was SPENT this month and starts COSTING next, and collapsing them files the
+ * spending in the wrong month — which is the exact error the float exists to fix.
+ */
+function CardPlanDialog({ prefill }) {
+  const { state, closeModal, addCardPlan } = useVantage()
+  const cards = state.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+  const str = (v, fallback = '') => (v == null ? fallback : String(v))
+  const [f, setF] = useState({
+    commitment_id: String(prefill.commitment_id ?? cards[0]?.id ?? ''),
+    kind: prefill.kind || 'EPP',
+    name: str(prefill.name),
+    merchant: str(prefill.merchant),
+    amount: str(prefill.amount),
+    tenure_months: str(prefill.tenure_months, '12'),
+    instalment: str(prefill.instalment),
+    rate: str(prefill.rate, '0'),
+    upfront_fee: str(prefill.upfront_fee, '0'),
+    purchased_on: prefill.purchased_on || today(),
+    started_on: prefill.started_on || today(),
+    category: prefill.category || 'THINGS',
+  })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const num = v => (v === '' ? null : Number(v))
+
+  const ready = f.commitment_id && f.name.trim() && f.amount && f.tenure_months && f.instalment
+
+  // What the plan actually costs, shown while the decision is still being made.
+  // A fee on a "0%" plan is the only place its cost appears.
+  const effective = planEffectiveRate({
+    amount: num(f.amount),
+    tenure_months: num(f.tenure_months),
+    rate: Number(f.rate) || 0,
+    upfront_fee: Number(f.upfront_fee) || 0,
+  })
+  // Only an EPP is a purchase. A cash-out moves money into your own account and a
+  // balance transfer refinances a debt you already had; logging either as spending
+  // would invent living costs that never happened.
+  const isSpending = f.kind === 'EPP'
+
+  const save = async () => {
+    if (!ready) return
+    setBusy(true)
+    const ok = await addCardPlan(Number(f.commitment_id), {
+      kind: f.kind,
+      name: f.name.trim(),
+      merchant: f.merchant.trim(),
+      amount: num(f.amount),
+      tenure_months: Number(f.tenure_months),
+      instalment: num(f.instalment),
+      rate: Number(f.rate) || 0,
+      upfront_fee: Number(f.upfront_fee) || 0,
+      purchased_on: f.purchased_on,
+      started_on: f.started_on,
+      category: isSpending ? f.category : null,
+    })
+    setBusy(false)
+    if (ok) closeModal()
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[520px]">
+      <DialogHeader>
+        <DialogTitle>Add an instalment plan</DialogTitle>
+        <DialogDescription>
+          An EPP, a balance transfer or a cash instalment. Everything after the first month is
+          derived — you never type an instalment twice.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="On which card" htmlFor="cp-card" className="col-span-2">
+          <Select value={f.commitment_id} onValueChange={v => set('commitment_id', v)}>
+            <SelectTrigger id="cp-card" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {cards.map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field
+          label="Kind"
+          htmlFor="cp-kind"
+          className="col-span-2"
+          hint={
+            isSpending
+              ? 'A purchase, so it reaches the expense log on the day it was bought.'
+              : 'Not spending — this moves or refinances money you already owed, and is never logged as an expense.'
+          }
+        >
+          <Select value={f.kind} onValueChange={v => set('kind', v)}>
+            <SelectTrigger id="cp-kind" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EPP">Easy payment plan — a purchase</SelectItem>
+              <SelectItem value="BALANCE_TRANSFER">Balance transfer — another card&rsquo;s debt</SelectItem>
+              <SelectItem value="CASH_INSTALMENT">Cash instalment — drawn to your account</SelectItem>
+              <SelectItem value="AUTO_BALANCE_CONVERSION">Automatic balance conversion</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field label="What for" htmlFor="cp-name">
+          <Input id="cp-name" value={f.name} onChange={e => set('name', e.target.value)} placeholder="Fridge" />
+        </Field>
+        <Field label="Where" htmlFor="cp-merchant">
+          <Input id="cp-merchant" value={f.merchant} onChange={e => set('merchant', e.target.value)} placeholder="Senheng" />
+        </Field>
+
+        <Field label="Amount financed" htmlFor="cp-amount" hint="What came off the limit.">
+          <Input id="cp-amount" className="num" type="number" step="0.01" value={f.amount} onChange={e => set('amount', e.target.value)} />
+        </Field>
+        <Field label="Over how many months" htmlFor="cp-tenure">
+          <Input id="cp-tenure" className="num" type="number" min="1" value={f.tenure_months} onChange={e => set('tenure_months', e.target.value)} />
+        </Field>
+
+        <Field
+          label="Billed each month"
+          htmlFor="cp-inst"
+          className="col-span-2"
+          hint="The bank's own figure, and the TOTAL for this plan — if it bills principal and interest as two lines, add them. Both count toward the minimum."
+        >
+          <Input id="cp-inst" className="num" type="number" step="0.01" value={f.instalment} onChange={e => set('instalment', e.target.value)} />
+        </Field>
+
+        <Field label="Rate (%)" htmlFor="cp-rate" hint="0 on a true 0% plan.">
+          <Input id="cp-rate" className="num" type="number" step="0.01" value={f.rate} onChange={e => set('rate', e.target.value)} />
+        </Field>
+        <Field label="Upfront fee" htmlFor="cp-fee" hint="Where the cost of a 0% plan actually hides.">
+          <Input id="cp-fee" className="num" type="number" step="0.01" value={f.upfront_fee} onChange={e => set('upfront_fee', e.target.value)} />
+        </Field>
+
+        <Field label="Bought on" htmlFor="cp-bought" hint="When it was spent.">
+          <Input id="cp-bought" type="date" value={f.purchased_on} onChange={e => set('purchased_on', e.target.value)} />
+        </Field>
+        <Field label="First instalment" htmlFor="cp-start" hint="When money starts moving — often a cycle later.">
+          <Input id="cp-start" type="date" value={f.started_on} onChange={e => set('started_on', e.target.value)} />
+        </Field>
+
+        {isSpending ? (
+          <Field label="Expense category" htmlFor="cp-cat" className="col-span-2">
+            <Select value={f.category} onValueChange={v => set('category', v)}>
+              <SelectTrigger id="cp-cat" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_GROUPS.map(g => (
+                  <SelectGroup key={g.group}>
+                    <SelectLabel>{g.label}</SelectLabel>
+                    {g.categories.map(c => (
+                      <SelectItem key={c} value={c}>
+                        {EXPENSE_LABEL[c]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : null}
+
+        {ready ? (
+          <div className="border-hairline col-span-2 rounded-md border px-3 py-2.5">
+            <span className="eyebrow">What it costs</span>
+            <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="num text-[15px] font-semibold">
+                {effective == null ? 'Nothing' : pct1(effective)}
+              </span>
+              <span className="text-muted-foreground text-[12px]">
+                {effective == null
+                  ? 'genuinely 0% — no rate, no fee'
+                  : 'effective, on a reducing balance'}
+              </span>
+            </div>
+            <p className="text-faint mt-1.5 mb-0 text-[11.5px] leading-relaxed text-pretty">
+              {fmt(Number(f.instalment) * Number(f.tenure_months), 'MYR')} paid in total against{' '}
+              {fmt(Number(f.amount), 'MYR')} financed.
+              {effective == null
+                ? ' A merchant plan with no fee really is free.'
+                : ' Converted by the Hire-Purchase Act’s own Seventh Schedule formula, so it compares with every other rate on screen.'}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={!ready || busy}>
+          {busy ? 'Saving…' : 'Add plan'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+/**
+ * One statement — a dated reading of what a card owed.
+ *
+ * This is the row the float reads, and the reason it is a table rather than a
+ * column: a float needs `owed` at TWO dates, and a mutable balance can only ever
+ * answer for today. Upserts on the statement date, so recording the same bill
+ * twice corrects it instead of duplicating it.
+ */
+function CardStatementDialog({ prefill }) {
+  const { state, closeModal, addCardStatement } = useVantage()
+  const cards = state.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+  const str = (v, fallback = '') => (v == null ? fallback : String(v))
+  const [f, setF] = useState({
+    commitment_id: String(prefill.commitment_id ?? cards[0]?.id ?? ''),
+    statement_date: prefill.statement_date || today(),
+    due_date: prefill.due_date || '',
+    closing_balance: str(prefill.closing_balance),
+    minimum_due: str(prefill.minimum_due),
+    interest_charged: str(prefill.interest_charged, '0'),
+    fees_charged: str(prefill.fees_charged, '0'),
+  })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+  const num = v => (v === '' ? null : Number(v))
+  const ready = f.commitment_id && f.statement_date && f.due_date && f.closing_balance !== ''
+
+  const save = async () => {
+    if (!ready) return
+    setBusy(true)
+    const ok = await addCardStatement(Number(f.commitment_id), {
+      statement_date: f.statement_date,
+      due_date: f.due_date,
+      closing_balance: Number(f.closing_balance),
+      minimum_due: num(f.minimum_due),
+      interest_charged: Number(f.interest_charged) || 0,
+      fees_charged: Number(f.fees_charged) || 0,
+    })
+    setBusy(false)
+    if (ok) closeModal()
+  }
+
+  return (
+    <DialogContent className="sm:max-w-[480px]">
+      <DialogHeader>
+        <DialogTitle>Record a statement</DialogTitle>
+        <DialogDescription>
+          Off the bill, as printed. One row a month — this is what lets the spending figure survive
+          a credit card.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Which card" htmlFor="cs-card" className="col-span-2">
+          <Select value={f.commitment_id} onValueChange={v => set('commitment_id', v)}>
+            <SelectTrigger id="cs-card" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {cards.map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field label="Statement date" htmlFor="cs-date" hint="The day it closed.">
+          <Input id="cs-date" type="date" value={f.statement_date} onChange={e => set('statement_date', e.target.value)} />
+        </Field>
+        <Field label="Due date" htmlFor="cs-due">
+          <Input id="cs-due" type="date" value={f.due_date} onChange={e => set('due_date', e.target.value)} />
+        </Field>
+
+        <Field
+          label="Closing balance"
+          htmlFor="cs-close"
+          className="col-span-2"
+          hint="The TOTAL owed as printed, instalment plans included — not the revolving part."
+        >
+          <Input id="cs-close" className="num" type="number" step="0.01" value={f.closing_balance} onChange={e => set('closing_balance', e.target.value)} />
+        </Field>
+
+        <Field
+          label="Minimum due"
+          htmlFor="cs-min"
+          className="col-span-2"
+          hint="As printed. It outranks anything derived, because the bank can see what this app cannot."
+        >
+          <Input id="cs-min" className="num" type="number" step="0.01" value={f.minimum_due} onChange={e => set('minimum_due', e.target.value)} />
+        </Field>
+
+        <Field label="Interest charged" htmlFor="cs-int" hint="The price of carrying a balance.">
+          <Input id="cs-int" className="num" type="number" step="0.01" value={f.interest_charged} onChange={e => set('interest_charged', e.target.value)} />
+        </Field>
+        <Field label="Fees charged" htmlFor="cs-fee" hint="The price of holding the card.">
+          <Input id="cs-fee" className="num" type="number" step="0.01" value={f.fees_charged} onChange={e => set('fees_charged', e.target.value)} />
+        </Field>
+      </div>
+
+      <DialogFooter>
+        <Button variant="ghost" onClick={closeModal}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={!ready || busy}>
+          {busy ? 'Saving…' : 'Record it'}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
 function CommitmentDialog({ prefill }) {
   const { closeModal, addCommitment, updateCommitment } = useVantage()
   const editing = prefill.id != null
@@ -2347,6 +2672,8 @@ function Modals() {
       {modal?.kind === 'assetEntry' && <AssetEntryDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'expense' && <ExpenseDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'commitment' && <CommitmentDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'cardPlan' && <CardPlanDialog prefill={modal.prefill || {}} />}
+      {modal?.kind === 'cardStatement' && <CardStatementDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'income' && <IncomeDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'incomeEvent' && <IncomeEventDialog prefill={modal.prefill || {}} />}
       {modal?.kind === 'goal' && <GoalDialog />}

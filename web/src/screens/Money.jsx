@@ -42,6 +42,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronUpIcon,
+  FileTextIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
@@ -599,7 +600,7 @@ function CardHeadroom({ r }) {
   )
 }
 
-function CommitmentRow({ r, onEdit, onRemove }) {
+function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onAddStatement }) {
   const c = r.commitment
 
   return (
@@ -715,6 +716,20 @@ function CommitmentRow({ r, onEdit, onRemove }) {
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
+        {r.kind === 'REVOLVING' ? (
+          <>
+            <RowAction
+              icon={PlusIcon}
+              label={`Add an instalment plan to ${r.name}`}
+              onClick={() => onAddPlan({ commitment_id: r.id })}
+            />
+            <RowAction
+              icon={FileTextIcon}
+              label={`Record a statement for ${r.name}`}
+              onClick={() => onAddStatement({ commitment_id: r.id })}
+            />
+          </>
+        ) : null}
         <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
         <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
       </div>
@@ -724,6 +739,12 @@ function CommitmentRow({ r, onEdit, onRemove }) {
           <CardPlans r={r} />
           <CardHeadroom r={r} />
         </>
+      ) : null}
+      {r.kind === 'REVOLVING' && !r.cycle ? (
+        <p className="text-faint mb-3 ml-[33px] text-[11.5px] leading-relaxed text-pretty">
+          No statement day recorded, so this card cannot say when a purchase stops being
+          interest-free — the period runs from the day the bill closes, not the day it is due.
+        </p>
       ) : null}
     </div>
   )
@@ -735,6 +756,8 @@ export default function Money() {
   const {
     state,
     openCommitment,
+    openCardPlan,
+    openCardStatement,
     openIncome,
     openIncomeEvent,
     deleteIncomeSource,
@@ -993,6 +1016,8 @@ export default function Money() {
                         r={r}
                         onEdit={openCommitment}
                         onRemove={deleteCommitment}
+                        onAddPlan={openCardPlan}
+                        onAddStatement={openCardStatement}
                       />
                     ))}
                     <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 px-4 py-3 text-[12.5px]">

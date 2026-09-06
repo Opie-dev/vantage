@@ -50,6 +50,13 @@ const VantageContext = createContext(null)
  *   openAsset: (prefill?: object) => void,
  *   openAssetEntry: (prefill?: object) => void,
  *   openCommitment: (prefill?: object) => void,
+ *   openCardPlan: (prefill?: object) => void,
+ *   openCardStatement: (prefill?: object) => void,
+ *   addCardPlan: (cardId: number, body: object) => Promise<boolean>,
+ *   updateCardPlan: (cardId: number, planId: number, body: object) => Promise<boolean>,
+ *   deleteCardPlan: (cardId: number, planId: number) => Promise<boolean>,
+ *   addCardStatement: (cardId: number, body: object) => Promise<boolean>,
+ *   deleteCardStatement: (cardId: number, statementId: number) => Promise<boolean>,
  *   openIncome: (prefill?: object) => void,
  *   updateIncomeSource: (id: number, body: object) => Promise<boolean>,
  *   openGoal: () => void,
@@ -331,6 +338,29 @@ export function VantageProvider({ children }) {
       setModal({ kind: 'incomeEvent', prefill })
     }
 
+    // Same guard again: a plan hangs off a card, and only a card. Offering an
+    // empty select would be a worse answer than saying what is missing — and the
+    // API refuses a plan on a loan anyway, so this catches it a step earlier.
+    const openCardPlan = (prefill = {}) => {
+      const cards = latest.current.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+      if (!cards.length) {
+        toast.warning('Add a card first', {
+          description: 'An instalment plan sits on a card account, from the Money screen.',
+        })
+        return
+      }
+      setModal({ kind: 'cardPlan', prefill: { commitment_id: cards[0].id, ...prefill } })
+    }
+
+    const openCardStatement = (prefill = {}) => {
+      const cards = latest.current.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+      if (!cards.length) {
+        toast.warning('Add a card first', { description: 'A statement is a reading of a card account.' })
+        return
+      }
+      setModal({ kind: 'cardStatement', prefill: { commitment_id: cards[0].id, ...prefill } })
+    }
+
     const syncMoomoo = async () => {
       setSyncPending(true)
       const id = toast.loading('Asking moomoo…', {
@@ -483,6 +513,19 @@ export function VantageProvider({ children }) {
         mutate(() => api.deleteAssetEntry(assetId, entryId), 'Entry removed'),
       updateGoal: (id, body) => mutate(() => api.updateGoal(id, body), null),
       deleteGoal: id => mutate(() => api.deleteGoal(id), 'Goal removed'),
+      addCardPlan: (cardId, body) => mutate(() => api.addCardPlan(cardId, body), `${body.name} added`),
+      updateCardPlan: (cardId, planId, body) =>
+        mutate(() => api.updateCardPlan(cardId, planId, body), `${body.name} updated`),
+      deleteCardPlan: (cardId, planId) =>
+        mutate(() => api.deleteCardPlan(cardId, planId), 'Plan removed'),
+      // Upserts on the statement date, so re-recording the same bill corrects it
+      // rather than duplicating it.
+      addCardStatement: (cardId, body) =>
+        mutate(() => api.addCardStatement(cardId, body), 'Statement recorded'),
+      deleteCardStatement: (cardId, statementId) =>
+        mutate(() => api.deleteCardStatement(cardId, statementId), 'Statement removed'),
+      openCardPlan,
+      openCardStatement,
       setManualPrice: body => mutate(() => api.setManualPrice(body), 'Price updated'),
       refreshPrices,
       pricesPending,
