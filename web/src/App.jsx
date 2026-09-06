@@ -1458,6 +1458,9 @@ function CommitmentDialog({ prefill }) {
     apr: str(prefill.apr, '18'),
     balance: str(prefill.balance),
     credit_limit: str(prefill.credit_limit),
+    statement_day: str(prefill.statement_day),
+    min_payment_floor: str(prefill.min_payment_floor, '50'),
+    limit_release: prefill.limit_release || 'PROGRESSIVE',
     amount: str(prefill.amount),
     every_months: str(prefill.every_months, '1'),
   })
@@ -1501,6 +1504,12 @@ function CommitmentDialog({ prefill }) {
               apr: num(f.apr),
               credit_limit: num(f.credit_limit),
               balance: num(f.balance),
+              // The day the bill CLOSES, which is not the day it falls due. The
+              // interest-free period runs from it, so without it the app cannot
+              // say when something bought today stops being free.
+              statement_day: f.statement_day === '' ? null : Number(f.statement_day),
+              min_payment_floor: num(f.min_payment_floor),
+              limit_release: f.limit_release,
               // The API refuses a balance with no date, because a card balance is
               // a snapshot and the screen has to be able to say how old it is.
               balance_as_of: f.balance === '' ? null : today(),
@@ -1674,9 +1683,39 @@ function CommitmentDialog({ prefill }) {
               label="Balance now"
               htmlFor="cm-bal"
               className="col-span-2"
-              hint="A snapshot, dated today — the screen shows how stale it gets, because a card balance goes off in days."
+              hint="The REVOLVING part only — what is carried at the rate above. Instalment plans are added separately and must not be folded in here, or the minimum is charged on them twice."
             >
               <Input id="cm-bal" className="num" type="number" step="0.01" value={f.balance} onChange={e => set('balance', e.target.value)} />
+            </Field>
+            <Field
+              label="Statement day"
+              htmlFor="cm-stmt"
+              hint="The day the bill CLOSES, not the day it is due. Both, or the app cannot say when a purchase stops being interest-free."
+            >
+              <Input id="cm-stmt" className="num" type="number" min="1" max="31" value={f.statement_day} onChange={e => set('statement_day', e.target.value)} />
+            </Field>
+            <Field
+              label="Minimum floor"
+              htmlFor="cm-floor"
+              hint="Issuer practice, not a rule: BSN 50, Maybank 25."
+            >
+              <Input id="cm-floor" className="num" type="number" step="1" value={f.min_payment_floor} onChange={e => set('min_payment_floor', e.target.value)} />
+            </Field>
+            <Field
+              label="Instalment plans free the limit"
+              htmlFor="cm-release"
+              className="col-span-2"
+              hint="Off the card's own terms — issuers publish both, and it decides how much credit you actually have left."
+            >
+              <Select value={f.limit_release} onValueChange={v => set('limit_release', v)}>
+                <SelectTrigger id="cm-release" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PROGRESSIVE">Month by month, as principal is paid</SelectItem>
+                  <SelectItem value="ON_SETTLEMENT">Not until the plan finishes</SelectItem>
+                </SelectContent>
+              </Select>
             </Field>
           </>
         ) : (
