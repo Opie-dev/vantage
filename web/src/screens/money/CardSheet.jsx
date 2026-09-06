@@ -19,6 +19,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { cardFloat } from '@/lib/calc'
 import { dfmt, fmt, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
@@ -37,11 +38,144 @@ function BandLine({ colour, value, label, dim = false }) {
   )
 }
 
-function CycleLine({ label, value, strong = false }) {
+/**
+ * The cycle as a line rather than two dates.
+ *
+ * A BILL AND A DUE DATE ARE NOT THE SAME EVENT, and reading them as two rows
+ * makes it easy to plan against the wrong one. Drawn in order — the bill that
+ * closed, today, when it falls due, when the next one closes — the gap you are
+ * actually spending into is the thing the eye lands on.
+ *
+ * Positions are proportional to real days, so a due date that is nearly here
+ * looks nearly here. Every marker is clamped into the window it draws: a marker
+ * off the end of its own line reads as a bug rather than as history.
+ */
+function Timeline({ row }) {
+  const at = iso => new Date(`${iso}T00:00:00Z`).getTime()
+  const closedISO = row.statement ? row.statement.statement_date : null
+  const dueISO = row.statement ? row.statement.due_date : null
+
+  const marks = [
+    closedISO && { iso: closedISO, label: 'bill closed', hot: true },
+    { iso: null, label: 'today', now: true },
+    dueISO && { iso: dueISO, label: `${fmt(row.minimum, row.cur)} minimum`, hot: true },
+    { iso: row.cycle.closesOn, label: 'next closes' },
+    { iso: row.cycle.dueOn, label: 'and is due' },
+  ].filter(Boolean)
+
+  const today = Date.now()
+  const times = marks.map(m => (m.iso ? at(m.iso) : today))
+  const start = Math.min(...times)
+  const end = Math.max(...times)
+  const span = end - start || 1
+  const pos = t => Math.max(0, Math.min(100, ((t - start) / span) * 100))
+
   return (
-    <div className="flex items-baseline gap-3 text-[12.5px]">
-      <span className={`flex-1 ${strong ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>
-      <span className={`num ${strong ? 'font-semibold' : ''}`}>{value}</span>
+    <div className="mt-3">
+      <div className="relative h-[3px] rounded-full" style={{ background: 'var(--muted)' }}>
+        <div
+          className="absolute top-0 left-0 h-full rounded-full"
+          style={{ width: `${pos(today)}%`, background: 'var(--loss)' }}
+        />
+        {marks.map((m, i) => (
+          <span
+            key={i}
+            className="absolute size-[9px] -translate-x-1/2 rounded-full"
+            style={{
+              left: `${pos(times[i])}%`,
+              top: '-3px',
+              background: m.hot || m.now ? 'var(--loss)' : 'var(--background)',
+              border: `1.5px solid ${m.hot || m.now ? 'var(--loss)' : 'var(--border)'}`,
+            }}
+          />
+        ))}
+      </div>
+      <div className="mt-2 flex flex-wrap justify-between gap-x-3 gap-y-1">
+        {marks.map((m, i) => (
+          <span key={i} className="text-[10.5px] leading-tight">
+            <span className={m.now ? 'text-loss font-semibold' : 'num'}>
+              {m.iso ? dfmt(m.iso) : 'today'}
+            </span>
+            <span className="text-faint block">{m.label}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the card took on over the cycle that just closed.
+ *
+ * THIS IS WHY EXPENSES LAGS, and it is the only place the app can say so. Money
+ * spent on a card in July leaves your account in August, so the residual — which
+ * reads wallet balances — reports it a month late and looks wrong to anyone who
+ * lived the month. Two closing balances and the payment between them give the
+ * whole of a cycle's card activity in one subtraction, with no transaction ever
+ * entered.
+ */
+function Float({ row }) {
+  const { state } = useVantage()
+  const f = cardFloat(state, row.id)
+  if (!f) return null
+
+  if (f.reason) {
+    return (
+      <div className="border-hairline border-t pt-4">
+        <span className="eyebrow">Float, over the cycle just closed</span>
+        <p className="text-muted-foreground mt-2 mb-0 text-[12px] leading-relaxed text-pretty">
+          {f.reason === 'NO_STATEMENTS'
+            ? 'No bill recorded yet. This reads what was owed on two dates, so it needs two.'
+            : 'One bill recorded. A second gives the window — until then there is a balance but no movement, and a float from a single reading would be the balance wearing another name.'}
+        </p>
+      </div>
+    )
+  }
+
+  const rows = [
+    { label: `Owed on ${dfmt(f.from)}`, rm: f.owedBefore },
+    { label: 'Paid off it', rm: -f.paidRM, tone: 'text-gain' },
+    { label: `Owed on ${dfmt(f.to)}`, rm: f.owedAfter },
+  ]
+
+  return (
+    <div className="border-hairline border-t pt-4">
+      <span className="eyebrow">Float, over the cycle just closed</span>
+      <div className="mt-1 flex flex-wrap items-baseline gap-2.5">
+        <span className="num text-loss text-[26px] leading-none font-semibold">
+          {f.rm >= 0 ? '+' : ''}
+          {fmt(f.rm, f.cur)}
+        </span>
+        <Meta>
+          {dfmt(f.from)} &rarr; {dfmt(f.to)}
+        </Meta>
+      </div>
+      <p className="text-muted-foreground mt-2 mb-2.5 text-[12px] leading-relaxed text-pretty">
+        Owed went from {fmt(f.owedBefore, f.cur)} to {fmt(f.owedAfter, f.cur)} while{' '}
+        {fmt(f.paidRM, f.cur)} was paid off it. That difference is spending that has already
+        happened and has not left your account — the whole of a cycle&rsquo;s activity, in one
+        subtraction. No transaction was needed to know it.
+      </p>
+      <div className="grid gap-1">
+        {rows.map(r => (
+          <div key={r.label} className="flex items-baseline justify-between gap-3 text-[12px]">
+            <span className="text-muted-foreground">{r.label}</span>
+            <span className={`num ${r.tone || ''}`}>
+              {r.rm < 0 ? '\u2212' : ''}
+              {fmt(Math.abs(r.rm), f.cur)}
+            </span>
+          </div>
+        ))}
+        <div className="border-hairline flex items-baseline justify-between gap-3 border-t pt-1.5 text-[12px] font-semibold">
+          <span>Spent on the card</span>
+          <span className="num text-loss">{fmt(f.rm, f.cur)}</span>
+        </div>
+      </div>
+      <p className="text-faint m-0 mt-2.5 text-[11.5px] leading-relaxed text-pretty">
+        This is why Expenses lags: {fmt(f.rm, f.cur)} was lived in one cycle and pays in the next.
+        The residual there reports money leaving your wallet, and the card is where that promise
+        waits.
+      </p>
     </div>
   )
 }
@@ -153,9 +287,43 @@ export default function CardSheet({ row, open, onClose }) {
             </div>
             {row.cycle ? (
               <>
-                <div className="mt-2.5 grid gap-1.5">
-                  <CycleLine label="Bill closes" value={dfmt(row.cycle.closesOn)} />
-                  <CycleLine label="And falls due" value={dfmt(row.cycle.dueOn)} strong />
+                <Timeline row={row} />
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <span className="eyebrow">Minimum due</span>
+                    <div className="num text-[15px] font-semibold">{fmt(row.minimum, row.cur)}</div>
+                    <Meta>
+                      {row.minimumIsStated
+                        ? 'as the bill printed it'
+                        : '5% of retail, plus contracted instalments in full'}
+                    </Meta>
+                  </div>
+                  <div>
+                    <span className="eyebrow">Statement balance</span>
+                    <div className="num text-[15px] font-semibold">
+                      {row.statement ? fmt(row.statement.closing_balance, row.cur) : '—'}
+                    </div>
+                    <Meta>
+                      {row.statement
+                        ? `what the bill asked for on ${dfmt(row.statement.statement_date)}`
+                        : 'no bill recorded yet'}
+                    </Meta>
+                  </div>
+                  <div>
+                    {/* The rate runs on the REVOLVING band alone. A 0% instalment
+                        plan sits inside the balance and costs nothing, so charging
+                        the APR across the whole figure would invent interest. */}
+                    <span className="eyebrow">Cost of carrying</span>
+                    <div className="num text-loss text-[15px] font-semibold">
+                      {fmt(row.interestThisMonth, row.cur)}
+                      <span className="text-faint text-[11px]">/mo</span>
+                    </div>
+                    <Meta>
+                      {row.commitment.apr
+                        ? `${pct1(row.commitment.apr)} on the revolving band only`
+                        : 'no rate recorded'}
+                    </Meta>
+                  </div>
                 </div>
                 <p className="text-muted-foreground mt-2.5 mb-0 text-[12px] leading-relaxed text-pretty">
                   Anything bought today lands on that bill —{' '}
@@ -173,6 +341,8 @@ export default function CardSheet({ row, open, onClose }) {
               </p>
             )}
           </div>
+
+          <Float row={row} />
 
           <div className="border-hairline border-t pt-4">
             <div className="flex flex-wrap items-center gap-2">

@@ -998,6 +998,50 @@ try {
     console.log(`  fx         ${dated.rm.toFixed(2)} at a stored rate vs ${undated.rm.toFixed(2)} at the global one`)
   }
 
+  /* ── what a card took on, from two readings and no transactions ──────────── */
+  {
+    const { cardFloat } = await server.ssrLoadModule('/src/lib/calc.js')
+    const card = STATE.commitments.find(c => c.kind === 'REVOLVING')
+
+    const one = JSON.parse(JSON.stringify(STATE))
+    one.cardStatements = [{ id: 800, commitment_id: card.id, statement_date: ago(35),
+      due_date: ago(15), closing_balance: 1375.33, minimum_due: 68.77, interest_charged: 0,
+      fees_charged: 0, note: '', source: 'manual' }]
+    // One reading is a balance, not a movement, and must say so rather than
+    // reporting the balance as if the whole of it had been spent this cycle.
+    if (cardFloat(one, card.id).reason !== 'ONE_STATEMENT') {
+      throw new Error('cardFloat: one statement cannot make a window')
+    }
+
+    const two = JSON.parse(JSON.stringify(one))
+    // Newest first, as the model returns them.
+    two.cardStatements.unshift({ id: 801, commitment_id: card.id, statement_date: ago(5),
+      due_date: ago(-15), closing_balance: 5092.49, minimum_due: 1838.83, interest_charged: 0,
+      fees_charged: 0, note: '', source: 'manual' })
+    two.commitmentPayments = [{ id: 700, commitment_id: card.id, date: ago(33), amount: 1375.33,
+      extra_principal: 0, note: '', source: 'manual' }]
+
+    const f = cardFloat(two, card.id)
+    if (f.reason) throw new Error(`cardFloat: expected a window, got ${f.reason}`)
+    // The claim the panel prints: owed after, less owed before, plus what was
+    // paid off it. The repayment is ADDED because it reduced the balance without
+    // being spending — drop it and a month that was paid in full reads as zero
+    // activity, which is the exact opposite of what happened.
+    const expect = 5092.49 - 1375.33 + 1375.33
+    if (Math.abs(f.rm - expect) > 0.005) throw new Error(`cardFloat: ${f.rm} vs ${expect}`)
+    if (Math.abs(f.rm - 5092.49) > 0.005) throw new Error('cardFloat: a fully-paid cycle spent the closing balance')
+
+    // A payment ON the earlier closing date is already inside that balance and
+    // must not be counted again.
+    const edge = JSON.parse(JSON.stringify(two))
+    edge.commitmentPayments = [{ id: 701, commitment_id: card.id, date: ago(35), amount: 500,
+      extra_principal: 0, note: '', source: 'manual' }]
+    if (Math.abs(cardFloat(edge, card.id).rm - (5092.49 - 1375.33)) > 0.005) {
+      throw new Error('cardFloat: a payment on the closing date is already in that balance')
+    }
+    console.log(`  card float ${f.rm.toFixed(2)} from two readings and ${f.payments.length} payment, no transactions`)
+  }
+
   // The month is shared, and that is the whole reason six screens are allowed to
   // exist. Stepping it on one must move it on every other, or the statement says
   // August while the log says July — which is exactly what the single screen's
