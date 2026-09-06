@@ -12,10 +12,17 @@
  * because a commitment is a commitment; Credit cards renders REVOLVING and Loans
  * renders LOAN, each with the room the single screen could not give them.
  *
- * The card-only callbacks are optional. On Loans and Commitments they are simply
- * not passed, and the card branch never runs to miss them.
+ * THE CARD-ONLY ACTIONS ARE NOT ALWAYS AVAILABLE, and this used to be wrong. A
+ * card row appears on Commitments too — every kind does, because a commitment is
+ * a commitment — so the branch DOES run there, and calling a callback that screen
+ * never passed threw "r is not a function" and left the button doing nothing.
+ *
+ * Where the owning screen has not passed them, the row offers to go to the screen
+ * that has instead. That is also the better answer: adding an instalment plan
+ * from a list of every obligation is a form on a screen that is not about cards,
+ * and the plan form's own limit check reads figures Commitments does not show.
  */
-import { FileTextIcon, PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
+import { ChevronRightIcon, FileTextIcon, PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -130,7 +137,18 @@ function CardHeadroom({ r }) {
   )
 }
 
-export default function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onRemovePlan, onAddStatement, onOpenSheet }) {
+export default function CommitmentRow({
+  r,
+  onEdit,
+  onRemove,
+  onAddPlan,
+  onRemovePlan,
+  onAddStatement,
+  onOpenSheet,
+  // Given by screens that show a kind they do not own — Commitments shows
+  // cards and loans, and hands them back to the screen that does.
+  onOpenOwner,
+}) {
   const c = r.commitment
 
   return (
@@ -256,7 +274,7 @@ export default function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onRemove
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
-        {r.kind === 'REVOLVING' ? (
+        {r.kind === 'REVOLVING' && onAddPlan && onAddStatement ? (
           <>
             <RowAction
               icon={PlusIcon}
@@ -270,13 +288,22 @@ export default function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onRemove
             />
           </>
         ) : null}
+        {onOpenOwner && (r.kind === 'REVOLVING' || r.kind === 'LOAN') ? (
+          <RowAction
+            icon={ChevronRightIcon}
+            label={r.kind === 'REVOLVING' ? `Open ${r.name} on Credit cards` : `Open ${r.name} on Loans`}
+            onClick={() => onOpenOwner(r)}
+          />
+        ) : null}
         <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
         <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
       </div>
 
       {r.kind === 'REVOLVING' && r.plans?.length ? (
         <>
-          <CardPlans r={r} onEditPlan={onAddPlan} onRemovePlan={onRemovePlan} />
+          {onAddPlan && onRemovePlan ? (
+            <CardPlans r={r} onEditPlan={onAddPlan} onRemovePlan={onRemovePlan} />
+          ) : null}
           <CardHeadroom r={r} />
         </>
       ) : null}
