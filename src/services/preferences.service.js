@@ -41,6 +41,23 @@ const PNL_BASIS = ['price', 'net', 'gross'];
 const DASHBOARD_THEME = ['income', 'equity'];
 
 /**
+ * How the Money Overview draws the month.
+ *
+ *   waterfall - income at the top, each obligation taken off it in turn, and what
+ *               is left at the bottom. Reads downward and closes against the
+ *               measured wallet movement, which is what makes it checkable.
+ *   flow      - arrives on the left, promised in the middle, left over on the
+ *               right. Answers "where did it go" spatially rather than
+ *               arithmetically.
+ *
+ * BOTH DRAW THE SAME FIGURES. money-redesign-plan.md 2.4 is the standing warning
+ * behind that sentence: the two views once disagreed about what share of income a
+ * card minimum was, because each carried its own copy of the number. Neither view
+ * may hold a figure the other does not derive the same way.
+ */
+const OVERVIEW_MODE = ['waterfall', 'flow'];
+
+/**
  * What the owner means to spend in a month, in RM, or null for no target.
  *
  * NULL IS THE DEFAULT AND IT MATTERS. expenses-plan.md §7 puts a target last and
@@ -61,11 +78,18 @@ const ALLOWED = {
   pnlBasis: v => (PNL_BASIS.includes(v) ? null : `pnlBasis must be one of: ${PNL_BASIS.join(', ')}`),
   dashboardTheme: v =>
     DASHBOARD_THEME.includes(v) ? null : `dashboardTheme must be one of: ${DASHBOARD_THEME.join(', ')}`,
+  overviewMode: v =>
+    OVERVIEW_MODE.includes(v) ? null : `overviewMode must be one of: ${OVERVIEW_MODE.join(', ')}`,
   expenseTargetRM: v =>
     isTarget(v) ? null : 'expenseTargetRM must be a positive number, or null for no target',
 };
 
-const DEFAULTS = { pnlBasis: 'price', dashboardTheme: 'income', expenseTargetRM: null };
+const DEFAULTS = {
+  pnlBasis: 'price',
+  dashboardTheme: 'income',
+  overviewMode: 'waterfall',
+  expenseTargetRM: null,
+};
 
 /** Stored preferences merged over the defaults, so a caller always gets a full object. */
 async function get() {
@@ -91,4 +115,4 @@ async function update(patch) {
   return next;
 }
 
-module.exports = { get, update, PNL_BASIS, DASHBOARD_THEME, DEFAULTS };
+module.exports = { get, update, PNL_BASIS, DASHBOARD_THEME, OVERVIEW_MODE, DEFAULTS };

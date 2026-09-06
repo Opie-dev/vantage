@@ -437,7 +437,8 @@ try {
   )
 
   // every screen must mount and render something
-  const SCREENS = ['dashboard', 'portfolio', 'history', 'calendar', 'goals', 'assets', 'money', 'settings']
+  const SCREENS = ['dashboard', 'portfolio', 'history', 'calendar', 'goals', 'assets',
+    'overview', 'income', 'commitments', 'cards', 'loans', 'expenses', 'settings']
   for (const id of SCREENS) {
     await tick(() => ctl.setTab(id))
     const panes = document.querySelectorAll('[data-slot="tabs-content"][data-state="active"]')
@@ -536,7 +537,14 @@ try {
     // The money layer. The fixture's salary lands on the 25th and the loans on
     // the 1st and 5th, so a grid with no money marks means moneyByDay() stopped
     // producing them. 'across the month' is the in/out/net line.
-    ['calendar', ['Annual income', 'Income by month', 'across the month', 'Not on the grid']],
+    // 'Not on the grid' is deliberately NOT asserted: it renders only when the
+    // month has money with no date on it, and the fixture's irregular source
+    // lands on ago(5). For most of a month that is the previous month and the
+    // note appears; in the first days of one it lands in THIS month, moneyMonthNotes()
+    // correctly suppresses the averaged line beside the real payment, and the
+    // string vanishes. Asserting it made the suite fail on the 1st through the 5th
+    // — the same date-dependence a888f22 took out of the Thursday case.
+    ['calendar', ['Annual income', 'Income by month', 'across the month']],
     // Balances are derived, so these are the arithmetic on screen rather than
     // anything the fixture states: ASB 1000 - 12 + 3588, TH 742.30 - 200,
     // EPF 1955. A regression in assetBalance() shows up here as a wrong string.
@@ -570,13 +578,20 @@ try {
     // proves the month cannot be closed without a reading — the fixture has no
     // wallet — and 'Set a target' that an unset target is a state rather than an
     // invented figure.
-    ['money', ['Governs both halves', 'What happened to the money',
-      'Mark the account you spend from', 'The other question', 'forward-looking, not Sep',
-      'Net income', 'RM 8,719.50', '= Uncommitted', 'RM 4,051.50', 'RM 4,668.00',
-      'RM 2,868.00', 'Income · known in advance', 'Commitments · known in advance',
-      'Spending · what was actually spent', 'RM 285.30 logged', 'Logged spend · 12 months',
-      'Set a target', 'Day by day', 'By group', 'Food', 'Transport', 'Groceries',
-      'Every entry', 'Jaya Grocer']],
+    // Six screens where there was one (money-redesign-plan.md §3). Each is
+    // asserted on something only it can render, so a screen quietly rendering
+    // another's content fails here rather than looking plausible.
+    ['overview', ['Governs every Money screen', 'What happened to the money',
+      'The other question', 'Net income', '= Uncommitted', 'RM 4,668.00', 'waterfall', 'flow']],
+    ['income', ['Net, a month', 'Of that, firm', 'Of that, estimated', 'Sources',
+      'RM 8,719.50', 'a salary is a floor'.replace('a s', 'A s')]],
+    ['commitments', ['Committed run rate', 'Falling in', 'Commitments', 'All', 'Recurring',
+      'RM 4,051.50']],
+    ['cards', ['Minimums, a month', 'Owed today', 'Actually available', 'The accounts']],
+    ['loans', ['Instalments, a month', 'Of that, spent', 'Of that, kept', 'Outstanding']],
+    ['expenses', ['Spending · what was actually spent', 'RM 285.30 logged',
+      'Logged spend · 12 months', 'Set a target', 'Day by day', 'By group', 'Food',
+      'Transport', 'Groceries', 'Every entry', 'Jaya Grocer']],
     // The payoff: goal budgets checked against real uncommitted cash. RM 1,800
     // is the fixture's three budgets; RM 4,668.00 is income less commitments,
     // both derived. 'all funded' proves the allocation ran rather than the card
@@ -732,50 +747,29 @@ try {
     console.log(`  drift      ${d.length} gap from the fixture, free-share case detected, residue ignored`)
   }
 
-  // Income and Commitments fold away by default: the statement and the log are
-  // the daily read, the two lists are setup. Folding is only acceptable if
-  // unfolding gives everything back, so this asserts the row detail the old
-  // two-card Money screen showed — and, by finding the headers at all, that the
-  // merge did not quietly drop a section.
+  // The month is shared, and that is the whole reason six screens are allowed to
+  // exist. Stepping it on one must move it on every other, or the statement says
+  // August while the log says July — which is exactly what the single screen's
+  // "Governs both halves" bar existed to prevent.
   {
-    await tick(() => ctl.setTab('money'))
-    const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
-    const header = re =>
-      [...pane().querySelectorAll('button[aria-expanded]')].find(b => re.test(b.textContent))
-
-    const FOLDED = [
-      [/Income · known in advance/, 'income',
-        ['Deducted from your pay', 'Paid on top by your employer', '3-month average',
-          'recorded payment']],
-      [/Commitments · known in advance/, 'commitments',
-        ['flat = 6.3% real', 'no balance, pure expense', 'of instalments', 'Debt falling']],
-    ]
-    for (const [re, what, needed] of FOLDED) {
-      const btn = header(re)
-      if (!btn) throw new Error(`money: no ${what} section header`)
-      for (const n of needed) {
-        if (pane().textContent.includes(n)) {
-          throw new Error(`money: "${n}" is visible while ${what} is folded`)
-        }
-      }
-      await tick(() => btn.click())
-      for (const n of needed) {
-        if (!pane().textContent.includes(n)) {
-          throw new Error(`money: unfolding ${what} did not bring back "${n}"`)
-        }
-      }
+    await tick(() => ctl.setTab('expenses'))
+    // Off the Previous-month button rather than a class: the label's own classes
+    // carry Tailwind's bracket syntax, which is not a valid CSS selector.
+    const monthText = () => {
+      const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+      const prev = pane?.querySelector('[aria-label="Previous month"]')
+      return prev?.nextElementSibling?.textContent || ''
     }
-    console.log('  sections   income and commitments fold away and come back whole')
-
-    // One month control for the whole screen. The statement and the log read the
-    // same month by construction now that they share a component; what is left to
-    // prove is that the control actually moves it.
-    const monthOf = () => (pane().textContent.match(/\w+ \d{4}/) || [''])[0]
-    const before = monthOf()
-    await tick(() => pane().querySelector('button[aria-label="Previous month"]').click())
-    const moved = monthOf()
-    if (moved === before) throw new Error('money: the month control did not move')
-    console.log(`  one screen statement and log, moved together to ${moved}`)
+    const before = monthText()
+    await tick(() => ctl.stepMoneyMonth(-1))
+    const after = monthText()
+    if (!before || before === after) throw new Error(`month did not step: ${before} -> ${after}`)
+    await tick(() => ctl.setTab('overview'))
+    if (monthText() !== after) {
+      throw new Error(`month is not shared: expenses says ${after}, overview says ${monthText()}`)
+    }
+    await tick(() => ctl.stepMoneyMonth(1))
+    console.log(`  month      shared across the Money screens (${after} on both)`)
   }
 
   // Expenses, and the reconciliation that makes a hand-kept log defensible.

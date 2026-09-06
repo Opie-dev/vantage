@@ -663,10 +663,10 @@ function RatesCard() {
  * THE IMPORTER NEVER GUESSES, and this is the list it consults instead. A
  * merchant with no rule here stays unmatched and is reported back rather than
  * filed — because a wrong category is worse than an empty one: the group totals
- * on Money are read as fact, and nothing would ever flag them.
+ * on Expenses are read as fact, and nothing would ever flag them.
  *
  * The three actions are three different mistakes being prevented. EXPENSE books
- * it. COMMITMENT records that it is ALREADY counted on the Money screen and books
+ * it. COMMITMENT records that it is ALREADY counted on Commitments and books
  * nothing, which is what stops an electricity bill on a card being subtracted from
  * income twice. IGNORE is for what was never spending — a cash-out moves money
  * into your own account, and logging it would invent living costs.
