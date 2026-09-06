@@ -302,11 +302,74 @@ def check(header, rows):
     return out
 
 
+def post_statement(base, card_id, header, rows):
+    """
+    Send the header to /api/commitments/:id/statements — and ONLY the header.
+
+    The statement row is the load-bearing one: the float reads two closing
+    balances and nothing else, so importing this alone already makes the month's
+    spending figure exact. The transaction rows are a convenience for the expense
+    log and need a human, because the statement genuinely does not contain the
+    answer: an electricity bill on a card is already a RECURRING commitment and
+    booking it again would count it twice, a cash-out is not spending at all, and
+    a payment gateway hides the merchant it was paid to. See cards-plan.md §8.
+    """
+    import urllib.error
+    import urllib.request
+
+    card = [c for c in header['cards'] if c['balance'] > 0]
+    if not card:
+        sys.exit('no card on this statement carries a balance — nothing to record')
+    card = card[-1]
+
+    charges = [r for r in rows if r['kind'] in ('retail', 'instalment')]
+    body = {
+        'statement_date': header['statement_date'],
+        'due_date': header['due_date'],
+        'closing_balance': card['balance'],
+        'minimum_due': card['minimum'],
+        # Interest and fees are not separated out by this parser yet: they sit in
+        # the retail rows under their own descriptions. Left at zero rather than
+        # guessed, so the card sheet shows an honest blank.
+        'interest_charged': 0,
+        'fees_charged': 0,
+        'source': 'import',
+        'note': f'imported from {header["statement_date"]}',
+    }
+    req = urllib.request.Request(
+        f'{base.rstrip("/")}/api/commitments/{card_id}/statements',
+        data=json.dumps(body).encode(),
+        headers={'content-type': 'application/json'},
+        method='POST')
+    try:
+        with urllib.request.urlopen(req) as r:
+            out = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        sys.exit(f'the server refused it: {e.code} {e.read().decode(errors="replace")[:300]}')
+    except urllib.error.URLError as e:
+        sys.exit(f'could not reach {base}: {e.reason}')
+
+    print(f'recorded statement {out["statement_date"]}, closing {out["closing_balance"]:,.2f}, '
+          f'minimum {out["minimum_due"]:,.2f}')
+
+    plans = [r for r in rows if r['kind'] == 'instalment']
+    spend = [r for r in charges if r.get('spending_candidate')]
+    print(f'\nNOT sent, and deliberately:')
+    print(f'  {len(plans)} instalment line(s) - match these against the card\'s plans by hand once;')
+    print(f'     the bank prints its own counter, so a mismatch means a deferred or missed month')
+    print(f'  {len(spend)} purchase(s) - each needs a category, an existing commitment, or nothing.')
+    print(f'     An unmatched merchant is left uncategorised rather than guessed at.')
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[1])
     ap.add_argument('pdf')
     ap.add_argument('--password', help='e-statement password, if the file is locked')
     ap.add_argument('--text', action='store_true', help='dump what pdftotext saw and stop')
+    ap.add_argument('--post', metavar='BASE_URL',
+                    help='record the statement against a card, e.g. http://127.0.0.1:8123')
+    ap.add_argument('--card', type=int, metavar='ID',
+                    help='the REVOLVING commitment id to record it against')
     args = ap.parse_args()
 
     text = extract(args.pdf, args.password)
@@ -321,13 +384,29 @@ def main():
 
     rows = parse_rows(lines, header['statement_date'])
     gates = check(header, rows)
+    failed = [g for g in gates if not g['ok']]
+
+    if args.post:
+        if not args.card:
+            sys.exit('--post needs --card <id>: which card account is this statement for?')
+        # The gates run BEFORE anything is sent, every time. An import that does
+        # not add up is refused rather than corrected.
+        for g in gates:
+            print(('PASS' if g['ok'] else 'FAIL'),
+                  f"{g['gate']:<8} expected {g['expected']:>12,.2f}  derived {g['derived']:>12,.2f}")
+        if failed:
+            print('\nGATE FAILED — nothing was sent.', file=sys.stderr)
+            sys.exit(2)
+        print()
+        post_statement(args.post, args.card, header, rows)
+        return
 
     print(json.dumps({'statement': header, 'gates': gates, 'rows': rows},
                      indent=2, ensure_ascii=False))
 
     # Exit non-zero on a failed gate so a shell pipeline stops rather than
     # importing rows nobody has checked.
-    if any(not g['ok'] for g in gates):
+    if failed:
         print('\nGATE FAILED — do not import these rows.', file=sys.stderr)
         sys.exit(2)
 
