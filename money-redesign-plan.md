@@ -289,29 +289,36 @@ Note that viewers on the shared link stay on the pinned pre-fix version until th
 **Phase 1 — Settle the shape.** **Done** — six rail items, one standalone calendar, both overview
 modes. See §3.
 
-**Phase 2 — The Import screen.** §4(e). Backend complete; add the `api.js` caller and build the
+**Phase 2 — The Import screen.** **Done** (#27). §4(e). Backend complete; add the `api.js` caller and build the
 overlay — the three checks and the refusal, recorded-without-asking, plans matched against the
 bank's own counter, known merchants, and the gateway rows left uncategorised with the reason
 printed. Wire "decided once, remembered after" to the existing `merchant_rules` CRUD. Independent
 of Phase 1, so it can run in parallel with it or before it.
 
-**Phase 3 — Split Money into pages.** Extract Income, Commitments, Cards and Loans out of
+**Phase 3 — Split Money into pages.** **Done** (#31). Extract Income, Commitments, Cards and Loans out of
 `Money.jsx`; promote `Spending.jsx` to Expenses. Build the Overview — the segment strip and the
 waterfall, which `calc.js:3106` already computes. Rail group, hash routes, redirects for the old
 anchors. Only after Phase 1.
 
-**Phase 4 — Cards, in depth.** Cycle, float, utilisation bands, statements and plans per account —
+**Phase 4 — Cards, in depth.** **Done** (#29). Cycle, float, utilisation bands, statements and plans per account —
 all derivable today from `cardCycle`, `floatFor`, `cardMinimum`, `liveStatement`, `planRows`. The
 add-plan overlay with the limit refusal (limit − billed − unbilled instalments, which
 `planRows().blocked` already gives). The pay-this-card sheet, §4(d).
 
-**Phase 5 — Loans and item assets.** §4(a): permit `kind = 'ITEM'`, un-hardcode `itemsTracked`,
+**Phase 5 — Loans and item assets.** **Done** (#30). §4(a): permit `kind = 'ITEM'`, un-hardcode `itemsTracked`,
 and build the equity line. Loan detail — the split instalment, the projected balance, the
 flat-rate warning. Land the §2.7 decision here, since it changes net worth.
 
-**Phase 6 — Commitments and income gaps.** §4(b) collected-through, §4(c) per-date FX. Show the
-annual amortisation both ways — run rate and falling-this-month — which is also the permanent fix
-for §2.1 and §2.2.
+**Phase 6 — Commitments and income gaps.** **Mostly done.** §4(b) collected-through shipped: a
+recurring charge names the card account that collects it, which adds nothing to the month and moves
+the day the money leaves. The two bases are now shown together on Commitments with the difference
+named and broken down, which is the permanent fix for §2.1 and §2.2 — a single figure labelled
+"committed" is exactly how one basis silently became the other.
+
+**§4(c) per-date FX is deferred, and not for want of time.** Storing the pair on the event is the
+easy half; the open question in §6 is where a daily rate comes from, and a wrong rate kept forever
+is worse than one global rate that is visibly approximate. It wants a decision before it wants
+code.
 
 **Phase 7 — Expenses.** Mostly shipped: `spendingFor`, `expensesFor` and `expenseHistory` already
 produce everything on the page. What is new is the group drill-down and the "two bases, and the

@@ -52,6 +52,19 @@ export default function Commitments() {
   const kinds = TABS.find(t => t.id === tab)?.kinds
   const shown = kinds ? out.rows.filter(r => kinds.includes(r.kind)) : out.rows
 
+  // The two bases, and what stands between them.
+  //
+  // money-redesign-plan.md §2.1 and §2.2 are both this gap going unnamed. The run
+  // rate spreads an annual charge over twelve months; what actually fell is
+  // measured over the window two wallet readings bracket. Neither is wrong and
+  // they answer different questions, so the screen shows both and says what the
+  // difference is made of — a single figure labelled "committed" is how one basis
+  // silently becomes the other.
+  const spread = out.rows.filter(r => r.kind === 'RECURRING' && r.everyMonths > 1)
+  const spreadRM = spread.reduce((t, r) => t + r.monthlyOut, 0)
+  const fellRM = ex.spend?.reason ? null : ex.spend.committedRM
+  const gapRM = fellRM == null ? null : out.monthlyOutRM - fellRM
+
   if (!out.rows.length) {
     return (
       <div className="grid gap-4">
@@ -97,11 +110,45 @@ export default function Commitments() {
             <Meta>
               {ex.spend?.reason
                 ? 'needs a wallet reading bracketing the month'
-                : 'what these commitments actually took out of this month'}
+                : 'measured, not averaged — what these actually took out of this month'}
             </Meta>
           </CardContent>
         </Card>
       </div>
+
+      {fellRM != null && Math.abs(gapRM) > 0.005 ? (
+        <Card>
+          <CardContent className="grid gap-1.5 px-4">
+            <span className="eyebrow">Why the two differ</span>
+            <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+              <span className="text-muted-foreground">Run rate, a usual month</span>
+              <span className="num">{fmt(out.monthlyOutRM, 'MYR')}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+              <span className="text-muted-foreground">What actually fell in {monthShort}</span>
+              <span className="num">{fmt(fellRM, 'MYR')}</span>
+            </div>
+            <div className="border-hairline flex items-baseline justify-between gap-3 border-t pt-1.5 text-[12.5px] font-semibold">
+              <span>Difference</span>
+              <span className="num">{fmt(Math.abs(gapRM), 'MYR')}</span>
+            </div>
+            <p className="text-faint m-0 mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-pretty">
+              {spread.length ? (
+                <>
+                  {fmt(spreadRM, 'MYR')} a month of it is{' '}
+                  {spread.map(r => r.name).join(', ')} — charged every{' '}
+                  {spread.length === 1 ? `${spread[0].everyMonths} months` : 'few months'} and
+                  spread here, because which month it lands in is not recorded and dating it would
+                  be inventing the date.{' '}
+                </>
+              ) : null}
+              The rest is what a card was actually paid, which is anywhere between its minimum and
+              its whole bill. Both figures above are right; they answer different questions, and a
+              single figure labelled &ldquo;committed&rdquo; would answer neither.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="min-w-0 gap-0 overflow-hidden py-0">
         <div className="flex flex-wrap items-center gap-2.5 px-4 py-3">

@@ -2712,8 +2712,10 @@ function CommitmentDialog({ prefill }) {
   const [showRate, setShowRate] = useState(prefill.rate != null)
   const str = (v, fallback = '') => (v == null ? fallback : String(v))
   const items = state.assets.filter(a => a.kind === 'ITEM' && !a.archived)
+  const cardAccounts = state.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
   const [f, setF] = useState({
     asset_id: prefill.asset_id == null ? '' : String(prefill.asset_id),
+    collected_by_id: prefill.collected_by_id == null ? '' : String(prefill.collected_by_id),
     kind: prefill.kind || 'LOAN',
     name: str(prefill.name),
     lender: str(prefill.lender),
@@ -2787,7 +2789,15 @@ function CommitmentDialog({ prefill }) {
               // a snapshot and the screen has to be able to say how old it is.
               balance_as_of: f.balance === '' ? null : today(),
             }
-          : { ...common, amount: num(f.amount), every_months: Number(f.every_months) }
+          : {
+              ...common,
+              amount: num(f.amount),
+              every_months: Number(f.every_months),
+              // Where the money goes out through. It adds nothing to the month —
+              // the charge is counted once, here — but a charge a card collects
+              // leaves when that bill is paid, not on its own due day.
+              collected_by_id: f.collected_by_id === '' ? null : Number(f.collected_by_id),
+            }
     // kind is not sent on an edit: the shape decides which columns are
     // meaningful, and changing it would leave a loan's fields on a card.
     const ok = editing
@@ -3034,6 +3044,31 @@ function CommitmentDialog({ prefill }) {
                 </SelectContent>
               </Select>
             </Field>
+            {cardAccounts.length ? (
+              <Field
+                label="Collected through"
+                htmlFor="cm-collected"
+                className="col-span-2"
+                hint="Adds nothing to the month — this charge is counted once, here. What it changes is the day the money leaves: a direct debit goes on its own due day, and a card charge goes when that bill is paid."
+              >
+                <Select
+                  value={f.collected_by_id}
+                  onValueChange={v => set('collected_by_id', v === NONE ? '' : v)}
+                >
+                  <SelectTrigger id="cm-collected" className="w-full">
+                    <SelectValue placeholder="Direct debit or transfer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Direct debit or transfer</SelectItem>
+                    {cardAccounts.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
           </>
         )}
 

@@ -63,6 +63,12 @@ function checkShape(kind, f) {
   if (f.asset_id != null && kind !== 'LOAN') {
     throw badRequest(`a ${kind} does not buy anything — only a loan can be linked to an asset`);
   }
+  // Only a recurring charge is collected through something. A loan instalment
+  // goes where the agreement says, and a card collecting a card is a loop.
+  if (f.collected_by_id != null && kind !== 'RECURRING') {
+    throw badRequest(
+      `a ${kind} is not collected through a card — only a recurring charge can be`);
+  }
   if (kind === 'LOAN') {
     // Either will do, because each gives the other. A hire-purchase statement
     // shows the instalment and never the amount financed, so demanding the
@@ -132,6 +138,28 @@ function checkShape(kind, f) {
  * and with the wrong message, because that check runs before the one that would
  * have caught the real problem. Validate what will actually be stored.
  */
+/**
+ * The half of the collected-through rule a CHECK cannot enforce: the target has
+ * to be a card account, and it has to exist.
+ *
+ * Separate from checkShape() because it needs a query, and checkShape is
+ * deliberately synchronous and pure — everything it decides, it decides from the
+ * row in front of it.
+ */
+async function checkCollector(id, collectedById) {
+  if (collectedById == null) return;
+  if (collectedById === id) throw badRequest('a charge cannot collect itself');
+  const target = await commitments.findById(collectedById);
+  if (!target) throw notFound('no such card account');
+  if (target.kind !== 'REVOLVING') {
+    throw badRequest(
+      `${target.name} is a ${target.kind}, and only a card account collects a charge`);
+  }
+  if (!target.active) {
+    throw badRequest(`${target.name} has ended — a closed account collects nothing`);
+  }
+}
+
 async function create(body) {
   const { kind } = body;
   if (!KINDS.includes(kind)) throw badRequest(`kind must be one of: ${KINDS.join(', ')}`);
@@ -160,6 +188,9 @@ async function create(body) {
     // What the loan bought, if it is tracked. Only a LOAN may carry one —
     // checkShape enforces it, as does commitments_asset_is_loan_check.
     asset_id: body.asset_id ?? null,
+    // The card account that collects this charge, if one does. Adds no
+    // money to the month — it says which day the money leaves.
+    collected_by_id: body.collected_by_id ?? null,
     amount: body.amount ?? null,
     every_months: body.every_months ?? 1,
     sort_order: body.sort_order ?? 0,
@@ -167,6 +198,7 @@ async function create(body) {
 
   checkDueDay(f.due_day);
   checkShape(kind, f);
+  await checkCollector(null, f.collected_by_id);
 
   return commitments.insert({
     kind,
@@ -176,7 +208,8 @@ async function create(body) {
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
     statementDay: f.statement_day, limitRelease: f.limit_release, assetId: f.asset_id,
-    amount: f.amount, everyMonths: f.every_months, sortOrder: f.sort_order,
+    amount: f.amount, everyMonths: f.every_months, collectedById: f.collected_by_id,
+    sortOrder: f.sort_order,
   });
 }
 
@@ -216,6 +249,8 @@ async function update(id, body) {
     statement_day: body.statement_day === undefined ? c.statement_day : body.statement_day,
     limit_release: body.limit_release === undefined ? c.limit_release : body.limit_release,
     asset_id: body.asset_id === undefined ? c.asset_id : body.asset_id,
+    collected_by_id:
+      body.collected_by_id === undefined ? c.collected_by_id : body.collected_by_id,
     amount: body.amount === undefined ? c.amount : body.amount,
     every_months: body.every_months ?? c.every_months,
     active: body.active === undefined ? c.active : body.active,
@@ -229,6 +264,7 @@ async function update(id, body) {
   if (!optionalNumber(f.min_payment_pct)) throw badRequest('min_payment_pct must be a number');
   checkDueDay(f.due_day ?? null);
   checkShape(c.kind, f);
+  await checkCollector(id, f.collected_by_id);
 
   await commitments.update(id, {
     name: String(f.name).trim(), lender: f.lender, currency: f.currency,

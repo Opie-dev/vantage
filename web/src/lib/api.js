@@ -158,11 +158,17 @@ export const deleteAssetEntry = (assetId, entryId) =>
 /**
  * What you owe and what leaves each month. The repayment schedule is NOT sent —
  * it is derived from these five fields (see calc.js).
+ * A RECURRING charge may carry `collected_by_id` — the REVOLVING account that
+ * collects it. It adds NOTHING to the month: the charge is counted once, and the
+ * statement importer books a matched merchant as nothing at all. What it says is
+ * which day the money leaves, since a card charge goes when that bill is paid.
+ *
  * A LOAN may carry `asset_id` — what it bought. Optional, and the server refuses
  * it on any other kind, because only a loan buys a thing and a card pointing at
  * an asset is how a wrong net worth starts.
  *
  * @param {{kind:'LOAN'|'REVOLVING'|'RECURRING', name:string, asset_id?:number|null,
+ *          collected_by_id?:number|null,
  *          principal?:number, rate?:number, rate_type?:'FLAT'|'REDUCING',
  *          term_months?:number, started_on?:string, instalment?:number|null,
  *          apr?:number, balance?:number, balance_as_of?:string, credit_limit?:number,

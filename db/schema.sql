@@ -302,6 +302,9 @@ CREATE TABLE public.commitments (
     statement_day integer,
     limit_release text,
     asset_id integer,
+    collected_by_id integer,
+    CONSTRAINT commitments_collected_is_recurring_check CHECK (((collected_by_id IS NULL) OR (kind = 'RECURRING'::text))),
+    CONSTRAINT commitments_collected_not_self_check CHECK (((collected_by_id IS NULL) OR (collected_by_id <> id))),
     CONSTRAINT commitments_asset_is_loan_check CHECK (((asset_id IS NULL) OR (kind = 'LOAN'::text))),
     CONSTRAINT commitments_due_day_check CHECK (((due_day IS NULL) OR ((due_day >= 1) AND (due_day <= 31)))),
     CONSTRAINT commitments_kind_check CHECK ((kind = ANY (ARRAY['LOAN'::text, 'REVOLVING'::text, 'RECURRING'::text]))),
@@ -1011,6 +1014,13 @@ CREATE INDEX commitments_asset_idx ON public.commitments USING btree (asset_id);
 
 
 --
+-- Name: commitments_collected_by_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX commitments_collected_by_idx ON public.commitments USING btree (collected_by_id);
+
+
+--
 -- Name: merchant_rules_match_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1143,6 +1153,14 @@ ALTER TABLE ONLY public.prices
 
 ALTER TABLE ONLY public.commitments
     ADD CONSTRAINT commitments_asset_id_fkey FOREIGN KEY (asset_id) REFERENCES public.assets(id) ON DELETE SET NULL;
+
+
+--
+-- Name: commitments commitments_collected_by_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.commitments
+    ADD CONSTRAINT commitments_collected_by_id_fkey FOREIGN KEY (collected_by_id) REFERENCES public.commitments(id) ON DELETE SET NULL;
 
 
 --

@@ -3081,6 +3081,17 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
 
       // RECURRING — no balance, and every ringgit of it is spent.
       const per = c.every_months || 1
+      // The card account that collects it, if one does. It adds NOTHING to the
+      // month: the charge is counted once, here, and the statement importer books
+      // a matched merchant as nothing at all. What it changes is the day the money
+      // leaves — a charge on direct debit goes on its own due day, and the same
+      // charge on a card goes when that card's bill is paid, up to five weeks
+      // later. Both are the same commitment costing the same money on two
+      // different dates, and only one of them was ever drawn correctly.
+      const collector =
+        c.collected_by_id == null
+          ? null
+          : (S.commitments || []).find(x => x.id === c.collected_by_id) || null
       return {
         ...base,
         monthlyOut: c.amount / per,
@@ -3089,6 +3100,11 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
         everyMonths: per,
         interestThisMonth: 0,
         principalThisMonth: 0,
+        collectedBy: collector,
+        // Which day it actually leaves. The card's due day when a card collects
+        // it, its own otherwise — and null stays null rather than becoming a
+        // guess, because a charge with no day is a charge with no day.
+        leavesOnDay: collector ? (collector.due_day ?? null) : (c.due_day ?? null),
       }
     })
     .sort((a, b) => b.monthlyOut - a.monthlyOut)

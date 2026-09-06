@@ -22,7 +22,7 @@ import { PlusIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { commitmentsTotal } from '@/lib/calc'
+import { commitmentRows, commitmentsTotal } from '@/lib/calc'
 import { fmt } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
@@ -72,6 +72,10 @@ export default function Cards() {
 
   const cards = out.rows.length
   const withLimit = out.rows.filter(r => r.commitment.credit_limit)
+  // Recurring charges these accounts collect. They are counted on Commitments and
+  // NOT here — this panel says where the money goes out through, never what it
+  // costs, which is why it prints no total of its own alongside the ones above.
+  const collected = commitmentRows(state).filter(r => r.collectedBy)
 
   return (
     <div className="grid gap-4">
@@ -142,6 +146,45 @@ export default function Cards() {
               Room free on one account cannot pay another&rsquo;s bill — it can only move the debt,
               usually at a worse rate. A combined total would make the tightest account vanish
               inside it, which is the one error this page exists to prevent.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {collected.length ? (
+        <Card>
+          <CardContent className="grid gap-2 px-4">
+            <span className="eyebrow">Which account collects what</span>
+            {out.rows.map(card => {
+              const mine = collected.filter(r => r.collectedBy.id === card.id)
+              if (!mine.length) return null
+              return (
+                <div key={card.id} className="grid gap-1">
+                  <Meta>
+                    {card.name} · leaves on the {card.commitment.due_day ?? '—'}
+                  </Meta>
+                  {mine.map(r => (
+                    <div
+                      key={r.id}
+                      className="flex flex-wrap items-baseline justify-between gap-2 text-[12.5px]"
+                    >
+                      <span>
+                        {r.name}
+                        {r.everyMonths > 1 ? (
+                          <Meta className="ml-1.5">every {r.everyMonths} months</Meta>
+                        ) : null}
+                      </span>
+                      <span className="num">{fmt(r.monthlyOut, r.cur)}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+            <p className="text-faint m-0 mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-pretty">
+              These are already subtracted from income on Commitments and are not added again here
+              — this says where the money goes out through, not what it costs. Move a direct debit
+              to the other account and the day it leaves moves with it, which is the whole reason
+              it is stored per account rather than per charge.
             </p>
           </CardContent>
         </Card>
