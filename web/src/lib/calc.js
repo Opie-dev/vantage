@@ -3363,8 +3363,10 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
       const plans = planRows(S, c, nowISO)
       // A statement covering this due date turns the amount from a guess into a
       // fact — the bank did the arithmetic and printed it.
+      // `monthKey` is the local STRING for this month, not the module-level
+      // helper of the same name — it is shadowed throughout this function.
       const stmt = (S.cardStatements || [])
-        .filter(s => s.commitment_id === c.id && s.due_date.slice(0, 7) === monthKey(year, monthIndex))
+        .filter(s => s.commitment_id === c.id && s.due_date.slice(0, 7) === monthKey)
         .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))[0]
 
       if (stmt && stmt.minimum_due != null) {
