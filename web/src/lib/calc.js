@@ -3359,6 +3359,60 @@ export function loanEquity(S, commitment, opts = {}) {
 }
 
 /**
+ * What one card took on over the cycle that just closed.
+ *
+ * THE SUBTRACTION THAT EXPLAINS WHY EXPENSES LAGS. Money spent on a card in July
+ * leaves your account in August, so the residual — which reads wallet balances —
+ * reports it a month late and looks wrong to anyone who lived the month. This is
+ * that gap, per card, in one line:
+ *
+ *   owed at the close − owed at the previous close + what was paid between
+ *
+ * The repayment has to be added back because it reduced what is owed without
+ * being spending; what is left is purchases and charges. No transaction log is
+ * needed for it — two closing balances and the payments between them are enough,
+ * which is the whole reason card_statements exists as dated readings rather than
+ * as one mutable balance column.
+ *
+ * TWO STATEMENTS OR NOTHING. With one bill there is no window, and a float
+ * computed from a single reading would be the balance wearing another name.
+ * Returns null and the screen says what is missing rather than drawing a figure
+ * that cannot mean anything yet.
+ */
+export function cardFloat(S, cardId) {
+  const row = commitmentRows(S).find(r => r.id === cardId && r.kind === 'REVOLVING')
+  if (!row) return null
+  const [closed, previous] = row.statements || []
+  if (!closed || !previous) {
+    return { rm: null, reason: row.statements?.length ? 'ONE_STATEMENT' : 'NO_STATEMENTS' }
+  }
+
+  const from = previous.statement_date
+  const to = closed.statement_date
+  // Payments recorded strictly after the earlier close and up to the later one.
+  // Strictly after, because a payment ON the closing date is already inside the
+  // balance that close reported.
+  const paid = (S.commitmentPayments || [])
+    .filter(p => p.commitment_id === cardId && p.date > from && p.date <= to)
+  const paidRM = paid.reduce((t, p) => t + toRM(S, p.amount || 0, row.cur), 0)
+
+  const owedBefore = previous.closing_balance
+  const owedAfter = closed.closing_balance
+
+  return {
+    rm: owedAfter - owedBefore + paidRM,
+    reason: null,
+    from,
+    to,
+    owedBefore,
+    owedAfter,
+    paidRM,
+    payments: paid,
+    cur: row.cur,
+  }
+}
+
+/**
  * Whether a card has room for a plan of `amount`, against what is ACTUALLY free.
  *
  * NOT AGAINST WHAT THE BILL SAYS, and the gap between the two is the whole point.
