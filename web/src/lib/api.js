@@ -304,6 +304,31 @@ export const deleteCardStatement = (cardId, statementId) =>
  */
 export const ingestStatement = body => send('POST', '/api/ingest/statement', body)
 
+/**
+ * Read a statement PDF on the server and get back what the parser found —
+ * nothing is written. The result is the shape the CLI prints, so it goes into
+ * the review screen exactly as a pasted payload would, and confirming sends it
+ * through ingestStatement() above with its gates re-checked.
+ *
+ * The body is the file's bytes, not a form: the route takes one thing. The
+ * password for a locked statement travels in a header, never the URL.
+ *
+ * @param {File|Blob} file
+ * @param {{password?: string}} [opts]
+ * @returns {Promise<{statement:object, gates:Array<object>, rows:Array<object>, gatesPassed:boolean}>}
+ */
+export const parseStatementPdf = (file, { password } = {}) =>
+  request('/api/ingest/statement/pdf', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/pdf',
+      // Header values are byte strings; a non-Latin-1 character makes fetch
+      // throw before sending. Encoded here, decoded on the server.
+      ...(password ? { 'X-Statement-Password': encodeURIComponent(password) } : {}),
+    },
+    body: file,
+  })
+
 /* ── income ───────────────────────────────────────────────────────────────── */
 
 /**
@@ -417,6 +442,7 @@ export default {
   addIncomeEvent,
   deleteIncomeEvent,
   ingestStatement,
+  parseStatementPdf,
   refreshPrices,
   setManualPrice,
   saveSnapshot,

@@ -33,3 +33,6 @@ vantage-backup.sql
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# A card statement is the most sensitive thing this app touches. Never one in git.
+*.pdf

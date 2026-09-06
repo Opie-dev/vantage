@@ -62,6 +62,10 @@ services:
       # HOST's loopback. It proxies to sync/moomoo_sync.py --serve instead, which
       # runs on the host and owns the OpenD session. Agent down = the button says so.
       SYNC_AGENT_URL: ${SYNC_AGENT_URL:-http://host.docker.internal:8124}
+    # A decompression bomb in an uploaded PDF inflates outside V8's heap, where
+    # no in-process limit can see it \u2014 a one-megabyte file reached 2.2 GB. The
+    # parser is stopped on a clock; this is what stops the memory.
+    mem_limit: 1g
     ports:
       # Loopback only, matching devdata's reasoning: this is a personal tracker
       # with no authentication in front of it.
