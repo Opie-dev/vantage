@@ -25,17 +25,25 @@ import { PlusIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { commitmentsTotal } from '@/lib/calc'
-import { fmt } from '@/lib/format'
+import { commitmentsTotal, loanEquity } from '@/lib/calc'
+import { dfmt, fmt } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 import CommitmentRow from './money/CommitmentRow'
 import { Meta, MonthStepper } from './money/parts'
 
 export default function Loans() {
-  const { state, openCommitment, deleteCommitment } = useVantage()
+  const { state, openCommitment, deleteCommitment, openItem } = useVantage()
   const out = useMemo(() => commitmentsTotal(state, { kinds: ['LOAN'] }), [state])
   const hasFlat = out.rows.some(r => r.flat)
+  // One per loan, null where nothing is linked — which is most of them, and is a
+  // statement rather than a gap.
+  const equity = useMemo(
+    () => out.rows.map(r => [r, loanEquity(state, r.commitment)]),
+    [state, out.rows],
+  )
+  const tracked = equity.filter(([, e]) => e)
+  const untracked = equity.filter(([, e]) => !e).map(([r]) => r.name)
 
   if (!out.rows.length) {
     return (
@@ -92,6 +100,51 @@ export default function Loans() {
         </Card>
       </div>
 
+      {tracked.length ? (
+        <Card>
+          <CardContent className="grid gap-2.5 px-4">
+            <div className="flex items-center gap-2">
+              <span className="eyebrow">What the loans bought</span>
+              <div className="flex-1" />
+              <Button variant="outline" size="sm" onClick={() => openItem()}>
+                Add an item
+              </Button>
+            </div>
+            {tracked.map(([r, e]) => (
+              <div key={r.id} className="grid gap-1">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-[12.5px]">
+                    {e.asset.name}
+                    <Meta className="ml-2">bought with {r.name}</Meta>
+                  </span>
+                  <span
+                    className={`num text-[12.5px] font-semibold ${e.equityRM >= 0 ? 'text-gain' : 'text-loss'}`}
+                  >
+                    {fmt(e.equityRM, 'MYR')} equity
+                  </span>
+                </div>
+                <Meta>
+                  {fmt(e.valueRM, 'MYR')} valued
+                  {e.valuedOn ? ` on ${dfmt(e.valuedOn)}` : ', never valued'} ·{' '}
+                  {fmt(e.owedRM, 'MYR')} still owed
+                  {e.owedIsInstalments
+                    ? ' as instalments still to run, so this equity is understated'
+                    : ''}
+                </Meta>
+              </div>
+            ))}
+            <p className="text-faint m-0 mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-pretty">
+              Nothing here appreciates anything. A valuation is whatever was last asserted, carrying
+              the date it was asserted on — reading a two-year-old figure as today&rsquo;s is a
+              decision to make with that date in front of you.
+              {untracked.length
+                ? ` ${untracked.join(' and ')} ${untracked.length === 1 ? 'has' : 'have'} nothing linked, so net worth counts only the debt there.`
+                : ''}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card className="min-w-0 gap-0 overflow-hidden py-0">
         <div className="flex items-center gap-2.5 px-4 py-3">
           <span className="eyebrow">Outstanding</span>
@@ -128,8 +181,18 @@ export default function Loans() {
             so nothing on this screen is a payoff quote.
           </>
         ) : null}{' '}
-        Tracking a mortgage without tracking the house understates net worth by the whole value of
-        the house; the Dashboard says so in words rather than absorbing the asymmetry quietly.
+        {tracked.length
+          ? 'For most of the first decade of a mortgage the fastest-growing line in net worth is the loan balance falling, not the investments rising — which is only visible once the thing the loan bought is counted on the other side.'
+          : 'Tracking a mortgage without tracking the house understates net worth by the whole value of the house. Link one on the loan and both sides count; leave it and the Dashboard keeps saying so rather than absorbing the asymmetry quietly.'}{' '}
+        {tracked.length ? null : (
+          <button
+            type="button"
+            onClick={() => openItem()}
+            className="text-muted-foreground underline underline-offset-2"
+          >
+            Add something a loan bought
+          </button>
+        )}
       </p>
     </div>
   )

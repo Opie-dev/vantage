@@ -74,6 +74,8 @@ const VantageContext = createContext(null)
  *   openCommitment: (prefill?: object) => void,
  *   openCardPlan: (prefill?: object) => void,
  *   openCardStatement: (prefill?: object) => void,
+ *   addItem: (body: object) => Promise<boolean>,
+ *   openItem: (prefill?: object) => void,
  *   openCardPayment: (prefill?: object) => void,
  *   openStatementImport: (prefill?: object) => void,
  *   importStatement: (body: object) => Promise<object|null>,
@@ -455,6 +457,38 @@ export function VantageProvider({ children }) {
       setModal({ kind: 'cardStatement', prefill: { commitment_id: cards[0].id, ...prefill } })
     }
 
+    /**
+     * Create a thing a loan bought, and its first valuation, as one action.
+     *
+     * TWO WRITES, ONE INTENT. An item with no valuation is worth nothing, and an
+     * item worth nothing understates net worth exactly as much as not having it —
+     * so the form asks for both and this books both. If the valuation fails the
+     * asset is left behind rather than rolled back, which is recoverable (add the
+     * valuation) in a way a silently-missing asset is not.
+     */
+    const addItem = async ({ value, valued_on, ...asset }) => {
+      try {
+        const row = await api.addAsset({
+          ...asset,
+          kind: 'ITEM',
+          // The three things the schema insists on for an item, set here rather
+          // than asked: it earns nothing, it cannot be reached, and it has no cap.
+          rate_basis: 'NONE',
+          liquidity: 'ILLIQUID',
+          unit_cap: null,
+        })
+        await api.addAssetEntry(row.id, { type: 'BALANCE', date: valued_on, amount: value })
+        await reload()
+        toast.success(`${asset.name} added`)
+        return true
+      } catch (e) {
+        toast.error(e.message)
+        return false
+      }
+    }
+
+    const openItem = (prefill = {}) => setModal({ kind: 'item', prefill })
+
     const openCardPayment = (prefill = {}) => {
       const cards = latest.current.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
       if (!cards.length) {
@@ -669,6 +703,8 @@ export function VantageProvider({ children }) {
         mutate(() => api.deleteCardStatement(cardId, statementId), 'Statement removed'),
       openCardPlan,
       openCardStatement,
+      addItem,
+      openItem,
       openCardPayment,
       openStatementImport,
       importStatement,

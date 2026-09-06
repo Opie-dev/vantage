@@ -804,6 +804,62 @@ try {
     console.log(`  plan fit   ${g.availableRM.toFixed(2)} free vs ${g.apparentFree.toFixed(2)} the bill implies, ${g.blocked.toFixed(2)} blocked`)
   }
 
+  /* ── both sides of a loan, once the thing it bought is tracked ───────────── */
+  {
+    const { loanEquity, assetsTotal, netWorth } = await server.ssrLoadModule('/src/lib/calc.js')
+    const loan = STATE.commitments.find(c => c.kind === 'LOAN')
+
+    // Nothing linked is the common case and must not read as an error.
+    if (loanEquity(STATE, loan) !== null) throw new Error('loanEquity: an unlinked loan has no equity')
+    if (netWorth(STATE).itemsTracked) throw new Error('itemsTracked must be false with no items')
+
+    // A local copy: an item in the shared fixture would move the net-worth and
+    // reachable figures asserted on the Dashboard and Assets screens above.
+    const owned = JSON.parse(JSON.stringify(STATE))
+    owned.assets.push({
+      id: 900, kind: 'ITEM', name: 'The house', slug: 'the-house', currency: 'MYR',
+      institution: '', account_ref: '', unit_label: '', unit_cap: null, fiscal_year: '12-31',
+      rate_basis: 'NONE', rate_quote: 'PERCENT', last_rate: null, last_bonus: null,
+      sort_order: 9, archived: false, created_at: ago(0), product_id: null, liquidity: 'ILLIQUID',
+    })
+    owned.assetEntries.push({
+      id: 9000, asset_id: 900, type: 'BALANCE', date: ago(30), amount: 550000,
+      note: '', source: 'manual', ext_id: null,
+    })
+    owned.commitments = owned.commitments.map(c => (c.id === loan.id ? { ...c, asset_id: 900 } : c))
+
+    const e = loanEquity(owned, owned.commitments.find(c => c.id === loan.id))
+    if (!e) throw new Error('loanEquity: a linked loan must produce equity')
+    if (Math.abs(e.valueRM - 550000) > 0.005) throw new Error(`loanEquity: value ${e.valueRM}`)
+    if (Math.abs(e.equityRM - (e.valueRM - e.owedRM)) > 0.005) {
+      throw new Error('loanEquity: equity must be value less what is owed')
+    }
+    if (e.valuedOn !== ago(30)) throw new Error('loanEquity: the valuation date must survive')
+
+    // The asymmetry closes: net worth rises by exactly the valuation, and the
+    // Dashboard's "the things they bought are not counted" line stops being true.
+    if (!netWorth(owned).itemsTracked) throw new Error('itemsTracked must follow the data')
+    const gain = netWorth(owned).netRM - netWorth(STATE).netRM
+    if (Math.abs(gain - 550000) > 0.005) {
+      throw new Error(`net worth should rise by the valuation, rose by ${gain}`)
+    }
+
+    // And it is NOT money. An item must never reach the reachable total, which is
+    // the bug the old `liquidity !== LOCKED` test would have shipped.
+    const before = assetsTotal(STATE)
+    const after = assetsTotal(owned)
+    if (Math.abs(after.reachableRM - before.reachableRM) > 0.005) {
+      throw new Error('a house is not money you can reach')
+    }
+    if (Math.abs(after.lockedRM - before.lockedRM) > 0.005) {
+      throw new Error('a house is not locked money either — that bucket answers a different question')
+    }
+    if (Math.abs(after.illiquidRM - 550000) > 0.005) {
+      throw new Error(`illiquidRM should carry the house, got ${after.illiquidRM}`)
+    }
+    console.log(`  equity     ${e.equityRM.toFixed(2)} on ${e.asset.name}, and none of it reachable`)
+  }
+
   // The month is shared, and that is the whole reason six screens are allowed to
   // exist. Stepping it on one must move it on every other, or the statement says
   // August while the log says July — which is exactly what the single screen's

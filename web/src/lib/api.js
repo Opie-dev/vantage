@@ -109,7 +109,13 @@ export const deleteGoal = id => send('DELETE', `/api/goals/${id}`)
 /**
  * Holdings outside moomoo — ASB, Tabung Haji, EPF. Nothing here touches the
  * broker tables; see the assets section in calc.js.
- * @param {{name:string, slug:string, rate_basis:'MIN_MONTHLY'|'MADB',
+ * `kind` is 'SAVINGS' by default. 'ITEM' is a thing a loan bought — a house, a
+ * car — and the server insists it be ILLIQUID with rate_basis NONE and no unit
+ * cap, because it earns nothing and cannot be spent. Its value is recorded as a
+ * BALANCE entry rather than accumulated from deposits.
+ *
+ * @param {{name:string, slug:string, rate_basis:'MIN_MONTHLY'|'MADB'|'NONE',
+ *          kind?:'SAVINGS'|'ITEM', liquidity?:'WALLET'|'SAVINGS'|'LOCKED'|'ILLIQUID',
  *          institution?:string, unit_label?:string, unit_cap?:number|null,
  *          rate_quote?:'PERCENT'|'SEN_PER_UNIT', last_rate?:number|null,
  *          last_bonus?:number|null, fiscal_year?:string, sort_order?:number}} body
@@ -152,7 +158,11 @@ export const deleteAssetEntry = (assetId, entryId) =>
 /**
  * What you owe and what leaves each month. The repayment schedule is NOT sent —
  * it is derived from these five fields (see calc.js).
- * @param {{kind:'LOAN'|'REVOLVING'|'RECURRING', name:string,
+ * A LOAN may carry `asset_id` — what it bought. Optional, and the server refuses
+ * it on any other kind, because only a loan buys a thing and a card pointing at
+ * an asset is how a wrong net worth starts.
+ *
+ * @param {{kind:'LOAN'|'REVOLVING'|'RECURRING', name:string, asset_id?:number|null,
  *          principal?:number, rate?:number, rate_type?:'FLAT'|'REDUCING',
  *          term_months?:number, started_on?:string, instalment?:number|null,
  *          apr?:number, balance?:number, balance_as_of?:string, credit_limit?:number,

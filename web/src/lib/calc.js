@@ -2212,11 +2212,21 @@ export function assetsTotal(S) {
     earnedRM,
     declared: rows.reduce((n, r) => n + r.declared, 0),
     returnPct: contributedRM > 0 ? (earnedRM / contributedRM) * 100 : null,
-    // What you could actually get at. LOCKED is the whole distinction: EPF Akaun
-    // Persaraan cannot be touched before 55, so counting it beside a Tabung Haji
-    // balance answers "what do I have" and never "what can I reach".
-    reachableRM: rows.filter(r => r.liquidity !== 'LOCKED').reduce((s, r) => s + r.balanceRM, 0),
+    // What you could actually get at. LOCKED is the original distinction: EPF
+    // Akaun Persaraan cannot be touched before 55, so counting it beside a Tabung
+    // Haji balance answers "what do I have" and never "what can I reach".
+    //
+    // ILLIQUID is a THIRD state and not a synonym for the second. A house is not
+    // money you may not touch yet; it is not money. Folding it into `lockedRM`
+    // would make one figure answer two questions, and folding it into
+    // `reachableRM` would say you could spend your house — which is what the
+    // liquidity !== 'LOCKED' test used to say, before there was anything illiquid
+    // for it to be wrong about.
+    reachableRM: rows
+      .filter(r => r.liquidity !== 'LOCKED' && r.liquidity !== 'ILLIQUID')
+      .reduce((s, r) => s + r.balanceRM, 0),
     lockedRM: rows.filter(r => r.liquidity === 'LOCKED').reduce((s, r) => s + r.balanceRM, 0),
+    illiquidRM: rows.filter(r => r.liquidity === 'ILLIQUID').reduce((s, r) => s + r.balanceRM, 0),
   }
 }
 
@@ -3252,6 +3262,51 @@ export function waterfall(S, opts = {}) {
 }
 
 /**
+ * What a loan has actually bought you, once the thing it bought is tracked.
+ *
+ *   equity = what it is worth − what is still owed on it
+ *
+ * THE FIGURE MOST PEOPLE NEVER SEE. For most of the first decade of a mortgage
+ * the fastest-growing line in net worth is the loan balance falling, not the
+ * investments rising — and an app that models the debt without the house shows
+ * only the half that looks like a loss.
+ *
+ * VALUED, NOT PRICED. `valuedOn` is the date someone last asserted a figure, and
+ * it is returned so a screen can say how old it is. Nothing here appreciates
+ * anything: a valuation from two years ago is two years old, and reading it as
+ * today's number is the owner's decision to make with the date in front of them.
+ *
+ * Returns null when no asset is linked — which is the common case and not a
+ * failure. The screen says the omission out loud instead, because an understated
+ * net worth the owner knows about is a different thing from one they do not.
+ */
+export function loanEquity(S, commitment, opts = {}) {
+  if (!commitment || commitment.kind !== 'LOAN' || commitment.asset_id == null) return null
+  const asset = (S.assets || []).find(a => a.id === commitment.asset_id)
+  if (!asset) return null
+
+  const entries = assetEntriesFor(S, asset.id)
+  const latest = entries.filter(e => e.type === 'BALANCE').sort((a, b) => (a.date < b.date ? 1 : -1))[0]
+  const valueRM = toRM(S, assetBalance(S, asset), asset.currency)
+
+  const row = commitmentRows(S, opts).find(r => r.id === commitment.id)
+  const owedRM = row ? toRM(S, row.owed || 0, row.cur) : 0
+
+  return {
+    asset,
+    valueRM,
+    owedRM,
+    equityRM: valueRM - owedRM,
+    valuedOn: latest ? latest.date : null,
+    // A flat loan's `owed` is the instalments still to run, which includes
+    // interest not yet earned — so equity against it is understated, and by a
+    // figure that shrinks to nothing as the loan ends. Said rather than adjusted:
+    // the alternative is a rebate this app does not model.
+    owedIsInstalments: !!(row && row.owedIsInstalments),
+  }
+}
+
+/**
  * Whether a card has room for a plan of `amount`, against what is ACTUALLY free.
  *
  * NOT AGAINST WHAT THE BILL SAYS, and the gap between the two is the whole point.
@@ -3410,9 +3465,12 @@ export function netWorth(S, opts = {}) {
     owedRM: owed.owedRM,
     liabilities,
     netRM: owned.totalRM - owed.owedRM,
-    // Nothing in the app is an ITEM kind yet, so no loan has its purchase
-    // counted on the other side. The Dashboard says so in words.
-    itemsTracked: false,
+    // Whether anything a loan bought is counted on the other side. Until items
+    // existed this was hardcoded false and the Dashboard said so in words; it is
+    // derived now, because the sentence it drives — "the loans are counted, the
+    // things they bought are not" — stops being true the moment one is tracked
+    // and would otherwise keep being printed.
+    itemsTracked: (S.assets || []).some(a => !a.archived && a.kind === 'ITEM'),
   }
 }
 
