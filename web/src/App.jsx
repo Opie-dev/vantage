@@ -39,6 +39,8 @@ import {
   EyeIcon,
   EyeOffIcon,
   MoonIcon,
+  PanelLeftCloseIcon,
+  PanelLeftOpenIcon,
   PiggyBankIcon,
   RefreshCwIcon,
   SettingsIcon,
@@ -207,22 +209,59 @@ function PrivateToggle() {
 }
 
 /**
- * The rail. Brand, the eight screens, and the two things that belong beside them
- * rather than beside the actions: when the data last arrived, and the theme.
+ * The rail. Brand, the eight screens, and when the data last arrived.
+ *
+ * WIDTH IS A CHOICE NOW, NOT ONLY A BREAKPOINT. It used to be `w-[58px]
+ * lg:w-[212px]` and nothing else, which meant a window under 1024px got the icon
+ * strip with no way to read the labels, and a wide one could not reclaim the
+ * 212px for a dense table. The breakpoint still decides the DEFAULT — see
+ * railCollapsed in the store — and after that the owner decides.
+ *
+ * Every width rule below is now driven by that one boolean rather than by `lg:`,
+ * so the rail cannot end up half-collapsed: 58px of chrome with labels clipped
+ * inside it was the failure mode of doing this with two independent mechanisms.
  */
 function SideNav() {
-  const { state } = useVantage()
+  const { state, railCollapsed, toggleRail } = useVantage()
+  const wide = !railCollapsed
 
   return (
-    <aside className="bg-background sticky top-0 z-30 flex h-svh w-[58px] shrink-0 flex-col border-r lg:w-[212px]">
-      <div className="flex h-[60px] shrink-0 items-center justify-center border-b lg:justify-start lg:px-4">
-        <div>
-          <div className="num text-[17px] leading-none font-semibold tracking-[0.04em] lg:text-[19px]">
-            <span className="lg:hidden">V</span>
-            <span className="hidden lg:inline">Vantage</span>
+    <aside
+      className={cn(
+        'bg-background sticky top-0 z-30 flex h-svh shrink-0 flex-col border-r transition-[width] duration-150',
+        wide ? 'w-[212px]' : 'w-[58px]',
+      )}
+    >
+      <div
+        className={cn(
+          'flex h-[60px] shrink-0 items-center border-b',
+          wide ? 'justify-between px-4' : 'justify-center',
+        )}
+      >
+        {wide ? (
+          <div>
+            <div className="num text-[19px] leading-none font-semibold tracking-[0.04em]">
+              Vantage
+            </div>
+            <div className="eyebrow mt-1.5">personal finance</div>
           </div>
-          <div className="eyebrow mt-1.5 hidden lg:block">personal finance</div>
-        </div>
+        ) : null}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleRail}
+              aria-label={wide ? 'Collapse the sidebar' : 'Expand the sidebar'}
+              aria-expanded={wide}
+            >
+              {wide ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {wide ? 'Collapse to icons' : 'Expand the sidebar'}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <TabsList
@@ -239,18 +278,24 @@ function SideNav() {
               // button's accessible name on the icon rail, where a tooltip would
               // only reach a mouse. `title` gives that rail a hover hint too.
               title={t.label}
-              className="h-9 flex-none justify-center gap-2.5 rounded-md px-0 text-[13px] font-semibold data-[state=active]:bg-muted data-[state=active]:after:bg-primary lg:justify-start lg:px-3"
+              className={cn(
+                'h-9 flex-none gap-2.5 rounded-md text-[13px] font-semibold data-[state=active]:bg-muted data-[state=active]:after:bg-primary',
+                wide ? 'justify-start px-3' : 'justify-center px-0',
+              )}
             >
               <Icon aria-hidden="true" />
-              <span className="sr-only lg:not-sr-only">{t.label}</span>
+              {/* The label is hidden by width, never removed: sr-only keeps it as
+                  the button's accessible name on the icon rail, where a tooltip
+                  would only reach a mouse. `title` gives that rail a hover hint. */}
+              <span className={wide ? '' : 'sr-only'}>{t.label}</span>
             </TabsTrigger>
           )
         })}
       </TabsList>
 
-      <div className="shrink-0 border-t p-2 lg:px-3 lg:py-2.5">
+      <div className={cn('shrink-0 border-t', wide ? 'px-3 py-2.5' : 'p-2')}>
         <div className="flex items-center justify-center gap-2">
-          <span className="text-faint hidden text-[11px] leading-tight lg:block">
+          <span className={cn('text-faint text-[11px] leading-tight', wide ? '' : 'hidden')}>
             {state.lastSync ? (
               <>
                 OpenD sync

@@ -78,6 +78,8 @@ const VantageContext = createContext(null)
  *   setManualPrice: (body: object) => Promise<boolean>,
  *   refreshPrices: () => Promise<boolean>,
  *   pricesPending: boolean,
+ *   railCollapsed: boolean,
+ *   toggleRail: () => void,
  *   syncMoomoo: () => Promise<boolean>,
  *   syncPending: boolean,
  * }}
@@ -168,6 +170,41 @@ export function VantageProvider({ children }) {
   // figures on every toggle. The write is idempotent and derived purely from
   // state, so re-running it costs nothing.
   setFormatPrivate(isPrivate)
+
+  /**
+   * Whether the rail is collapsed to icons.
+   *
+   * PER DEVICE, LIKE PRIVATE MODE AND FOR THE SAME REASON: it answers how much
+   * room this screen has, which is a property of where you are sitting rather
+   * than of the account. So it stays out of the server preferences.
+   *
+   * The default follows the viewport — collapsed on a narrow window, expanded on
+   * a wide one — which is exactly what the CSS breakpoint did on its own before
+   * there was a control at all. Once the owner has chosen, the choice wins at
+   * every width: a rail that re-collapses itself on resize is a rail arguing
+   * with the person using it.
+   */
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('vantage.rail')
+      if (saved != null) return saved === '1'
+      return !window.matchMedia('(min-width: 1024px)').matches
+    } catch {
+      return false
+    }
+  })
+
+  const toggleRail = useCallback(() => {
+    setRailCollapsed(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('vantage.rail', next ? '1' : '0')
+      } catch {
+        // Nothing to do — the choice still holds for this session.
+      }
+      return next
+    })
+  }, [])
 
   const togglePrivate = useCallback(() => {
     setIsPrivate(prev => {
@@ -461,6 +498,8 @@ export function VantageProvider({ children }) {
       ready: !loading && !error && !locked,
       isPrivate,
       togglePrivate,
+      railCollapsed,
+      toggleRail,
       fx: state.fx,
       reload,
 
@@ -536,7 +575,7 @@ export function VantageProvider({ children }) {
       syncMoomoo,
       syncPending,
     }
-  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate])
+  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate, railCollapsed, toggleRail])
 
   return <VantageContext.Provider value={value}>{children}</VantageContext.Provider>
 }
