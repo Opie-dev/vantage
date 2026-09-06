@@ -52,6 +52,8 @@ const VantageContext = createContext(null)
  *   openCommitment: (prefill?: object) => void,
  *   openCardPlan: (prefill?: object) => void,
  *   openCardStatement: (prefill?: object) => void,
+ *   openStatementImport: (prefill?: object) => void,
+ *   importStatement: (body: object) => Promise<object|null>,
  *   addCardPlan: (cardId: number, body: object) => Promise<boolean>,
  *   updateCardPlan: (cardId: number, planId: number, body: object) => Promise<boolean>,
  *   deleteCardPlan: (cardId: number, planId: number) => Promise<boolean>,
@@ -400,6 +402,40 @@ export function VantageProvider({ children }) {
       setModal({ kind: 'cardStatement', prefill: { commitment_id: cards[0].id, ...prefill } })
     }
 
+    const openStatementImport = (prefill = {}) => {
+      const cards = latest.current.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+      if (!cards.length) {
+        toast.warning('Add a card first', {
+          description: 'An import records a bill against a card account.',
+        })
+        return
+      }
+      setModal({ kind: 'statementImport', prefill: { commitment_id: cards[0].id, ...prefill } })
+    }
+
+    /**
+     * Import a parsed statement, and hand the report back to the caller.
+     *
+     * The odd one out among the mutators: every other write only needs to say
+     * whether it worked, but this one returns a report the screen has to render —
+     * what was booked, what was already there, and which merchants are still
+     * undecided. So it resolves to the server's payload, or null if it refused.
+     *
+     * No success toast. A refusal is a toast because it is the whole outcome; a
+     * success is a screen, and a toast over it would say less than what is
+     * already on it.
+     */
+    const importStatement = async body => {
+      try {
+        const out = await api.ingestStatement(body)
+        await reload()
+        return out
+      } catch (e) {
+        toast.error(e.message)
+        return null
+      }
+    }
+
     const syncMoomoo = async () => {
       setSyncPending(true)
       const id = toast.loading('Asking moomoo…', {
@@ -567,6 +603,8 @@ export function VantageProvider({ children }) {
         mutate(() => api.deleteCardStatement(cardId, statementId), 'Statement removed'),
       openCardPlan,
       openCardStatement,
+      openStatementImport,
+      importStatement,
       saveMerchantRule: body => mutate(() => api.saveMerchantRule(body), `${body.pattern} decided`),
       deleteMerchantRule: id => mutate(() => api.deleteMerchantRule(id), 'Rule removed'),
       setManualPrice: body => mutate(() => api.setManualPrice(body), 'Price updated'),

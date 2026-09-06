@@ -700,7 +700,7 @@ function CardHeadroom({ r }) {
  * principal keeps blocking it until each month's share is repaid.
  */
 function CardSheet({ row, open, onClose }) {
-  const { deleteCardStatement, openCardStatement, openCardPlan } = useVantage()
+  const { deleteCardStatement, openCardStatement, openStatementImport, openCardPlan } = useVantage()
   if (!row) return null
   const c = row.commitment
   const limit = c.credit_limit || 0
@@ -882,6 +882,16 @@ function CardSheet({ row, open, onClose }) {
             <div className="flex flex-wrap items-center gap-2">
               <span className="eyebrow">Statements</span>
               <div className="flex-1" />
+              {/* Importing reads the whole bill — the header, the plans and the rows
+                  a merchant rule already explains. Recording one by hand enters the
+                  header alone, which is still the load-bearing half. */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openStatementImport({ commitment_id: c.id })}
+              >
+                Import
+              </Button>
               <Button
                 variant="outline"
                 size="icon-sm"
