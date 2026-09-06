@@ -2838,9 +2838,15 @@ export function cardCycle(c, nowISO = isoOf(Date.now())) {
  * excess) are things this app cannot see.
  */
 export function liveStatement(S, cardId, nowISO = isoOf(Date.now())) {
-  return (S.cardStatements || [])
-    .filter(s => s.commitment_id === cardId && s.statement_date <= nowISO)
+  const s = (S.cardStatements || [])
+    .filter(x => x.commitment_id === cardId && x.statement_date <= nowISO)
     .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))[0] || null
+  if (!s) return null
+  // A statement whose due date has passed is history, not an obligation. Its
+  // printed minimum described a bill that has already fallen due, so it must stop
+  // outranking the derived figure the moment it stops being the live one —
+  // otherwise a card sits showing last month's demand forever.
+  return { ...s, live: s.due_date >= nowISO }
 }
 
 /**
@@ -2901,7 +2907,8 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
         // due, and any overlimit excess — are things this app cannot see, so a
         // printed minimum is a fact where the formula is only a floor on a floor.
         const stmt = liveStatement(S, c.id, nowISO)
-        const minimum = stmt && stmt.minimum_due != null ? stmt.minimum_due : derived
+        const stated = stmt && stmt.live && stmt.minimum_due != null
+        const minimum = stated ? stmt.minimum_due : derived
 
         // APR runs on the revolving balance ALONE. A 0% instalment plan costs
         // nothing to hold, and charging the card's rate against it — which is what
@@ -2925,7 +2932,7 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
           planOutstanding,
           instalments,
           minimum,
-          minimumIsStated: !!(stmt && stmt.minimum_due != null),
+          minimumIsStated: !!stated,
           derivedMinimum: derived,
           statement: stmt,
           cycle: cardCycle(c, nowISO),
