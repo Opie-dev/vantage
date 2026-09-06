@@ -187,6 +187,53 @@ export const addCommitmentPayment = (commitmentId, body) =>
 export const deleteCommitmentPayment = (commitmentId, paymentId) =>
   send('DELETE', `/api/commitments/${commitmentId}/payments/${paymentId}`)
 
+/* ── card plans and statements ────────────────────────────────────────────── */
+
+/**
+ * An instalment plan on a card — the derivable half of it.
+ *
+ * `instalment` is the TOTAL the bank bills each month for this plan, including any
+ * separate interest line: Maybank splits EzyPay Plus into principal and interest,
+ * and BNM 13.1(b) counts both. `purchased_on` and `started_on` are two different
+ * facts and both are required, because a purchase after the bill closes is spent
+ * this month and starts costing next.
+ *
+ * @param {number} cardId  a REVOLVING commitment; the server refuses any other
+ * @param {{kind:string, name:string, amount:number, tenure_months:number,
+ *          instalment:number, purchased_on:string, started_on:string,
+ *          rate?:number, upfront_fee?:number, merchant?:string, category?:string,
+ *          status?:string, note?:string}} body
+ */
+export const addCardPlan = (cardId, body) => send('POST', `/api/commitments/${cardId}/plans`, body)
+
+/** @param {number} cardId @param {number} planId */
+export const updateCardPlan = (cardId, planId, body) =>
+  send('PATCH', `/api/commitments/${cardId}/plans/${planId}`, body)
+
+/** @param {number} cardId @param {number} planId */
+export const deleteCardPlan = (cardId, planId) =>
+  send('DELETE', `/api/commitments/${cardId}/plans/${planId}`)
+
+/**
+ * One bill. Upserts on (card, statement_date), so re-importing the same PDF
+ * changes nothing — which is what makes running the importer twice safe.
+ *
+ * `closing_balance` is the TOTAL owed as printed, plans included. It is a
+ * different quantity from `commitments.balance`, which is the revolving part
+ * alone, and the float reads these rather than that for exactly that reason.
+ *
+ * @param {number} cardId
+ * @param {{statement_date:string, due_date:string, closing_balance:number,
+ *          minimum_due?:number, interest_charged?:number, fees_charged?:number,
+ *          note?:string, source?:string}} body
+ */
+export const addCardStatement = (cardId, body) =>
+  send('POST', `/api/commitments/${cardId}/statements`, body)
+
+/** @param {number} cardId @param {number} statementId */
+export const deleteCardStatement = (cardId, statementId) =>
+  send('DELETE', `/api/commitments/${cardId}/statements/${statementId}`)
+
 /* ── income ───────────────────────────────────────────────────────────────── */
 
 /**

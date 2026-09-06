@@ -100,8 +100,8 @@ const KIND_COLOR = {
   RECURRING: 'var(--chart-5)',
 }
 
-function Meta({ children }) {
-  return <span className="text-faint text-[11.5px]">{children}</span>
+function Meta({ children, className = '' }) {
+  return <span className={`text-faint text-[11.5px] ${className}`}>{children}</span>
 }
 
 function Line({ label, value, tone = '', strong = false, rule = false }) {
@@ -503,11 +503,108 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
 
 /* ── going out ────────────────────────────────────────────────────────────── */
 
+/**
+ * The plans on a card, nested the way the statement nests them.
+ *
+ * The two totals below the list are kept apart because only one of them is a
+ * choice: an instalment is due in full or it is a default, while the 5% sits under
+ * a balance that could be cleared tomorrow. A single "card minimum" line would
+ * hide which half is which, which is precisely what the old model did.
+ */
+function CardPlans({ r }) {
+  return (
+    <div className="border-hairline mt-1 mb-3 ml-[33px] grid gap-2 border-l pl-3.5">
+      {r.plans.map(p => (
+        <div key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="min-w-[190px] flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 text-[12.5px]">
+              <span>{p.name}</span>
+              {p.merchant ? <span className="text-faint">· {p.merchant}</span> : null}
+              {p.effective == null ? (
+                <Badge variant="gain" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+                  genuinely 0%
+                </Badge>
+              ) : (
+                <Badge variant="loss" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+                  {pct1(p.effective)} real
+                </Badge>
+              )}
+              {!p.isSpending ? (
+                <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+                  not spending
+                </Badge>
+              ) : null}
+            </div>
+            <Meta className="mt-0.5">
+              <span className="num">{p.paid}</span> of <span className="num">{p.tenure}</span>
+              {p.endsOn ? ` · ends ${p.endsOn.slice(0, 7)}` : ''}
+              {p.status !== 'ACTIVE' ? ` · ${p.status.toLowerCase()}` : ''}
+            </Meta>
+          </div>
+          <div className="w-[112px] shrink-0 text-right">
+            <div className="num text-[12.5px]">{fmt(p.outstanding, r.cur)}</div>
+            <Meta>left</Meta>
+          </div>
+          <div className="num w-[92px] shrink-0 text-right text-[12.5px] font-semibold">
+            {fmt(p.monthlyOut, r.cur)}
+          </div>
+        </div>
+      ))}
+
+      <div className="border-hairline flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2">
+        <div className="min-w-[190px] flex-1">
+          <span className="text-muted-foreground text-[12px]">5% of the revolving balance</span>{' '}
+          <span className="text-faint text-[11px]">· instalments out of the base first</span>
+        </div>
+        <div className="num text-faint w-[112px] shrink-0 text-right text-[12.5px]">
+          {fmt(r.revolving, r.cur)}
+        </div>
+        <div className="num w-[92px] shrink-0 text-right text-[12.5px]">
+          {fmt(Math.max(r.minimum - r.instalments, 0), r.cur)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What is actually left on the limit, which no statement prints.
+ *
+ * A bill showing a third of the limit used can sit on an account with almost
+ * nothing free, because the instalments not yet billed are still blocking it and
+ * come back only as each month's principal is paid.
+ */
+function CardHeadroom({ r }) {
+  const apparent = r.commitment.credit_limit - r.revolving - r.planOutstanding
+  const hidden = r.availableRM != null && r.blocked > 0
+  if (!hidden) return null
+  return (
+    <div className="mb-3 ml-[33px] rounded-md border border-[color:var(--chart-2)]/25 bg-[color:var(--chart-2)]/[0.06] px-3 py-2">
+      <p className="text-muted-foreground m-0 text-[12px] leading-relaxed text-pretty">
+        <b className="font-semibold text-[color:var(--chart-2)]">
+          {fmt(r.availableRM, r.cur)} is what is actually left
+        </b>{' '}
+        on this limit. <span className="num">{fmt(r.blocked, r.cur)}</span> of instalment principal is
+        still blocking it and is released only as each month&rsquo;s share is paid.
+        {apparent > r.availableRM ? (
+          <>
+            {' '}
+            <span className="text-faint">
+              The balance alone would suggest {fmt(apparent, r.cur)}.
+            </span>
+          </>
+        ) : null}
+      </p>
+    </div>
+  )
+}
+
 function CommitmentRow({ r, onEdit, onRemove }) {
   const c = r.commitment
 
   return (
-    <div className="border-hairline flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 last:border-b-0">
+    <div className="border-hairline border-b last:border-b-0">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
       <span className="size-[9px] shrink-0 rounded-full" style={{ background: KIND_COLOR[r.kind] }} />
 
       <div className="min-w-[200px] flex-1">
@@ -568,6 +665,26 @@ function CommitmentRow({ r, onEdit, onRemove }) {
                 </>
               ) : null}{' '}
               · <span className="num">{r.quoted}%</span> if carried
+              {r.planOutstanding > 0 ? (
+                <>
+                  {' '}
+                  · <span className="num">{fmt(r.revolving, r.cur)}</span> revolving,{' '}
+                  <span className="num">{fmt(r.planOutstanding, r.cur)}</span> in{' '}
+                  {r.plans.length} plan{r.plans.length === 1 ? '' : 's'}
+                </>
+              ) : null}
+              {r.cycle ? (
+                <>
+                  {' '}
+                  · closes {r.cycle.closesOn.slice(8)}
+                  {r.cycle.daysOfFloat != null ? (
+                    <>
+                      , anything bought today is due{' '}
+                      <span className="num">{r.cycle.dueOn}</span>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
             </Meta>
           ) : (
             <Meta>
@@ -598,8 +715,16 @@ function CommitmentRow({ r, onEdit, onRemove }) {
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
-      <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
-      <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
+        <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
+        <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
+      </div>
+
+      {r.kind === 'REVOLVING' && r.plans?.length ? (
+        <>
+          <CardPlans r={r} />
+          <CardHeadroom r={r} />
+        </>
+      ) : null}
     </div>
   )
 }

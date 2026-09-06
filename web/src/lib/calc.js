@@ -2663,14 +2663,202 @@ export function loanSchedule(c, nowISO = isoOf(Date.now()), extraPrincipal = 0) 
   }
 }
 
-/** A card's minimum due — 5% or a floor, whichever is higher, never more than the
- *  balance. Standardised across every Malaysian issuer checked. */
-export function cardMinimum(c) {
-  const bal = c.balance || 0
-  if (bal <= 0) return 0
+/* ── cards: the derivable half ─────────────────────────────────────────────── */
+
+/**
+ * One row per instalment plan on a card, with everything derived from five fields
+ * and today's date — the same contract loanSchedule() has, and for the same
+ * reason: you do not type twenty-four instalments.
+ *
+ * `blocked` is the part of the credit limit this plan is still holding, and it is
+ * NOT the same as `outstanding`. Under PROGRESSIVE release the limit comes back as
+ * each instalment's PRINCIPAL is paid, so an interest-bearing plan frees the limit
+ * more slowly than it pays down — Maybank EzyPay Plus cl 12 says exactly that.
+ * Under ON_SETTLEMENT the whole amount is held until the last instalment.
+ */
+export function planRows(S, card, nowISO = isoOf(Date.now())) {
+  const onSettlement = card.limit_release === 'ON_SETTLEMENT'
+  return (S.cardPlans || [])
+    .filter(p => p.commitment_id === card.id)
+    .map(p => {
+      const tenure = p.tenure_months || 0
+      const settled = p.status === 'SETTLED' || (p.settled_on && p.settled_on <= nowISO)
+      // RETRACTED is not "finished". The 0% was pulled and the unbilled balance was
+      // billed straight to the card, so it stops billing instalments and what is
+      // left of it now lives in the revolving balance. Counting it here as well
+      // would count it twice.
+      const dead = settled || p.status === 'RETRACTED'
+      const paid = dead ? tenure : instalmentsPaid(p.started_on, nowISO, tenure)
+      const left = Math.max(tenure - paid, 0)
+      const outstanding = left * (p.instalment || 0)
+      // The principal share, which is what a PROGRESSIVE limit releases against.
+      // For a 0% plan it is the same number as `outstanding`.
+      const principalLeft = tenure ? (p.amount || 0) * (left / tenure) : 0
+      return {
+        plan: p,
+        id: p.id,
+        kind: p.kind,
+        name: p.name,
+        merchant: p.merchant,
+        amount: p.amount,
+        tenure,
+        instalment: p.instalment,
+        paid,
+        left,
+        outstanding,
+        endsOn: addMonthsISO(p.started_on, tenure),
+        monthlyOut: dead ? 0 : p.instalment || 0,
+        blocked: dead ? 0 : onSettlement ? p.amount || 0 : principalLeft,
+        // What a "0%" plan actually costs, converted the way every other rate in
+        // this app is. An upfront fee of F on P over n months is a flat charge.
+        effective: planEffectiveRate(p),
+        status: p.status,
+        settled,
+        // A cash-out and a refinancing are not spending: booking either in the
+        // expense log would invent living costs that never happened.
+        isSpending: p.kind === 'EPP',
+      }
+    })
+    .sort((a, b) => b.outstanding - a.outstanding)
+}
+
+/** Add whole months to a YYYY-MM-DD, clamping the day into a shorter month. */
+function addMonthsISO(iso, months) {
+  if (!iso) return null
+  const [y, m, d] = iso.split('-').map(Number)
+  const idx = y * MONTHS + (m - 1) + months
+  const yy = Math.floor(idx / MONTHS)
+  const mm = idx % MONTHS
+  const day = Math.min(d, new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate())
+  return `${yy}-${String(mm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+/**
+ * The true cost of an instalment plan, as a reducing-balance rate.
+ *
+ * A "0% with a 3% upfront fee" is not free, and the fee is the only place the cost
+ * appears. F on P over n months is a flat charge of (F/P)/(n/12), which
+ * flatToEffective() — the Hire-Purchase Act's own Seventh Schedule closed form,
+ * already used for the car loan — converts to something comparable with everything
+ * else on screen. A plan quoting its own rate flat gets the same treatment.
+ *
+ * Returns null when there is genuinely nothing to pay: a merchant EPP at 0% with
+ * no fee really is free, and saying so is the point of computing this at all.
+ */
+export function planEffectiveRate(p) {
+  const n = p.tenure_months || 0
+  const principal = p.amount || 0
+  if (!n || principal <= 0) return null
+  const feeFlat = p.upfront_fee > 0 ? (p.upfront_fee / principal) / (n / MONTHS) * 100 : 0
+  const flat = (p.rate || 0) + feeFlat
+  if (flat <= 0) return null
+  return flatToEffective(flat, n)
+}
+
+/**
+ * A card's minimum due, per BNM/RH/PD 028-141 para 13.1.
+ *
+ * THE PERCENTAGE DOES NOT RUN ON EVERYTHING. Limb (a) reads "5% of the total
+ * amount outstanding", which alone would put it on the whole balance — but every
+ * issuer example checked strips the instalments out of the base first and then
+ * adds them back at 100% under limb (b), and unbilled plan principal is not on the
+ * statement to be percentaged at all. OCBC states it in one clause: "5% of your
+ * outstanding balance EXCLUDING the contracted monthly instalments … and 100% of
+ * all your contracted monthly instalment amounts … or RM50, whichever is higher."
+ *
+ * So the base narrows to the revolving balance while the floor WIDENS to sit
+ * outside the whole sum. Getting either the wrong way round is expensive, and the
+ * old one-limb version was wrong in both directions at once.
+ *
+ * The floor is issuer practice and not a rule — `RM50` appears in the policy
+ * document only inside a worked example — so it is per card: BSN 50, Maybank 25.
+ */
+export function cardMinimum(c, rows = []) {
+  const revolving = c.balance || 0
+  const instalments = rows.reduce((t, r) => t + r.monthlyOut, 0)
+  const billed = revolving + instalments
+  if (billed <= 0) return 0
   const pct = (c.min_payment_pct == null ? 5 : c.min_payment_pct) / 100
   const floor = c.min_payment_floor == null ? 50 : c.min_payment_floor
-  return Math.min(Math.max(bal * pct, floor), bal)
+  // Never more than what is actually billed: a floor above a nearly-cleared card
+  // would demand money the bank has not asked for.
+  return Math.min(Math.max(revolving * pct + instalments, floor), billed)
+}
+
+/**
+ * Where a card is in its cycle.
+ *
+ * Both days are needed, and only one of them was stored before. BNM requires an
+ * interest-free period of at least twenty days FROM THE STATEMENT DATE (para
+ * 18.2), so the due day alone cannot answer the one question a card screen is
+ * for — when does something bought today actually fall due.
+ *
+ * Returns null when the statement day has not been recorded, so the screen says
+ * so rather than implying a cycle nobody stated.
+ */
+export function cardCycle(c, nowISO = isoOf(Date.now())) {
+  if (c.statement_day == null || c.due_day == null) return null
+
+  /** The given day-of-month in (year, monthIndex), clamped into a short month. */
+  const at = (year, monthIndex, day) => {
+    const idx = year * MONTHS + monthIndex
+    const Y = Math.floor(idx / MONTHS)
+    const M = ((idx % MONTHS) + MONTHS) % MONTHS
+    const d = dueDayIn(Y, M, day)
+    return `${Y}-${String(M + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  }
+
+  const [y, m] = nowISO.split('-').map(Number)
+  // The next close at or after today.
+  let closes = at(y, m - 1, c.statement_day)
+  if (closes < nowISO) closes = at(y, m, c.statement_day)
+
+  // The due date belongs to the cycle that just closed, so it is the first
+  // occurrence of the due day AFTER that close — a card closing on the 25th and
+  // due on the 15th falls due the following month, and one closing on the 6th and
+  // due on the 26th falls due in the same one.
+  const [cy, cm] = closes.split('-').map(Number)
+  let due = at(cy, cm - 1, c.due_day)
+  if (due <= closes) due = at(cy, cm, c.due_day)
+
+  return {
+    closesOn: closes,
+    dueOn: due,
+    // What a purchase made today actually buys you, which is the sentence the
+    // statement day exists for.
+    daysOfFloat: Math.round((msOf(due) - msOf(nowISO)) / DAY),
+    daysToClose: Math.round((msOf(closes) - msOf(nowISO)) / DAY),
+  }
+}
+
+/**
+ * The statement a card is currently living under — the latest one issued, whether
+ * or not it has been paid. Its printed `minimum_due` outranks anything derived:
+ * the bank did the arithmetic, and two of the limbs (past due, an overlimit
+ * excess) are things this app cannot see.
+ */
+export function liveStatement(S, cardId, nowISO = isoOf(Date.now())) {
+  return (S.cardStatements || [])
+    .filter(s => s.commitment_id === cardId && s.statement_date <= nowISO)
+    .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))[0] || null
+}
+
+/**
+ * What a card owed on a given date, from its statements alone.
+ *
+ * DELIBERATELY NOT FALLING BACK TO `balance`. A statement's closing balance is the
+ * total billed; `commitments.balance` is the revolving part only. They are
+ * different quantities, and a float computed across the two bases would be wrong
+ * in a way nothing on screen could reveal. So: statements or nothing.
+ *
+ * Returns null when no statement had been issued by that date, which is what makes
+ * floatFor() say NO_CARD_READING rather than invent a figure.
+ */
+export function owedOn(S, cardId, dateISO) {
+  const s = (S.cardStatements || [])
+    .filter(x => x.commitment_id === cardId && x.statement_date <= dateISO)
+    .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))[0]
+  return s ? s.closing_balance : null
 }
 
 /**
@@ -2703,19 +2891,54 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
       }
 
       if (c.kind === 'REVOLVING') {
-        const bal = c.balance || 0
-        const minimum = cardMinimum(c)
-        const monthlyInterest = (bal * (c.apr || 0)) / 100 / MONTHS
+        const plans = planRows(S, c, nowISO)
+        const revolving = c.balance || 0
+        const planOutstanding = plans.reduce((t, p) => t + p.outstanding, 0)
+        const instalments = plans.reduce((t, p) => t + p.monthlyOut, 0)
+        const derived = cardMinimum(c, plans)
+
+        // The bank's own figure beats ours. Two limbs of BNM 13.1 — anything past
+        // due, and any overlimit excess — are things this app cannot see, so a
+        // printed minimum is a fact where the formula is only a floor on a floor.
+        const stmt = liveStatement(S, c.id, nowISO)
+        const minimum = stmt && stmt.minimum_due != null ? stmt.minimum_due : derived
+
+        // APR runs on the revolving balance ALONE. A 0% instalment plan costs
+        // nothing to hold, and charging the card's rate against it — which is what
+        // folding plans into `balance` used to do — invents an expense.
+        const monthlyInterest = (revolving * (c.apr || 0)) / 100 / MONTHS
+
+        // What the plans are still holding off the limit, which is not what they
+        // still owe: under PROGRESSIVE release only the principal share comes back.
+        const blocked = plans.reduce((t, p) => t + p.blocked, 0)
+        const committed = revolving + planOutstanding
+        const usedAgainstLimit = revolving + blocked
+
         return {
           ...base,
+          plans,
           monthlyOut: minimum,
-          owed: bal,
+          // What the card owes in total, plans included — the figure the old
+          // single `balance` column was being asked to carry on its own.
+          owed: committed,
+          revolving,
+          planOutstanding,
+          instalments,
           minimum,
+          minimumIsStated: !!(stmt && stmt.minimum_due != null),
+          derivedMinimum: derived,
+          statement: stmt,
+          cycle: cardCycle(c, nowISO),
           // Only if the balance is carried — what it costs to revolve, not a
           // charge already incurred.
           interestThisMonth: monthlyInterest,
           principalThisMonth: Math.max(minimum - monthlyInterest, 0),
-          utilisationPct: c.credit_limit ? (bal / c.credit_limit) * 100 : null,
+          utilisationPct: c.credit_limit ? (usedAgainstLimit / c.credit_limit) * 100 : null,
+          // The number no statement prints. A bill showing a third of the limit
+          // used can sit on an account with almost nothing left, because the
+          // instalments not yet billed are still blocking it.
+          availableRM: c.credit_limit ? c.credit_limit - usedAgainstLimit : null,
+          blocked,
           staleDays: c.balance_as_of ? Math.round((msOf(nowISO) - msOf(c.balance_as_of)) / DAY) : null,
           effective: c.apr,
           quoted: c.apr,
@@ -3130,17 +3353,54 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
       if (s.left <= 0) continue
       put(day, { key: `cl${c.id}`, dir: -1, label: c.name, amount: s.instalment, state: 'due', domain: 'OWED' })
     } else if (c.kind === 'REVOLVING') {
-      // The date is known and the amount is not: a statement has not been issued
-      // for it yet. The minimum off the stored balance is the floor, not the bill.
-      put(day, {
-        key: `cr${c.id}`,
-        dir: -1,
-        label: c.name,
-        amount: cardMinimum(c),
-        state: 'estimated',
-        domain: 'OWED',
-        note: 'minimum on the last balance you recorded — the statement decides the rest',
-      })
+      const plans = planRows(S, c, nowISO)
+      // A statement covering this due date turns the amount from a guess into a
+      // fact — the bank did the arithmetic and printed it.
+      const stmt = (S.cardStatements || [])
+        .filter(s => s.commitment_id === c.id && s.due_date.slice(0, 7) === monthKey(year, monthIndex))
+        .sort((a, b) => (a.statement_date < b.statement_date ? 1 : -1))[0]
+
+      if (stmt && stmt.minimum_due != null) {
+        put(day, {
+          key: `cr${c.id}`,
+          dir: -1,
+          label: c.name,
+          amount: stmt.minimum_due,
+          state: 'due',
+          domain: 'OWED',
+          // The screen formats it; calc.js does not know about currencies here.
+          clearAmount: stmt.closing_balance,
+          note: `minimum on the statement of ${stmt.statement_date}`,
+        })
+      } else {
+        put(day, {
+          key: `cr${c.id}`,
+          dir: -1,
+          label: c.name,
+          amount: cardMinimum(c, plans),
+          state: 'estimated',
+          domain: 'OWED',
+          note: plans.length
+            ? 'derived: 5% of the revolving balance plus every contracted instalment — the statement decides the rest'
+            : 'minimum on the last balance you recorded — the statement decides the rest',
+        })
+      }
+
+      // The day the bill CLOSES. Nothing moves, which is exactly why it earns its
+      // own mark: it is the most consequential day in a card's month and the only
+      // one on which no money changes hands. It decides what the due day costs.
+      const closeDay = dueDayIn(year, monthIndex, c.statement_day)
+      if (closeDay) {
+        put(closeDay, {
+          key: `cs${c.id}`,
+          dir: 0,
+          label: `${c.name} closes`,
+          amount: null,
+          state: 'informational',
+          domain: 'OWED',
+          note: 'the bill closes — nothing leaves your account today',
+        })
+      }
     } else if ((c.every_months || 1) === 1) {
       // Only monthly recurring items can be placed. A quarterly or annual charge
       // has no start date stored, so which month it falls in is unknown — and a
@@ -3215,6 +3475,51 @@ export const SPEND_UNKNOWN = {
   NO_WALLET: 'NO_WALLET',
   NO_OPENING_READING: 'NO_OPENING_READING',
   NO_CLOSING_READING: 'NO_CLOSING_READING',
+  // A card is another pocket — a negative one. The rule that already governs
+  // wallets simply widens: a window can be reconciled only when EVERY pocket has a
+  // dated reading at both ends of it.
+  NO_CARD_READING: 'NO_CARD_READING',
+}
+
+/**
+ * The float: spending that has happened and has not left your account.
+ *
+ * `spendingFor()` assumes every ringgit spent leaves a wallet inside the window.
+ * A credit card exists to break exactly that, so the residual lands a month late
+ * and the log/residual reconciliation then reports a fault in the accurate half.
+ *
+ * The fix needs no transaction ledger, because
+ *
+ *   Δ(card owed) = purchases + interest and fees − repayments
+ *
+ * so the float is simply the change in what the cards owe over the same window.
+ * Writing S for cash spending, P for card purchases, C for charges and R for
+ * repayments: leftPocket = S + R, float = P + C − R, and their sum is S + P + C —
+ * what living actually cost. The repayment cancels exactly.
+ *
+ * Returns `{ rm: null, reason }` rather than a figure when any card lacks a
+ * statement at either end. Saying so is the same instinct as SPEND_UNKNOWN: a
+ * card with no reading is not a card with no spending.
+ */
+export function floatFor(S, from, to) {
+  const cards = (S.commitments || []).filter(c => c.kind === 'REVOLVING' && c.active)
+  if (!cards.length) return { rm: 0, reason: null, cards: [] }
+
+  let rm = 0
+  const unreadable = []
+  for (const c of cards) {
+    const opening = owedOn(S, c.id, from)
+    const closing = owedOn(S, c.id, to)
+    // A card with no statements at all and nothing recorded against it is not a
+    // gap in the arithmetic — it is a card that has not been used yet.
+    if (opening == null && closing == null && !(c.balance > 0)) continue
+    if (opening == null || closing == null) { unreadable.push(c.name); continue }
+    rm += toRM(S, closing - opening, c.currency)
+  }
+  if (unreadable.length) {
+    return { rm: null, reason: SPEND_UNKNOWN.NO_CARD_READING, cards: unreadable }
+  }
+  return { rm, reason: null, cards: [] }
 }
 
 /**
@@ -3285,6 +3590,19 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   // includeEnded, because a loan settled last month still took money out of the
   // window being reconciled and would otherwise vanish from it.
   for (const r of commitmentRows(S, { includeEnded: true, nowISO })) {
+    // A CARD IS THE ONE PLACE THE DERIVED FIGURE IS A GUESS. For a loan the
+    // instalment is the instalment and an absent payment row means it was paid.
+    // For a card what actually left is whatever was actually paid — anywhere
+    // between the minimum and the whole bill — so a recorded payment wins, and the
+    // derived minimum is the fallback for a month with nothing recorded.
+    if (r.kind === 'REVOLVING') {
+      const recorded = (S.commitmentPayments || [])
+        .filter(p => p.commitment_id === r.id && p.date > from && p.date <= to)
+      if (recorded.length) {
+        for (const p of recorded) committedRM += toRM(S, p.amount || 0, r.cur)
+        continue
+      }
+    }
     // dueDayIn() is the same clamp the calendar uses, so the 31st in a short
     // month lands on the same day in both and the two cannot disagree.
     const day = dueDayIn(year, monthIndex, r.commitment.due_day)
@@ -3315,6 +3633,11 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   const walletDeltaRM = walletBalanceOn(S, to) - walletBalanceOn(S, from)
   const days = Math.round((msOf(to) - msOf(from)) / DAY)
 
+  // Over the SAME window the wallet readings bracket, so the two can never drift
+  // apart into a comparison of different months.
+  const float = floatFor(S, from, to)
+  const spentRM = inflowRM - committedRM - savedRM - walletDeltaRM
+
   return {
     reason: null,
     from,
@@ -3324,10 +3647,19 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     committedRM,
     savedRM,
     walletDeltaRM,
+    // `spentRM` below is untouched and still means what it always meant: what left
+    // your pockets. These are BESIDE it, not a correction to it.
+    floatRM: float.rm,
+    floatReason: float.reason,
+    floatUnreadableCards: float.cards,
+    // What the window actually cost, whenever the money happens to leave. Null
+    // rather than equal to spentRM when a card cannot be read — an unknown float
+    // is not a zero one.
+    livingCostRM: float.rm == null ? null : spentRM + float.rm,
     // Can legitimately go negative: a month funded by drawing down a wallet the
     // app was not watching closely will over-subtract. Negative is a signal the
     // readings or the destinations are incomplete, not a figure to clamp away.
-    spentRM: inflowRM - committedRM - savedRM - walletDeltaRM,
+    spentRM,
   }
 }
 
