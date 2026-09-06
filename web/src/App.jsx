@@ -1448,7 +1448,8 @@ function AssetEntryDialog({ prefill }) {
  * spending in the wrong month — which is the exact error the float exists to fix.
  */
 function CardPlanDialog({ prefill }) {
-  const { state, closeModal, addCardPlan } = useVantage()
+  const { state, closeModal, addCardPlan, updateCardPlan } = useVantage()
+  const editing = prefill.id != null
   const cards = state.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
   const str = (v, fallback = '') => (v == null ? fallback : String(v))
   const [f, setF] = useState({
@@ -1463,6 +1464,12 @@ function CardPlanDialog({ prefill }) {
     upfront_fee: str(prefill.upfront_fee, '0'),
     purchased_on: prefill.purchased_on || today(),
     started_on: prefill.started_on || today(),
+    settled_on: prefill.settled_on || '',
+    // A 0% plan can stop being one: miss two consecutive minimums and the
+    // concession is retracted and the unbilled balance is billed at the retail
+    // rate. That is a state transition, not a rate change, so it is set here
+    // rather than inferred from the dates.
+    status: prefill.status || 'ACTIVE',
     category: prefill.category || 'THINGS',
   })
   const [busy, setBusy] = useState(false)
@@ -1487,7 +1494,7 @@ function CardPlanDialog({ prefill }) {
   const save = async () => {
     if (!ready) return
     setBusy(true)
-    const ok = await addCardPlan(Number(f.commitment_id), {
+    const body = {
       kind: f.kind,
       name: f.name.trim(),
       merchant: f.merchant.trim(),
@@ -1498,8 +1505,13 @@ function CardPlanDialog({ prefill }) {
       upfront_fee: Number(f.upfront_fee) || 0,
       purchased_on: f.purchased_on,
       started_on: f.started_on,
+      settled_on: f.settled_on || null,
+      status: f.status,
       category: isSpending ? f.category : null,
-    })
+    }
+    const ok = editing
+      ? await updateCardPlan(Number(f.commitment_id), prefill.id, body)
+      : await addCardPlan(Number(f.commitment_id), body)
     setBusy(false)
     if (ok) closeModal()
   }
@@ -1507,7 +1519,7 @@ function CardPlanDialog({ prefill }) {
   return (
     <DialogContent className="sm:max-w-[520px]">
       <DialogHeader>
-        <DialogTitle>Add an instalment plan</DialogTitle>
+        <DialogTitle>{editing ? 'Edit the plan' : 'Add an instalment plan'}</DialogTitle>
         <DialogDescription>
           An EPP, a balance transfer or a cash instalment. Everything after the first month is
           derived — you never type an instalment twice.
@@ -1515,8 +1527,17 @@ function CardPlanDialog({ prefill }) {
       </DialogHeader>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="On which card" htmlFor="cp-card" className="col-span-2">
-          <Select value={f.commitment_id} onValueChange={v => set('commitment_id', v)}>
+        <Field
+          label="On which card"
+          htmlFor="cp-card"
+          className="col-span-2"
+          hint={editing ? 'A plan stays on the card whose limit it consumed.' : undefined}
+        >
+          <Select
+            value={f.commitment_id}
+            onValueChange={v => set('commitment_id', v)}
+            disabled={editing}
+          >
             <SelectTrigger id="cp-card" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -1590,6 +1611,26 @@ function CardPlanDialog({ prefill }) {
           <Input id="cp-start" type="date" value={f.started_on} onChange={e => set('started_on', e.target.value)} />
         </Field>
 
+        {editing ? (
+          <Field
+            label="Standing"
+            htmlFor="cp-status"
+            className="col-span-2"
+            hint="Retracted means the 0% was pulled and the rest was billed to the card — it stops billing instalments and what is left now lives in the revolving balance."
+          >
+            <Select value={f.status} onValueChange={v => set('status', v)}>
+              <SelectTrigger id="cp-status" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ACTIVE">Running</SelectItem>
+                <SelectItem value="SETTLED">Settled early</SelectItem>
+                <SelectItem value="RETRACTED">Retracted by the bank</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : null}
+
         {isSpending ? (
           <Field label="Expense category" htmlFor="cp-cat" className="col-span-2">
             <Select value={f.category} onValueChange={v => set('category', v)}>
@@ -1641,7 +1682,7 @@ function CardPlanDialog({ prefill }) {
           Cancel
         </Button>
         <Button onClick={save} disabled={!ready || busy}>
-          {busy ? 'Saving…' : 'Add plan'}
+          {busy ? 'Saving…' : editing ? 'Save' : 'Add plan'}
         </Button>
       </DialogFooter>
     </DialogContent>

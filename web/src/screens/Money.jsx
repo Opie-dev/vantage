@@ -512,7 +512,7 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
  * a balance that could be cleared tomorrow. A single "card minimum" line would
  * hide which half is which, which is precisely what the old model did.
  */
-function CardPlans({ r }) {
+function CardPlans({ r, onEditPlan, onRemovePlan }) {
   return (
     <div className="border-hairline mt-1 mb-3 ml-[33px] grid gap-2 border-l pl-3.5">
       {r.plans.map(p => (
@@ -549,6 +549,16 @@ function CardPlans({ r }) {
           <div className="num w-[92px] shrink-0 text-right text-[12.5px] font-semibold">
             {fmt(p.monthlyOut, r.cur)}
           </div>
+          <RowAction
+            icon={PencilIcon}
+            label={`Edit ${p.name}`}
+            onClick={() => onEditPlan({ ...p.plan })}
+          />
+          <RowAction
+            icon={TrashIcon}
+            label={`Remove ${p.name}`}
+            onClick={() => onRemovePlan(r.id, p.id)}
+          />
         </div>
       ))}
 
@@ -600,7 +610,7 @@ function CardHeadroom({ r }) {
   )
 }
 
-function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onAddStatement }) {
+function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onRemovePlan, onAddStatement }) {
   const c = r.commitment
 
   return (
@@ -736,7 +746,7 @@ function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onAddStatement }) {
 
       {r.kind === 'REVOLVING' && r.plans?.length ? (
         <>
-          <CardPlans r={r} />
+          <CardPlans r={r} onEditPlan={onAddPlan} onRemovePlan={onRemovePlan} />
           <CardHeadroom r={r} />
         </>
       ) : null}
@@ -758,6 +768,7 @@ export default function Money() {
     openCommitment,
     openCardPlan,
     openCardStatement,
+    deleteCardPlan,
     openIncome,
     openIncomeEvent,
     deleteIncomeSource,
@@ -1017,6 +1028,7 @@ export default function Money() {
                         onEdit={openCommitment}
                         onRemove={deleteCommitment}
                         onAddPlan={openCardPlan}
+                        onRemovePlan={deleteCardPlan}
                         onAddStatement={openCardStatement}
                       />
                     ))}
