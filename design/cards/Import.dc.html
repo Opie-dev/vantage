@@ -1,0 +1,332 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+      --chart-5: #d55181; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--background); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1;
+      letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .card {
+      border-radius: 6px; border: 1px solid var(--border);
+      background: var(--card); padding: 15px;
+    }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 0 6px; font-size: 9.5px; line-height: 16px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-gain { background: rgba(63,178,127,0.12); color: var(--gain); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .pick {
+      height: 27px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--background); display: inline-flex; align-items: center;
+      padding: 0 9px; font-size: 11.5px; color: var(--foreground); gap: 6px;
+    }
+    .rowline {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid var(--hairline);
+    }
+    .rowline:last-child { border-bottom: 0; }
+  </style>
+</helmet>
+
+<div style="min-height: 1100px; background: var(--background); display: flex; flex-direction: column">
+
+  <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 28px">
+    <h1 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Import a statement</h1>
+    <span class="badge badge-neutral">Maybank · 8 Aug 2026</span>
+    <div style="flex: 1"></div>
+    <span class="faint" style="font-size: 11.5px">nothing is written until you confirm</span>
+  </header>
+
+  <div style="padding: 22px 28px 26px; display: grid; gap: 16px; grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr)">
+
+    <!-- ══ left: what the file gave up, automatically ══════════════════════ -->
+    <div style="display: grid; gap: 14px; align-content: start">
+
+      <!-- the gates -->
+      <div class="card">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Checks</span>
+          <span class="badge badge-gain">3 of 3 passed</span>
+        </div>
+        <div style="margin-top: 12px; display: grid; gap: 9px">
+
+          <div style="display: flex; align-items: baseline; gap: 9px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fb27f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px; flex-shrink: 0"><path d="M20 6L9 17l-5-5"/></svg>
+            <div style="flex: 1">
+              <div style="font-size: 12.5px">Balance</div>
+              <div class="faint num" style="font-size: 11px; margin-top: 2px">1,120.00 + 4,180.00 &minus; 1,120.00 = 4,180.00</div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: baseline; gap: 9px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fb27f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px; flex-shrink: 0"><path d="M20 6L9 17l-5-5"/></svg>
+            <div style="flex: 1">
+              <div style="font-size: 12.5px">Rows</div>
+              <div class="faint" style="font-size: 11px; margin-top: 2px">
+                all <span class="num">42</span> charge rows sum to <span class="num">4,180.00</span> —
+                the only check that touches every line
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: baseline; gap: 9px">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3fb27f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="margin-top: 2px; flex-shrink: 0"><path d="M20 6L9 17l-5-5"/></svg>
+            <div style="flex: 1">
+              <div style="font-size: 12.5px">Minimum</div>
+              <div class="faint num" style="font-size: 11px; margin-top: 2px">
+                5% &times; 2,872.00 + 1,308.00 = 1,451.60 <span class="faint">as printed</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="faint" style="margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+          Any one of these failing stops the import. They are all computed from figures the bank printed
+          on the same document, so they cost nothing — and they are what caught an extractor mode that
+          was silently shearing the columns.
+        </p>
+      </div>
+
+      <!-- what lands without asking -->
+      <div class="card">
+        <span class="eyebrow">Recorded without asking</span>
+
+        <div style="margin-top: 11px">
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">The statement itself</span>
+            <span class="faint" style="font-size: 11px">card_statements</span>
+            <span class="badge badge-gain">1 row</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">Payment on 10 Jul</span>
+            <span class="num faint" style="font-size: 11.5px">1,120.00</span>
+            <span class="badge badge-gain">1 row</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">Retail rate <span class="num">15.00%</span></span>
+            <span class="faint" style="font-size: 11px">Tier&#8209;I</span>
+            <span class="badge badge-gain">apr</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">Combined limit <span class="num">RM 14,000</span></span>
+            <span class="faint" style="font-size: 11px">2 cards</span>
+            <span class="badge badge-gain">limit</span>
+          </div>
+        </div>
+
+        <p class="faint" style="margin: 11px 0 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+          The statement row is the load-bearing one. The spending float reads two closing balances and
+          nothing else — so even if you categorise none of the transactions below, importing this makes
+          the month&rsquo;s figure exact.
+        </p>
+      </div>
+
+      <!-- plans -->
+      <div class="card">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">Plans matched</span>
+          <span class="badge badge-gain">3 of 3</span>
+        </div>
+        <div style="margin-top: 11px">
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">EzyCash</span>
+            <span class="num faint" style="font-size: 11.5px">3/6</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3fb27f" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">EzyPay Plus <span class="faint">+ its interest line</span></span>
+            <span class="num faint" style="font-size: 11.5px">4/12</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3fb27f" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">Motor insurance</span>
+            <span class="num faint" style="font-size: 11.5px">5/12</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3fb27f" stroke-width="3" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+          </div>
+        </div>
+        <p class="faint" style="margin: 11px 0 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+          The bank prints its own counter on every instalment line, so each is checked against the count
+          the app worked out from dates. Agreement is silent. A disagreement means a deferred or missed
+          month and would be raised here instead.
+        </p>
+      </div>
+    </div>
+
+    <!-- ══ right: the part that needs you ═════════════════════════════════ -->
+    <div class="card" style="align-self: start">
+      <div style="display: flex; align-items: center; gap: 9px; flex-wrap: wrap">
+        <span class="eyebrow">38 purchases · 22 merchants</span>
+        <span class="badge badge-cash">6 need you</span>
+        <div style="flex: 1"></div>
+        <span class="faint" style="font-size: 11px">decided once, remembered after</span>
+      </div>
+
+      <!-- already a commitment -->
+      <div style="margin-top: 15px; padding: 11px 12px; border-radius: 6px; border: 1px solid rgba(213,81,129,0.3); background: rgba(213,81,129,0.06)">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="eyebrow" style="color: var(--chart-5)">Already a commitment &mdash; matched, not logged</span>
+        </div>
+        <div style="margin-top: 8px">
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">TENAGA-EC</span>
+            <span class="num faint" style="font-size: 11.5px">74.50</span>
+            <span class="pick" style="width: 172px">Electricity <span class="faint">· recurring</span></span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">INSURER-RPS</span>
+            <span class="num faint" style="font-size: 11.5px">265.00</span>
+            <span class="pick" style="width: 172px">Insurance <span class="faint">· recurring</span></span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">FPX-TELCO SDN BHD</span>
+            <span class="num faint" style="font-size: 11.5px">48.00</span>
+            <span class="pick" style="width: 172px">Phone <span class="faint">· recurring</span></span>
+          </div>
+        </div>
+        <p class="faint" style="margin: 9px 0 0; font-size: 11px; line-height: 1.45; text-wrap: pretty">
+          These are already subtracted from income on Money. Logging them as expenses too would count
+          them twice — the one error this whole screen exists to prevent.
+        </p>
+      </div>
+
+      <!-- resolved by the map -->
+      <div style="margin-top: 14px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="eyebrow">Known merchants</span>
+          <span class="badge badge-gain">16 rows, no questions</span>
+        </div>
+        <div style="margin-top: 8px">
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">SHELL SELECT-EC <span class="faint">&times;16</span></span>
+            <span class="num faint" style="font-size: 11.5px">118.40</span>
+            <span class="pick" style="width: 172px">Transport &rsaquo; Fuel</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">99 SPEEDMART <span class="faint">&times;2</span></span>
+            <span class="num faint" style="font-size: 11.5px">284.20</span>
+            <span class="pick" style="width: 172px">Food &rsaquo; Groceries</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">four restaurants and a kopitiam</span>
+            <span class="num faint" style="font-size: 11.5px">312.60</span>
+            <span class="pick" style="width: 172px">Food &rsaquo; Meals out</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">ZUS COFFEE <span class="faint">· coffee</span></span>
+            <span class="num faint" style="font-size: 11.5px">28.90</span>
+            <span class="pick" style="width: 172px">Food &rsaquo; Coffee &amp; snacks</span>
+          </div>
+        </div>
+        <p class="faint" style="margin: 9px 0 0; font-size: 11px; line-height: 1.45; text-wrap: pretty">
+          the fuel app alone is 16 of the 38 rows. One decision, made once, covers 42% of the statement — which
+          is why the second import asks almost nothing.
+        </p>
+      </div>
+
+      <!-- needs a decision -->
+      <div style="margin-top: 14px; padding: 11px 12px; border-radius: 6px; border: 1px solid rgba(232,163,61,0.3); background: rgba(232,163,61,0.06)">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="eyebrow" style="color: var(--cash)">New &mdash; never guessed</span>
+        </div>
+        <div style="margin-top: 8px">
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">SHOPEE-EC</span>
+            <span class="num" style="font-size: 11.5px">1,115.30</span>
+            <span class="pick" style="width: 172px; color: var(--faint)">Choose a category</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">CLOUD SUBSCRIPTION
+              <span class="faint num">· USD 92.00 @ 4.1870</span></span>
+            <span class="num" style="font-size: 11.5px">385.20</span>
+            <span class="pick" style="width: 172px; color: var(--faint)">Expense or recurring?</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">GOOGLE*VPN</span>
+            <span class="num" style="font-size: 11.5px">26.90</span>
+            <span class="pick" style="width: 172px; color: var(--faint)">Expense or recurring?</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- opaque -->
+      <div style="margin-top: 14px">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="eyebrow">The statement does not say who</span>
+          <span class="badge badge-neutral">3 rows</span>
+        </div>
+        <div style="margin-top: 8px">
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">FPX-GATEWAY A SDN BHD</span>
+            <span class="num faint" style="font-size: 11.5px">41.00</span>
+            <span class="pick" style="width: 172px; color: var(--faint)">Uncategorised</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">FPX-GATEWAY B SDN BHD</span>
+            <span class="num faint" style="font-size: 11.5px">130.00</span>
+            <span class="pick" style="width: 172px; color: var(--faint)">Uncategorised</span>
+          </div>
+          <div class="rowline">
+            <span style="flex: 1; font-size: 12.5px">FPX-GATEWAY C SDN BHD</span>
+            <span class="num faint" style="font-size: 11.5px">42.00</span>
+            <span class="pick" style="width: 172px; color: var(--faint)">Uncategorised</span>
+          </div>
+        </div>
+        <p class="faint" style="margin: 9px 0 0; font-size: 11px; line-height: 1.45; text-wrap: pretty">
+          These are payment gateways: Maybank prints the aggregator, never the shop behind it. A real
+          limit rather than a bug, and the honest answer is to leave them uncategorised and say so —
+          a wrong category would be read as fact on Spending and nothing would ever flag it.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 17px; align-items: center">
+        <div style="flex: 1; height: 34px; border-radius: 6px; background: var(--primary); color: #10151a; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600">
+          Import 43 rows
+        </div>
+        <div style="width: 104px; height: 34px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted-foreground); display: flex; align-items: center; justify-content: center; font-size: 12.5px">
+          Cancel
+        </div>
+      </div>
+      <p class="faint" style="margin: 10px 0 0; font-size: 11px; line-height: 1.45; text-wrap: pretty">
+        Importing the same file twice changes nothing: every row hashes to a unique id the database
+        enforces, so a fumbled command cannot double-book a month.
+      </p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html",      "title": "Money — the account and its plans", "x": 0,    "y": 0,    "w": 1440, "h": 1180 },
+    { "file": "CardSheet.dc.html", "title": "The account sheet",                 "x": 1620, "y": 0,    "w": 880,  "h": 1280 },
+    { "file": "Import.dc.html",    "title": "Importing a statement",             "x": 0,    "y": 1440, "w": 1200, "h": 1120 },
+    { "file": "Calendar.dc.html",  "title": "Calendar — closes and due",         "x": 1380, "y": 1440, "w": 1440, "h": 940 },
+    { "file": "Spending.dc.html",  "title": "Spending — the float",              "x": 0,    "y": 2720, "w": 1440, "h": 800 },
+    { "file": "AddPlan.dc.html",   "title": "Adding a plan — and refusing one",  "x": 1620, "y": 2720, "w": 1000, "h": 900 }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -470,
+      "w": 1440,
+      "text": "VANTAGE — CREDIT CARDS\n\nDrawn with the real tokens from web/src/index.css — IBM Plex, #0e1216 / #151b21, 6px radius, the same .num / .eyebrow / .stat scale — so this reads as the app rather than as a proposal about it. See cards-plan.md.\n\nTHE CARD SIDE IS REAL. Every card figure here was read out of an actual Maybank statement of 8 August 2026 by sync/parse_maybank_statement.py: the RM 14,000 combined limit, the RM 4,180.00 closing balance, the RM 1,451.60 minimum, the 15% tier rate, and all three instalment plans with the bank's own progress counters. Income, loans, rent, goals and the wallet readings are still invented — the app has no data for those yet, and the artboards say which is which. No name, address or card number appears anywhere on this canvas.\n\nWHAT A CARD IS TODAY: one commitments row, kind = REVOLVING, holding a typed-in balance, a limit, an APR and a 5% minimum. No instalment plans, no statement date. Three consequences, now measured rather than argued:\n\n(1) THE MINIMUM. Bank Negara sets it at 5% of the balance with the instalments taken OUT, plus 100% of every instalment added back whole (PD 028-141 para 13.1). Today's cardMinimum() charges 5% of the lot and returns RM 209.00. The bill says RM 1,451.60. The app is reporting 14% of the real obligation — and the error is not the RM 1,242.60, it is that one number cannot say which part is contracted and which part is a floor you could clear tomorrow.\n\n(2) THE LIMIT. The statement shows RM 4,180.00 against RM 14,000 and reads as a third used. Add the RM 7,082.00 of instalments not yet billed — which keep blocking the limit until each month's principal is repaid — and the account is 80.4% used, with RM 2,738.00 free rather than RM 9,820.00. No statement prints that total anywhere.\n\n(3) THE FLOAT. The spending residual assumes every ringgit spent leaves a wallet in the same month, which is precisely what a credit card exists to break. Over the July–August cycle the card took on RM 3,060.00 that had not left the account. The fix needs no purchase ledger: float = the change in what the card owes between two dates, and leftPocket + float = what living took, exactly.\n\nAND THE STATEMENT CORRECTED THE PLAN TWICE. It covers TWO cards under ONE combined limit, one due date and one minimum — so a REVOLVING commitment models the ACCOUNT, not the plastic. And EzyPay Plus bills a principal line AND an interest line, both inside the minimum: 9% flat, about 16.6% effective, and not the 0% product its near-namesake EzyPay is."
+    },
+    {
+      "id": "sheet-note",
+      "x": 2620,
+      "y": 0,
+      "w": 500,
+      "text": "THE SHEET, NOT A FIFTH RAIL ITEM\n\nOne account, two cards, one sheet — opened from the Money row. Commit 654ad24 took Expenses off the rail for the same reason.\n\nTHE THREE-BAND BAR IS THE WHOLE ARGUMENT. Revolving at 15%, instalments billed this cycle, and instalments not yet billed. The third band is the one no statement shows, and it is the difference between believing you have RM 9,820.00 of room and having RM 2,738.00.\n\nWHY STATEMENTS ARE A TABLE. The float needs `owed` at two dates. A single mutable balance column can be read at one date only — today's. That is the argument for card_statements, and it comes from an arithmetic identity rather than from wanting a nicer screen. One row a month, copied off a bill that arrives whether the app exists or not.\n\nONE STATEMENT SO FAR, AND THE SCREEN SAYS SO rather than extrapolating from it. Maybank keeps twelve months online; importing the rest would give the float a year of history instead of a single window.\n\nTHE NAMES ARE A TRAP, AND THE STATEMENT PROVES IT. the insurer bills one line and is genuinely 0%. EzyPay Plus bills 200.00 principal and 18.00 interest — 0.75% a month, 9% flat, about 16.6% effective, above what simply carrying the balance costs. One word apart in the product name."
+    },
+    {
+      "id": "import-note",
+      "x": -560,
+      "y": 1440,
+      "w": 500,
+      "text": "THE IMPORT, AND WHERE THE HUMAN STOPS\n\nThe parser is built (sync/parse_maybank_statement.py); this screen is not. It is what §8 specifies.\n\nNOT OCR. The file has a text layer, so every figure is already exact. Running OCR over it would make `900.00` a probabilistic guess at `90000`, silently, in a column nobody re-reads.\n\nAND NOT `-layout` EITHER. Found the hard way on this very file: pdftotext's -layout mode SHEARS the columns, so the EzyPay Plus interest line comes out carrying EzyCash's RM 900.00 instead of its own RM 18.00. Nothing errors. `-table` gets it right. The lesson is that an extractor can be confidently wrong, which is why the three gates are not politeness.\n\nTHE GATES ARE ALL FREE. Every one is computed from figures the bank printed on the same document. The 'rows' gate is the important one — the balance gate compares the header against itself and would pass while the parser silently dropped a page.\n\nTHE HUMAN STEP IS CATEGORISATION, AND IT SHRINKS. 38 purchases, 22 merchants, and the fuel app alone is 16 of the rows: one decision covers 42% of the statement. Three merchants are already RECURRING commitments and must be matched rather than logged, or they count twice against income. Three are payment gateways whose real merchant the statement never names — those stay uncategorised and are said out loud, because a wrong category is read as fact on Spending and nothing would ever flag it."
+    },
+    {
+      "id": "calendar-note",
+      "x": 2940,
+      "y": 1440,
+      "w": 460,
+      "text": "WHY THE STATEMENT DAY IS A COLUMN\n\nThe interest-free period Bank Negara requires runs from the STATEMENT date, not the due date — at least 20 calendar days, and only while nothing is carried forward. This statement sits exactly at that floor: closes the 6th, due the 26th.\n\nStore only the due day and the app cannot say the most useful sentence a card screen has: anything bought today lands on the bill closing 8 September and due 28 September. Thirty-seven days.\n\nTHE HOLLOW RING earns its own mark. A statement closing is the most consequential day in a card's month and the only one on which nothing happens to your money. The 6th decides what the 26th costs.\n\nTHE BSN ROW IS BLANK ON PURPOSE. No statement has been read for it, and BSN prices anywhere between 8.88% and 17.5% on employment sector, card product and payment history — so neither its cycle nor its rate can be assumed. One import would fill the row. Until then the comparison is not the app's to make."
+    },
+    {
+      "id": "float-note",
+      "x": -560,
+      "y": 2720,
+      "w": 500,
+      "text": "TWO TRUE ANSWERS, BOTH NAMED\n\nspentRM is not touched. It still answers 'what left my pockets', it is still what the wallet readings support, and every screen reading it keeps meaning what it meant. The float is a new figure beside it, not a correction to it.\n\nTHE IDENTITY. Writing S for cash spending, P for card purchases, C for charges and R for repayments:\n\n  leftPocket = S + R\n  float      = Δowed = P + C − R\n  livingCost = S + P + C\n\nThe repayment cancels exactly. Over this cycle the card went 1,120.00 → 4,180.00 with 1,120.00 paid off it: a float of +3,060.00, which is a whole month of card activity in one subtraction. No transaction was needed to know it.\n\nWHAT IT CATCHES. A log measured against the old residual reads 248% complete, which is not a thing a log can be. The reconciliation was built to catch an abandoned log and was instead reporting a fault in the accurate half, because it measured July's spending against August's money.\n\nAND THE RULE GENERALISES. The app already refuses to reconcile a window without a wallet reading at both ends, and says so rather than inventing one. A card is another pocket — a negative one. So: a window can be reconciled only when every pocket, positive and negative, has a dated reading at both ends. SPEND_UNKNOWN gains NO_CARD_READING, and the BSN row stays a dash rather than a zero."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

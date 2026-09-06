@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+      --chart-5: #d55181; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--background); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1;
+      letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 0 6px; font-size: 9.5px; line-height: 16px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .cell {
+      border: 1px solid var(--hairline); border-radius: 6px; background: var(--card);
+      padding: 8px 9px 9px; min-height: 108px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .daynum { font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); }
+    .mark { display: flex; align-items: baseline; gap: 6px; font-size: 10.5px; line-height: 1.3; }
+    .pip { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; margin-top: 4px; }
+    .pip-hollow {
+      width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; margin-top: 4px;
+      background: transparent; border: 1.5px solid var(--faint);
+    }
+    .dow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+      color: var(--faint); padding-bottom: 8px; text-align: left;
+    }
+  </style>
+</helmet>
+
+<div style="min-height: 900px; background: var(--background); display: flex; flex-direction: column">
+
+  <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 28px">
+    <h1 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Calendar</h1>
+    <div style="flex: 1"></div>
+    <span class="faint" style="font-size: 11.5px">August 2026</span>
+  </header>
+
+  <!-- ── what the two dates buy you ───────────────────────────────────────── -->
+  <div style="padding: 20px 28px 18px; border-bottom: 1px solid var(--hairline); display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start">
+    <div style="min-width: 430px; flex: 1.2">
+      <span class="eyebrow">If you buy something today</span>
+      <div style="margin-top: 11px; display: grid; gap: 9px; max-width: 540px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="width: 8px; height: 8px; border-radius: 9999px; background: var(--chart-2); flex-shrink: 0"></span>
+          <span style="flex: 1; font-size: 13px">On the <b style="font-weight: 600">Maybank</b> account</span>
+          <span class="mut" style="font-size: 12px">bill closes 8 Sep</span>
+          <span class="num" style="font-size: 13px; font-weight: 600; width: 96px; text-align: right">due 28 Sep</span>
+          <span class="badge badge-cash" style="width: 62px">39 days</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; opacity: 0.55">
+          <span style="width: 8px; height: 8px; border-radius: 9999px; background: var(--muted); flex-shrink: 0"></span>
+          <span style="flex: 1; font-size: 13px" class="mut">On the <b style="font-weight: 600">BSN</b> card</span>
+          <span class="faint" style="font-size: 12px">cycle unknown</span>
+          <span class="num faint" style="font-size: 13px; width: 96px; text-align: right">&mdash;</span>
+          <span class="badge badge-neutral" style="width: 62px">no bill</span>
+        </div>
+      </div>
+      <p class="mut" style="margin: 13px 0 0; font-size: 12px; line-height: 1.55; max-width: 540px; text-wrap: pretty">
+        Thirty-nine days, and the app could not say it before: it stored the day a bill is
+        <b style="font-weight: 600">due</b> and not the day it <b style="font-weight: 600">closes</b>,
+        and the interest-free period Bank Negara requires runs from the statement date. Twenty days
+        minimum, and only while nothing is carried forward.
+        <span class="faint">The BSN row stays blank rather than guessing — one imported statement would
+        fill it, and until then the comparison is not the app&rsquo;s to make.</span>
+      </p>
+    </div>
+
+    <div style="min-width: 300px; flex: 0.85">
+      <span class="eyebrow">Reading the marks</span>
+      <div style="margin-top: 11px; display: grid; gap: 8px; font-size: 12px">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span style="width: 7px; height: 7px; border-radius: 9999px; background: var(--loss)"></span>
+          <span class="mut">Money leaves — an amount and a date</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span style="width: 7px; height: 7px; border-radius: 9999px; background: var(--gain)"></span>
+          <span class="mut">Money arrives</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span style="width: 7px; height: 7px; border-radius: 9999px; background: transparent; border: 1.5px solid var(--faint)"></span>
+          <span class="mut">A bill closes — <b style="font-weight: 600">nothing moves</b></span>
+        </div>
+      </div>
+      <p class="faint" style="margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+        The hollow ring is the whole point of the distinction. A statement closing is the most
+        consequential day in a card&rsquo;s month and the only one on which nothing at all happens to
+        your money. The 8th decides what the 28th costs.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── the grid ─────────────────────────────────────────────────────────── -->
+  <div style="padding: 18px 28px 26px">
+    <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0 8px">
+      <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div><div class="dow">Thu</div>
+      <div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px">
+
+      <!-- week 1 — August 2026 opens on a Saturday -->
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div class="cell">
+        <span class="daynum">1</span>
+        <div class="mark"><span class="pip" style="background: var(--loss)"></span>
+          <span><span class="mut">Rent &amp; recurring</span><br><span class="num loss">1,393.00</span></span></div>
+      </div>
+      <div class="cell"><span class="daynum">2</span></div>
+
+      <!-- week 2 -->
+      <div class="cell"><span class="daynum">3</span></div>
+      <div class="cell"><span class="daynum">4</span></div>
+      <div class="cell">
+        <span class="daynum">5</span>
+        <div class="mark"><span class="pip" style="background: var(--loss)"></span>
+          <span><span class="mut">House</span><br><span class="num loss">2,214.57</span></span></div>
+      </div>
+      <div class="cell">
+        <span class="daynum">6</span>
+        <div class="mark"><span class="pip-hollow"></span>
+          <span><span class="mut">Maybank bill closes</span><br><span class="num faint">4,180.00</span>
+          <br><span class="faint">due 28 Aug</span></span></div>
+      </div>
+      <div class="cell"><span class="daynum">7</span></div>
+      <div class="cell"><span class="daynum">8</span></div>
+      <div class="cell"><span class="daynum">9</span></div>
+
+      <!-- week 3 -->
+      <div class="cell"><span class="daynum">10</span></div>
+      <div class="cell"><span class="daynum">11</span></div>
+      <div class="cell">
+        <span class="daynum">12</span>
+        <div class="mark"><span class="pip" style="background: var(--loss)"></span>
+          <span><span class="mut">Myvi</span><br><span class="num loss">820.00</span></span></div>
+      </div>
+      <div class="cell"><span class="daynum">13</span></div>
+      <div class="cell"><span class="daynum">14</span></div>
+      <div class="cell"><span class="daynum">15</span></div>
+      <div class="cell"><span class="daynum">16</span></div>
+
+      <!-- week 4 -->
+      <div class="cell"><span class="daynum">17</span></div>
+      <div class="cell"><span class="daynum">18</span></div>
+      <div class="cell"><span class="daynum">19</span></div>
+      <div class="cell" style="border-color: var(--chart-2); background: rgba(217,89,38,0.05)">
+        <span class="daynum" style="color: var(--chart-2)">20 · today</span>
+      </div>
+      <div class="cell"><span class="daynum">21</span></div>
+      <div class="cell"><span class="daynum">22</span></div>
+      <div class="cell"><span class="daynum">23</span></div>
+
+      <!-- week 5 -->
+      <div class="cell"><span class="daynum">24</span></div>
+      <div class="cell">
+        <span class="daynum">25</span>
+        <div class="mark"><span class="pip" style="background: var(--gain)"></span>
+          <span><span class="mut">Day job</span><br><span class="num gain">6,869.50</span></span></div>
+      </div>
+      <div class="cell" style="border-color: rgba(229,83,75,0.4)">
+        <span class="daynum">26</span>
+        <div class="mark"><span class="pip" style="background: var(--loss)"></span>
+          <span><span class="mut">Maybank due</span><br><span class="num loss">1,451.60</span>
+          <span class="faint">min</span><br><span class="num faint">4,180.00 in full</span></span></div>
+      </div>
+      <div class="cell"><span class="daynum">27</span></div>
+      <div class="cell"><span class="daynum">28</span></div>
+      <div class="cell"><span class="daynum">29</span></div>
+      <div class="cell"><span class="daynum">30</span></div>
+
+      <!-- week 6 -->
+      <div class="cell"><span class="daynum">31</span></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+      <div style="min-height: 108px"></div>
+    </div>
+
+    <p class="faint" style="margin: 16px 0 0; font-size: 11.5px; line-height: 1.55; max-width: 940px; text-wrap: pretty">
+      The 26th carries two figures because they are two different decisions.
+      <b style="font-weight: 600">RM 1,451.60</b> is the minimum, and RM 1,308.00 of it is contracted
+      instalments that are due whatever you decide. <b style="font-weight: 600">RM 4,180.00</b> clears the
+      bill and keeps the interest-free period alive on next month&rsquo;s purchases — which is worth more
+      than the RM 35.90 of interest the difference would cost, and is the kind of thing the app can show
+      without telling you what to do.
+    </p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

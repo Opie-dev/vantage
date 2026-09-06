@@ -1,0 +1,326 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+      --chart-5: #d55181; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--card); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1;
+      letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .stat {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums;
+      font-size: 1.55rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.15;
+    }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 0 6px; font-size: 9.5px; line-height: 16px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-gain { background: rgba(63,178,127,0.12); color: var(--gain); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .track { height: 5px; border-radius: 9999px; background: var(--muted); overflow: hidden; display: flex; }
+    th {
+      border-bottom: 1px solid var(--hairline); padding: 0 0 7px 12px;
+      text-align: right; font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); white-space: nowrap;
+    }
+    td { border-bottom: 1px solid var(--hairline); padding: 8px 0 8px 12px; text-align: right; font-size: 12.5px; }
+    th:first-child, td:first-child { text-align: left; padding-left: 0; }
+    tr:last-child td { border-bottom: 0; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  </style>
+</helmet>
+
+<div style="min-height: 1260px; background: var(--card); display: flex; flex-direction: column; border-left: 1px solid var(--border)">
+
+  <header style="flex-shrink: 0; border-bottom: 1px solid var(--border); padding: 18px 24px 16px; display: flex; align-items: flex-start; gap: 12px">
+    <div style="flex: 1">
+      <div style="display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Maybank card account</h2>
+        <span class="badge badge-neutral">2 cards, 1 limit</span>
+      </div>
+      <div class="mut" style="font-size: 11.5px; margin-top: 4px">
+        myimpact Visa Signature · PETRONAS Gold · limit <span class="num">RM 14,000</span> ·
+        <span class="num">15%</span> if carried · statement 8th, due 28th
+      </div>
+    </div>
+    <div style="width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8b98a5" stroke-width="2" stroke-linecap="round">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </div>
+  </header>
+
+  <!-- ── what is owed, and what is actually left ──────────────────────────── -->
+  <div style="padding: 20px 24px 18px; border-bottom: 1px solid var(--hairline)">
+    <div style="display: flex; align-items: flex-start; gap: 32px; flex-wrap: wrap">
+      <div>
+        <span class="eyebrow">Committed on this account</span>
+        <div class="stat" style="margin-top: 8px; font-size: 34px">RM 11,262<span class="faint">.00</span></div>
+        <div class="faint" style="font-size: 11.5px; margin-top: 5px">
+          <span class="num">4,180.00</span> billed &middot; <span class="num">7,082.00</span> still to be
+        </div>
+      </div>
+      <div>
+        <span class="eyebrow">Actually available</span>
+        <div class="stat" style="margin-top: 8px; font-size: 34px; color: var(--chart-2)">RM 2,738<span style="opacity: 0.55">.00</span></div>
+        <div class="faint" style="font-size: 11.5px; margin-top: 5px">of a <span class="num">RM 14,000</span> limit</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 16px">
+      <div class="track" style="height: 8px">
+        <div style="width: 20.51%; background: var(--loss)"></div>
+        <div style="width: 9.34%; background: var(--chart-2)"></div>
+        <div style="width: 50.59%; background: var(--chart-2); opacity: 0.45"></div>
+      </div>
+      <div style="display: flex; gap: 22px; margin-top: 11px; flex-wrap: wrap">
+        <div style="display: flex; align-items: baseline; gap: 7px">
+          <span style="width: 8px; height: 8px; border-radius: 9999px; background: var(--loss); display: inline-block"></span>
+          <div>
+            <div class="num" style="font-size: 13px; font-weight: 600">RM 2,872.00</div>
+            <div class="faint" style="font-size: 11px; margin-top: 1px">revolving, at 15%</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 7px">
+          <span style="width: 8px; height: 8px; border-radius: 9999px; background: var(--chart-2); display: inline-block"></span>
+          <div>
+            <div class="num" style="font-size: 13px; font-weight: 600">RM 1,308.00</div>
+            <div class="faint" style="font-size: 11px; margin-top: 1px">instalments billed this cycle</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 7px">
+          <span style="width: 8px; height: 8px; border-radius: 9999px; background: var(--chart-2); opacity: 0.45; display: inline-block"></span>
+          <div>
+            <div class="num" style="font-size: 13px; font-weight: 600">RM 7,082.00</div>
+            <div class="faint" style="font-size: 11px; margin-top: 1px">unbilled, still blocking the limit</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="mut" style="margin: 14px 0 0; font-size: 12px; line-height: 1.55; text-wrap: pretty">
+      <b style="font-weight: 600">The third band is the one no statement shows you.</b> The bill says
+      RM 4,180.00 against RM 14,000 and reads as a third used. Add the instalments not yet billed and the
+      account is <b style="font-weight: 600">80.4% used</b>, with RM 2,738.00 free rather than RM 9,820.00.
+      <span class="faint">It comes back RM 1,308 a month, as each instalment&rsquo;s principal is paid.</span>
+    </p>
+  </div>
+
+  <!-- ── the cycle ────────────────────────────────────────────────────────── -->
+  <div style="padding: 18px 24px 20px; border-bottom: 1px solid var(--hairline)">
+    <div style="display: flex; align-items: center; gap: 9px; flex-wrap: wrap">
+      <span class="eyebrow">The cycle</span>
+      <span class="badge badge-loss">RM 1,451.60 due in 8 days</span>
+    </div>
+
+    <div style="margin-top: 18px; position: relative; height: 60px">
+      <div style="position: absolute; left: 0; right: 0; top: 15px; height: 2px; background: var(--hairline)"></div>
+      <div style="position: absolute; left: 0; width: 35%; top: 15px; height: 2px; background: var(--chart-2)"></div>
+
+      <div style="position: absolute; left: 0; top: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+        <span style="width: 13px; height: 13px; border-radius: 9999px; background: var(--background); border: 2px solid var(--faint)"></span>
+        <div style="font-size: 11px; white-space: nowrap">
+          <div class="mut">8 Aug</div>
+          <div class="faint" style="margin-top: 1px">bill closed</div>
+        </div>
+      </div>
+
+      <div style="position: absolute; left: 35%; top: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+        <span style="width: 13px; height: 13px; border-radius: 9999px; background: var(--chart-2); box-shadow: 0 0 0 3px rgba(217,89,38,0.18)"></span>
+        <div style="font-size: 11px; white-space: nowrap">
+          <div style="font-weight: 600; color: var(--chart-2)">20 Aug · today</div>
+        </div>
+      </div>
+
+      <div style="position: absolute; left: 55%; top: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+        <span style="width: 13px; height: 13px; border-radius: 9999px; background: var(--background); border: 2px solid var(--loss)"></span>
+        <div style="font-size: 11px; white-space: nowrap">
+          <div style="font-weight: 600">28 Aug</div>
+          <div class="faint" style="margin-top: 1px">RM 1,451.60 minimum</div>
+        </div>
+      </div>
+
+      <div style="position: absolute; left: 78%; top: 9px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px">
+        <span style="width: 13px; height: 13px; border-radius: 9999px; background: var(--background); border: 2px solid var(--faint)"></span>
+        <div style="font-size: 11px; white-space: nowrap">
+          <div class="mut">8 Sep</div>
+          <div class="faint" style="margin-top: 1px">next closes</div>
+        </div>
+      </div>
+
+      <div style="position: absolute; right: 0; top: 9px; display: flex; flex-direction: column; align-items: flex-end; gap: 8px">
+        <span style="width: 13px; height: 13px; border-radius: 9999px; background: var(--background); border: 2px solid var(--faint)"></span>
+        <div style="font-size: 11px; white-space: nowrap; text-align: right">
+          <div class="mut">28 Sep</div>
+          <div class="faint" style="margin-top: 1px">and is due</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="mut" style="margin: 4px 0 0; font-size: 12px; line-height: 1.55; text-wrap: pretty">
+      Twenty days from statement to due date — exactly the minimum Bank Negara requires, and only while
+      nothing is carried forward. Anything bought today lands on the bill closing
+      <b style="font-weight: 600">8 September</b>, due <b style="font-weight: 600">28 September</b>: 39 days.
+    </p>
+  </div>
+
+  <!-- ── plans ────────────────────────────────────────────────────────────── -->
+  <div style="padding: 18px 24px 20px; border-bottom: 1px solid var(--hairline)">
+    <div style="display: flex; align-items: center; gap: 9px; flex-wrap: wrap">
+      <span class="eyebrow">Instalment plans</span>
+      <span class="badge badge-neutral">RM 1,308.00 a month</span>
+      <div style="flex: 1"></div>
+      <span class="faint" style="font-size: 11px">counter checked against the app&rsquo;s own count</span>
+    </div>
+
+    <div style="margin-top: 14px; display: grid; gap: 13px">
+
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap">
+          <span style="font-size: 13px; font-weight: 600">EzyCash</span>
+          <span class="mut" style="font-size: 11.5px">RM 5,400 drawn to account</span>
+          <div style="flex: 1"></div>
+          <span class="num" style="font-size: 13px; font-weight: 600">RM 900.00</span>
+          <span class="faint" style="font-size: 11px">&times; 4 left</span>
+        </div>
+        <div class="track" style="margin-top: 8px"><div style="width: 25%; background: var(--chart-2)"></div></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px" class="faint">
+          <span><span class="num">2</span> of <span class="num">6</span> paid</span>
+          <span><span class="num">RM 3,600.00</span> left · ends Dec 2026</span>
+        </div>
+        <div class="mut" style="font-size: 11.5px; margin-top: 7px; line-height: 1.5">
+          <span class="badge badge-neutral" style="margin-right: 6px">not spending</span>
+          A cash-out moves money into your own account. It never reaches the expense log, or it would
+          invent RM 5,400 of living costs that never happened.
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--hairline); padding-top: 13px">
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap">
+          <span style="font-size: 13px; font-weight: 600">EzyPay Plus</span>
+          <span class="mut" style="font-size: 11.5px">a posted charge, converted</span>
+          <div style="flex: 1"></div>
+          <span class="num" style="font-size: 13px; font-weight: 600">RM 218.00</span>
+          <span class="faint" style="font-size: 11px">&times; 9 left</span>
+        </div>
+        <div class="track" style="margin-top: 8px"><div style="width: 25%; background: var(--chart-2)"></div></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px" class="faint">
+          <span><span class="num">3</span> of <span class="num">12</span> paid</span>
+          <span><span class="num">RM 1,962.00</span> left · ends May 2027</span>
+        </div>
+        <div class="mut" style="font-size: 11.5px; margin-top: 7px; line-height: 1.5">
+          <span class="badge badge-loss" style="margin-right: 6px">not the 0% one</span>
+          The statement bills it as two lines — <span class="num">200.00</span> principal and
+          <span class="num">18.00</span> interest — which is <span class="num">0.75%</span> a month, or
+          <span class="num">9%</span> flat, or about <b class="num" style="font-weight: 600">16.6%</b>
+          effective. Above what simply carrying the balance costs. Its near-namesake
+          <b style="font-weight: 600">EzyPay</b>, below, is genuinely free.
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--hairline); padding-top: 13px">
+        <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap">
+          <span style="font-size: 13px; font-weight: 600">Motor insurance</span>
+          <span class="mut" style="font-size: 11.5px">EzyPay, at the merchant</span>
+          <div style="flex: 1"></div>
+          <span class="num" style="font-size: 13px; font-weight: 600">RM 190.00</span>
+          <span class="faint" style="font-size: 11px">&times; 8 left</span>
+        </div>
+        <div class="track" style="margin-top: 8px"><div style="width: 33.3%; background: var(--chart-2)"></div></div>
+        <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px" class="faint">
+          <span><span class="num">4</span> of <span class="num">12</span> paid · RM 2,280.00 financed</span>
+          <span><span class="num">RM 1,520.00</span> left · ends Apr 2027</span>
+        </div>
+        <div class="mut" style="font-size: 11.5px; margin-top: 7px; line-height: 1.5">
+          <span class="badge badge-gain" style="margin-right: 6px">genuinely 0%</span>
+          One line on the statement, no interest line beneath it, no upfront fee. This is what a free
+          instalment plan looks like, and it is how you tell the two products apart.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── statements ───────────────────────────────────────────────────────── -->
+  <div style="padding: 18px 24px 20px; border-bottom: 1px solid var(--hairline)">
+    <div style="display: flex; align-items: center; gap: 9px">
+      <span class="eyebrow">Statements</span>
+      <div style="flex: 1"></div>
+      <span class="faint" style="font-size: 11px">one row a month, off the bill</span>
+    </div>
+
+    <table style="margin-top: 12px">
+      <tr>
+        <th>Closed</th><th>Closing</th><th>Minimum</th><th>Interest</th><th>Fees</th><th>Due</th>
+      </tr>
+      <tr>
+        <td>8 Aug 2026</td>
+        <td class="num">4,180.00</td>
+        <td class="num">1,451.60</td>
+        <td class="num faint">0.00</td>
+        <td class="num faint">0.00</td>
+        <td>28 Aug <span class="badge badge-cash" style="margin-left: 5px">unpaid</span></td>
+      </tr>
+    </table>
+
+    <div style="margin-top: 12px; padding: 10px 12px; border-radius: 6px; border: 1px dashed var(--border)">
+      <p class="faint" style="margin: 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+        <b style="font-weight: 600; color: var(--muted-foreground)">One statement read so far.</b>
+        Maybank keeps twelve months online — importing the rest would give the float a full year of
+        history rather than a single window. The app says how many it has instead of extrapolating
+        from one.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── the float ────────────────────────────────────────────────────────── -->
+  <div style="padding: 18px 24px 24px">
+    <span class="eyebrow">Float, over the cycle just closed</span>
+    <div style="display: flex; align-items: baseline; gap: 14px; margin-top: 8px; flex-wrap: wrap">
+      <span class="stat" style="color: var(--chart-2)">+RM 3,060.00</span>
+      <span class="mut" style="font-size: 12px">9 July &rarr; 8 August</span>
+    </div>
+    <p class="mut" style="margin: 10px 0 0; font-size: 12px; line-height: 1.55; text-wrap: pretty">
+      Owed went from <span class="num">RM 1,120.00</span> to <span class="num">RM 4,180.00</span> while
+      <span class="num">RM 1,120.00</span> was paid off it. That difference is spending and charges that
+      have already happened and have not left your account —
+      <b style="font-weight: 600">it is the whole of last month&rsquo;s card activity, in one subtraction.</b>
+      <span class="faint">Two closing balances. No transaction was needed to know it.</span>
+    </p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
