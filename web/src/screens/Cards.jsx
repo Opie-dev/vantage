@@ -4,9 +4,10 @@
  * TWO LIMITS ARE NOT ONE POOL, and that is why this is a screen. Adding the
  * limits together would make the tighter account disappear inside the total,
  * which is the one thing this page must never do: room free on one card cannot
- * pay the other's bill, it can only move the debt at a worse rate. So the totals
- * here are stated per account and the only figure summed across them is what
- * leaves in the next thirty days.
+ * pay the other's bill, it can only move the debt at a worse rate. So room is
+ * stated per account and never totalled. What IS summed across accounts is debt
+ * and what leaves — those add up honestly, because owing 5,000 on one card and
+ * 2,000 on another really is owing 7,000. Headroom is the figure that does not.
  *
  * WHAT THE BILL SAYS IS NOT WHAT IS FREE. A statement showing a third of the
  * limit used can sit on an account with almost nothing left, because instalments
@@ -71,7 +72,6 @@ export default function Cards() {
 
   const cards = out.rows.length
   const withLimit = out.rows.filter(r => r.commitment.credit_limit)
-  const availableRM = withLimit.reduce((t, r) => t + (r.availableRM || 0), 0)
 
   return (
     <div className="grid gap-4">
@@ -96,16 +96,56 @@ export default function Cards() {
         </Card>
         <Card>
           <CardContent className="px-4">
-            <span className="eyebrow">Actually available</span>
-            <div className="stat num">{withLimit.length ? fmt(availableRM, 'MYR') : '—'}</div>
-            <Meta>
-              {withLimit.length
-                ? 'limit less what is billed and what instalments still block'
-                : 'no limit recorded, so there is nothing to be free of'}
-            </Meta>
+            <span className="eyebrow">Accounts with a limit</span>
+            <div className="stat num">
+              {withLimit.length}
+              <span className="text-faint text-[13px]"> of {cards}</span>
+            </div>
+            <Meta>what is free is stated per account below, and never added up</Meta>
           </CardContent>
         </Card>
       </div>
+
+      {withLimit.length ? (
+        <Card>
+          <CardContent className="grid gap-2.5 px-4">
+            <span className="eyebrow">Room, per account</span>
+            {withLimit.map(r => (
+              <div key={r.id} className="grid gap-1">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-[12.5px]">{r.name}</span>
+                  <span className="num text-[12.5px] font-semibold">
+                    {fmt(r.availableRM, r.cur)} free
+                  </span>
+                </div>
+                <div className="bg-muted h-[5px] overflow-hidden rounded-full">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, r.utilisationPct || 0))}%`,
+                      background: 'var(--loss)',
+                    }}
+                  />
+                </div>
+                <Meta>
+                  {fmt(r.commitment.credit_limit, r.cur)} limit ·{' '}
+                  {fmt(r.revolving, r.cur)} billed ·{' '}
+                  {fmt(r.blocked, r.cur)} still blocked by instalments
+                </Meta>
+              </div>
+            ))}
+            {/* The one thing this screen must never do. Two limits added together
+                make the tighter account disappear inside the total, and a total
+                is what someone reads before deciding a purchase fits. */}
+            <p className="text-faint m-0 mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-pretty">
+              These are not added together, and there is no figure on this screen that adds them.
+              Room free on one account cannot pay another&rsquo;s bill — it can only move the debt,
+              usually at a worse rate. A combined total would make the tightest account vanish
+              inside it, which is the one error this page exists to prevent.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="min-w-0 gap-0 overflow-hidden py-0">
         <div className="flex items-center gap-2.5 px-4 py-3">

@@ -74,6 +74,7 @@ const VantageContext = createContext(null)
  *   openCommitment: (prefill?: object) => void,
  *   openCardPlan: (prefill?: object) => void,
  *   openCardStatement: (prefill?: object) => void,
+ *   openCardPayment: (prefill?: object) => void,
  *   openStatementImport: (prefill?: object) => void,
  *   importStatement: (body: object) => Promise<object|null>,
  *   addCardPlan: (cardId: number, body: object) => Promise<boolean>,
@@ -454,6 +455,15 @@ export function VantageProvider({ children }) {
       setModal({ kind: 'cardStatement', prefill: { commitment_id: cards[0].id, ...prefill } })
     }
 
+    const openCardPayment = (prefill = {}) => {
+      const cards = latest.current.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
+      if (!cards.length) {
+        toast.warning('Add a card first', { description: 'There is nothing to pay yet.' })
+        return
+      }
+      setModal({ kind: 'cardPayment', prefill: { commitment_id: cards[0].id, ...prefill } })
+    }
+
     const openStatementImport = (prefill = {}) => {
       const cards = latest.current.commitments.filter(c => c.kind === 'REVOLVING' && c.active)
       if (!cards.length) {
@@ -659,6 +669,7 @@ export function VantageProvider({ children }) {
         mutate(() => api.deleteCardStatement(cardId, statementId), 'Statement removed'),
       openCardPlan,
       openCardStatement,
+      openCardPayment,
       openStatementImport,
       importStatement,
       saveMerchantRule: body => mutate(() => api.saveMerchantRule(body), `${body.pattern} decided`),
