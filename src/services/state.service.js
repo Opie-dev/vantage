@@ -16,6 +16,7 @@ const commitmentPayments = require('../models/commitmentPayments.model');
 const cardPlans = require('../models/cardPlans.model');
 const cardStatements = require('../models/cardStatements.model');
 const merchantRules = require('../models/merchantRules.model');
+const fxRates = require('../models/fxRates.model');
 const income = require('../models/income.model');
 const snapshots = require('../models/snapshots.model');
 const fundMetrics = require('../models/fundMetrics.model');
@@ -53,6 +54,9 @@ async function getState() {
     // What a statement merchant IS. The importer applies these and never guesses;
     // an unmatched merchant is reported rather than filed. See §8.
     merchantRules: await merchantRules.listAll(),
+    // Published rates, cached. A date fetched once is a date fetched forever,
+    // because a rate BNM published for a past day does not change.
+    fxRates: await fxRates.listAll(),
     // What arrives. Net pay is NOT stored: it is gross less the deducted half
     // of the statutory block, derived on the client so the two column groups
     // can never be conflated into one wrong figure.

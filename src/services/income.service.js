@@ -13,6 +13,7 @@
  */
 const { transaction, pool } = require('../db');
 const income = require('../models/income.model');
+const fx = require('./fx.service');
 const assets = require('../models/assets.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 
@@ -178,13 +179,34 @@ async function addEvent(sourceId, body) {
   const epfTotal = f.epf_employee + f.epf_employer;
   const bookEpf = epfTotal > 0 && s.epf_asset_id != null;
 
+  /* The rate on the day it landed, fixed to the payment.
+   *
+   * WITHOUT THIS THE PAST MOVES. One global rate converts a March invoice at
+   * today's number, so the twelve-month income chart changes shape whenever the
+   * ringgit does and no month on it is what actually arrived.
+   *
+   * A LOOKUP FAILURE IS NOT A SAVE FAILURE. BNM being unreachable must not stop
+   * someone recording a payslip, so the rate comes back null, the event stores
+   * null, and the figure falls back to the global rate — which the screen labels
+   * approximate. A wrong rate written into history is permanent in a way a
+   * missing one is not. */
+  let fxRate = null;
+  let fxDate = null;
+  if (s.currency && s.currency !== 'MYR') {
+    const hit = await fx.rateOn(s.currency, date);
+    if (hit) {
+      fxRate = hit.rate / (hit.unit || 1);
+      fxDate = hit.date;
+    }
+  }
+
   return transaction(async client => {
     const row = (await income.insertEvent(client, {
       sourceId, date, gross,
       epfEmployee: f.epf_employee, socsoEmployee: f.socso_employee, eisEmployee: f.eis_employee,
       skbbk: f.skbbk, pcb: f.pcb, zakat: f.zakat, otherDeducted: f.other_deducted,
       epfEmployer: f.epf_employer, socsoEmployer: f.socso_employer, eisEmployer: f.eis_employer,
-      note, source,
+      note, source, fxRate, fxDate,
     })).rows[0];
 
     if (bookEpf) {
