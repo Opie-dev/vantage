@@ -860,6 +860,48 @@ try {
     console.log(`  equity     ${e.equityRM.toFixed(2)} on ${e.asset.name}, and none of it reachable`)
   }
 
+  /* ── a charge a card collects leaves on the card's day ───────────────────── */
+  {
+    const { commitmentRows, commitmentsTotal } = await server.ssrLoadModule('/src/lib/calc.js')
+    const card = STATE.commitments.find(c => c.kind === 'REVOLVING')
+    const rec = STATE.commitments.find(c => c.kind === 'RECURRING')
+    if (!card || !rec) throw new Error('collected: the fixture needs a card and a recurring charge')
+
+    // Unlinked, it leaves on its own day.
+    const before = commitmentRows(STATE).find(r => r.id === rec.id)
+    if (before.collectedBy !== null) throw new Error('collected: unlinked must be null')
+    if (before.leavesOnDay !== (rec.due_day ?? null)) {
+      throw new Error(`collected: unlinked leaves on its own day, got ${before.leavesOnDay}`)
+    }
+
+    const via = JSON.parse(JSON.stringify(STATE))
+    via.commitments = via.commitments.map(c =>
+      c.id === rec.id ? { ...c, collected_by_id: card.id } : c)
+    const after = commitmentRows(via).find(r => r.id === rec.id)
+
+    if (!after.collectedBy || after.collectedBy.id !== card.id) {
+      throw new Error('collected: the collector must be resolved to the card')
+    }
+    // The date moves to the card's, which is the entire point of the column.
+    if (after.leavesOnDay !== card.due_day) {
+      throw new Error(`collected: should leave on the card's day ${card.due_day}, got ${after.leavesOnDay}`)
+    }
+
+    // And it costs NOTHING extra. Counting a collected charge twice — once as a
+    // commitment and again as card spending — is the one error the whole
+    // merchant_rules COMMITMENT action exists to prevent, and this column must
+    // not reintroduce it through another door.
+    const t0 = commitmentsTotal(STATE)
+    const t1 = commitmentsTotal(via)
+    if (Math.abs(t0.monthlyOutRM - t1.monthlyOutRM) > 0.005) {
+      throw new Error(`collecting a charge must not change what a month costs: ${t0.monthlyOutRM} -> ${t1.monthlyOutRM}`)
+    }
+    if (Math.abs(t0.owedRM - t1.owedRM) > 0.005) {
+      throw new Error('collecting a charge must not change what is owed')
+    }
+    console.log(`  collected  ${rec.name} leaves on the ${after.leavesOnDay} via ${card.name}, costing the same`)
+  }
+
   // The month is shared, and that is the whole reason six screens are allowed to
   // exist. Stepping it on one must move it on every other, or the statement says
   // August while the log says July — which is exactly what the single screen's
