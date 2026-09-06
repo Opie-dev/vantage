@@ -42,9 +42,14 @@ that needs revisiting.
 
 ## 2. Where it does not add up
 
-Seven corrections. All of them are in the canvas, none of them are in the code, and every one
+Nine corrections. All of them are in the canvas, none of them are in the code, and every one
 should be fixed on the canvas before any of it is built — because each phase below reads its
 figures off this drawing.
+
+§2.1–§2.7 came from reading the canvas against itself. §2.8 and §2.9 came from an independent
+re-derivation afterwards, which is the more useful fact about them: the first pass found the
+figures that disagreed with each other, and only a second pass starting from the raw wallet
+readings found the row that agreed with nothing.
 
 ### 2.1 "Uncommitted" has two values
 
@@ -137,11 +142,17 @@ The canvas shows **Outstanding principal RM 39,000.00** — straight-line, half 
 because interest is charged on the original principal for the whole term, so any principal figure
 implies a settlement quote that needs a Rule-of-78 rebate this app does not model.
 
-Note the sen. The loan sheet asks for amount financed, rate, rate type, term and first payment,
-and no instalment — so the instalment is derived, `(78,000 + 18,564) / 84 = 1,149.5714…`, and
-`left × instalment` is 42 × that, not 42 × the 1,149.57 on screen. Multiplying the rounded display
-gives 48,281.94 and is wrong by six sen, which is the same mistake as §2.4 in miniature: a figure
-derived from what was printed rather than from what it was printed from.
+Note the sen, because it is contested. 42 × the 1,149.57 printed on the page gives **48,281.94**,
+and that is the figure a reader checking the screen will get. It is six sen short of what will
+actually be paid: the contract total is 78,000 × 1.238 = **96,564.00**, the loan is exactly half
+run at 42 of 84, and half of 96,564.00 is **48,282.00**. `loanSchedule()` lands on the same
+48,282.00, because the loan sheet collects no instalment and the derived one is 1,149.5714…, not
+the rounded display.
+
+So the canvas states 48,282.00 and its caption now says *"42 of 84, on a RM 96,564.00 contract"* —
+which a reader can verify on the page, where "42 × RM 1,149.57" invited a multiplication that does
+not reproduce the figure above it. The rounding remainder lands on the final instalment, as it does
+in the agreement.
 
 Net worth moves **RM 9,282.00** depending on which convention wins. The canvas already says the
 right thing in prose — *"Any settlement figure shown would be an estimate, never a quote"* — so
@@ -149,6 +160,37 @@ this is only a matter of making the headline agree with the paragraph under it.
 
 **Recommendation.** Keep `owedIsInstalments`. Show RM 48,282.00 as owed, and show the
 straight-line principal, if at all, as a clearly secondary figure that never enters a total.
+
+### 2.8 The residual table was RM 1,004.32 out, and pointing the wrong way
+
+The Expenses page walks income down to living costs in five rows. The fourth read:
+
+> Less what the wallet kept · *the balances rose, so this much never left* · −RM 180.00
+
+    9,984.50 − 4,796.22 − 2,000.00 − 180.00 = 3,008.28
+
+against a stated total of RM 4,012.60. The wallet did not rise. Its own readings on the same page
+say it fell: 4,180.00 + 96.20 on 1 August, 3,365.68 + 86.20 on the 31st — a fall of **824.32**. So
+the buffer part-funded the month and the row is an **add-back**, not a deduction:
+
+    9,984.50 − 4,796.22 − 2,000.00 + 824.32 = 4,012.60
+
+This is the worst of the nine. The other eight are figures disagreeing with each other, which a
+careful reader eventually catches; this one had the wrong sign, the wrong amount and prose
+asserting the opposite of the page's own data, while contradicting the waterfall, the segment card
+and the "What stayed −RM 824.32 · measured, not derived" tile simultaneously. It survived the first
+pass precisely because it was self-consistent with nothing — there was no pair of figures to
+compare. Finding it needed a re-derivation from the wallet readings up.
+
+### 2.9 The instalment split bar summed to 100.3%
+
+Fixing "73.4% is still interest" to 73.7% in §2.6 left its complement stranded at 26.6%, the
+orphan of the superseded figure. 398.03 / 1,514.42 = **26.3%**. A one-line consequence of an
+earlier fix, and the reason a second pass is worth running after the first.
+
+*(Also swept up: `commitmentRows()` still hard-coded three bar widths — 45, 34, 55 against derived
+45.50, 34.54, 55.25 — on the ×3 scale it computes for every other row. Small, and the same class as
+§2.4, so the constants are gone.)*
 
 ---
 
@@ -223,9 +265,10 @@ attribute should come off the drawing.
 
 ## 5. Phases
 
-**Phase 0 — Make the canvas self-consistent.** All seven corrections in §2. Design only, no code.
-It is first because every phase below quotes figures off it, and because a canvas whose waterfall
-does not sum will be built exactly as drawn.
+**Phase 0 — Make the canvas self-consistent.** ~~All nine corrections in §2.~~ **Done** — applied to
+the canvas and republished. Design only, no code. It was first because every phase below quotes
+figures off it, and because a canvas whose waterfall does not sum will be built exactly as drawn.
+Note that viewers on the shared link stay on the pinned pre-fix version until the pin is moved.
 
 **Phase 1 — Settle the shape.** §3: the rail, the calendar, one overview mode or two. Nothing else
 can be estimated until this lands.
