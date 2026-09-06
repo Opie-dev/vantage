@@ -187,7 +187,13 @@ export default function Commitments() {
         <div className="border-hairline border-t">
           {shown.length ? (
             shown.map(r => (
-              <CommitmentRow key={r.id} r={r} onEdit={openCommitment} onRemove={deleteCommitment} />
+              <CommitmentRow
+                key={r.id}
+                r={r}
+                onEdit={openCommitment}
+                onRemove={deleteCommitment}
+                onOpenOwner={row => setTab(row.kind === 'REVOLVING' ? 'cards' : 'loans')}
+              />
             ))
           ) : (
             <p className="text-faint m-0 px-4 py-6 text-[12px]">Nothing of that kind yet.</p>

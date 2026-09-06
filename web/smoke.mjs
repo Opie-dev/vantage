@@ -1042,6 +1042,31 @@ try {
     console.log(`  card float ${f.rm.toFixed(2)} from two readings and ${f.payments.length} payment, no transactions`)
   }
 
+  /* ── a row never offers an action its screen cannot perform ──────────────── */
+  {
+    const { commitmentRows } = await server.ssrLoadModule('/src/lib/calc.js')
+    const kinds = new Set(commitmentRows(STATE).map(r => r.kind))
+    if (!kinds.has('REVOLVING')) throw new Error('row actions: the fixture needs a card')
+
+    // Commitments shows EVERY kind, so a card row renders there — and it never
+    // passed the card callbacks. The plus called undefined and threw
+    // "r is not a function", which is a button that does nothing.
+    await tick(() => ctl.setTab('commitments'))
+    const onCommitments = document.querySelectorAll('[aria-label^="Add an instalment plan to"]').length
+    if (onCommitments !== 0) {
+      throw new Error(`row actions: Commitments offers ${onCommitments} add-plan buttons it cannot honour`)
+    }
+    const handoff = document.querySelectorAll('[aria-label*="on Credit cards"], [aria-label*="on Loans"]').length
+    if (handoff === 0) throw new Error('row actions: a card or loan row must offer its own screen instead')
+
+    // And Credit cards, which does pass them, still offers them.
+    await tick(() => ctl.setTab('cards'))
+    if (!document.querySelectorAll('[aria-label^="Add an instalment plan to"]').length) {
+      throw new Error('row actions: Credit cards must still offer to add a plan')
+    }
+    console.log(`  row actions Commitments hands ${handoff} row(s) to the screen that owns them`)
+  }
+
   // The month is shared, and that is the whole reason six screens are allowed to
   // exist. Stepping it on one must move it on every other, or the statement says
   // August while the log says July — which is exactly what the single screen's
