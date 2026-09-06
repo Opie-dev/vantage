@@ -42,6 +42,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronUpIcon,
+  FileTextIcon,
   PencilIcon,
   PlusIcon,
   TrashIcon,
@@ -51,6 +52,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 import {
@@ -100,8 +108,8 @@ const KIND_COLOR = {
   RECURRING: 'var(--chart-5)',
 }
 
-function Meta({ children }) {
-  return <span className="text-faint text-[11.5px]">{children}</span>
+function Meta({ children, className = '' }) {
+  return <span className={`text-faint text-[11.5px] ${className}`}>{children}</span>
 }
 
 function Line({ label, value, tone = '', strong = false, rule = false }) {
@@ -140,6 +148,74 @@ function SectionHead({ id, open, onToggle, label, badge, summary, add, addLabel 
 }
 
 /* ── the statement ────────────────────────────────────────────────────────── */
+
+/**
+ * What the cards took on, and what the month therefore actually cost.
+ *
+ * THE STATEMENT ABOVE IS UNTOUCHED and still means what it always meant: what
+ * LEFT YOUR POCKETS, over the window two wallet readings bracket. That identity
+ * closes exactly, and nothing here is allowed to alter it.
+ *
+ * But it rests on an assumption a credit card exists to break — that every ringgit
+ * spent leaves a wallet inside the same window. Buy something on the 3rd and pay
+ * the bill next month and the spending lands a month late, so the log looks
+ * over-complete now and abandoned later.
+ *
+ * The float closes that gap without a single purchase being entered, because
+ * Δ(what the cards owe) = purchases + charges − repayments. The repayment cancels
+ * against the committed line above, and what is left is the spending that has
+ * already happened and has not yet left your account.
+ *
+ * WHEN A CARD CANNOT BE READ THIS SAYS SO rather than falling back to zero. An
+ * unreadable card is not a card with no spending, and quietly treating it as one
+ * would restore the very error this exists to fix.
+ */
+function CardFloat({ spend }) {
+  const hasCards = spend.floatRM != null || spend.floatReason
+  if (!hasCards) return null
+
+  if (spend.floatReason) {
+    return (
+      <div className="border-hairline mt-3 border-t pt-2.5">
+        <p className="text-faint m-0 text-[11.5px] leading-relaxed text-pretty">
+          <b className="text-muted-foreground font-semibold">
+            What living cost cannot be closed yet.
+          </b>{' '}
+          {spend.floatUnreadableCards.join(', ')} has no statement bracketing this window, so what it
+          took on is unknown — and an unread card is not a card with no spending. Import or record a
+          statement at each end and this figure appears.
+        </p>
+      </div>
+    )
+  }
+
+  // A card that FELL over the window returned float: a month where you paid down
+  // more than you charged genuinely cost less than left your pockets.
+  const returned = spend.floatRM < 0
+  return (
+    <div className="border-hairline mt-3 border-t pt-2.5">
+      <div className="flex items-baseline gap-2.5 py-1">
+        <span className="num text-faint w-3 shrink-0 text-center text-[12px]">{returned ? '−' : '+'}</span>
+        <span className="text-muted-foreground min-w-0 flex-1 text-[12.5px]">
+          {returned ? 'Paid down more than the cards took on' : 'Spent on the cards, not yet paid'}
+        </span>
+        <span className="num text-[12.5px] font-semibold" style={{ color: 'var(--chart-2)' }}>
+          {fmt(Math.abs(spend.floatRM), 'MYR')}
+        </span>
+      </div>
+      <div className="border-hairline mt-1 flex items-baseline gap-2.5 border-t pt-2">
+        <span className="num text-faint w-3 shrink-0 text-center text-[12px]">=</span>
+        <span className="min-w-0 flex-1 text-[13px] font-semibold">What living actually cost</span>
+        <span className="num text-[14.5px] font-semibold">{fmt(spend.livingCostRM, 'MYR')}</span>
+      </div>
+      <p className="text-faint mt-2 mb-0 text-[11px] leading-relaxed text-pretty">
+        Read off what the cards owed on {dfmt(spend.from)} and {dfmt(spend.to)} — no purchase was
+        entered to know it. The repayment in the committed line cancels against it exactly, so no
+        ringgit is counted twice.
+      </p>
+    </div>
+  )
+}
 
 /**
  * What happened to the money, in the order it moved.
@@ -249,6 +325,7 @@ function Statement({ spend, monthShort }) {
           </div>
         ))}
       </div>
+      <CardFloat spend={spend} />
       <p className="text-faint mt-2 text-[11px] leading-relaxed">
         The last line is the remainder, not an input — it is what closes the month. Living cost is
         measured over <span className="num">{spend.days}</span>{' '}
@@ -503,16 +580,414 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
 
 /* ── going out ────────────────────────────────────────────────────────────── */
 
-function CommitmentRow({ r, onEdit, onRemove }) {
+/**
+ * The plans on a card, nested the way the statement nests them.
+ *
+ * The two totals below the list are kept apart because only one of them is a
+ * choice: an instalment is due in full or it is a default, while the 5% sits under
+ * a balance that could be cleared tomorrow. A single "card minimum" line would
+ * hide which half is which, which is precisely what the old model did.
+ */
+function CardPlans({ r, onEditPlan, onRemovePlan }) {
+  return (
+    <div className="border-hairline mt-1 mb-3 ml-[33px] grid gap-2 border-l pl-3.5">
+      {r.plans.map(p => (
+        <div key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="min-w-[190px] flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 text-[12.5px]">
+              <span>{p.name}</span>
+              {p.merchant ? <span className="text-faint">· {p.merchant}</span> : null}
+              {p.effective == null ? (
+                <Badge variant="gain" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+                  genuinely 0%
+                </Badge>
+              ) : (
+                <Badge variant="loss" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+                  {pct1(p.effective)} real
+                </Badge>
+              )}
+              {!p.isSpending ? (
+                <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+                  not spending
+                </Badge>
+              ) : null}
+            </div>
+            <Meta className="mt-0.5">
+              <span className="num">{p.paid}</span> of <span className="num">{p.tenure}</span>
+              {p.endsOn ? ` · ends ${p.endsOn.slice(0, 7)}` : ''}
+              {p.status !== 'ACTIVE' ? ` · ${p.status.toLowerCase()}` : ''}
+            </Meta>
+          </div>
+          <div className="w-[112px] shrink-0 text-right">
+            <div className="num text-[12.5px]">{fmt(p.outstanding, r.cur)}</div>
+            <Meta>left</Meta>
+          </div>
+          <div className="num w-[92px] shrink-0 text-right text-[12.5px] font-semibold">
+            {fmt(p.monthlyOut, r.cur)}
+          </div>
+          <RowAction
+            icon={PencilIcon}
+            label={`Edit ${p.name}`}
+            onClick={() => onEditPlan({ ...p.plan })}
+          />
+          <RowAction
+            icon={TrashIcon}
+            label={`Remove ${p.name}`}
+            onClick={() => onRemovePlan(r.id, p.id)}
+          />
+        </div>
+      ))}
+
+      <div className="border-hairline flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2">
+        <div className="min-w-[190px] flex-1">
+          <span className="text-muted-foreground text-[12px]">5% of the revolving balance</span>{' '}
+          <span className="text-faint text-[11px]">· instalments out of the base first</span>
+        </div>
+        <div className="num text-faint w-[112px] shrink-0 text-right text-[12.5px]">
+          {fmt(r.revolving, r.cur)}
+        </div>
+        <div className="num w-[92px] shrink-0 text-right text-[12.5px]">
+          {fmt(Math.max(r.minimum - r.instalments, 0), r.cur)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What is actually left on the limit, which no statement prints.
+ *
+ * A bill showing a third of the limit used can sit on an account with almost
+ * nothing free, because the instalments not yet billed are still blocking it and
+ * come back only as each month's principal is paid.
+ */
+function CardHeadroom({ r }) {
+  const apparent = r.commitment.credit_limit - r.revolving - r.planOutstanding
+  const hidden = r.availableRM != null && r.blocked > 0
+  if (!hidden) return null
+  return (
+    <div className="mb-3 ml-[33px] rounded-md border border-[color:var(--chart-2)]/25 bg-[color:var(--chart-2)]/[0.06] px-3 py-2">
+      <p className="text-muted-foreground m-0 text-[12px] leading-relaxed text-pretty">
+        <b className="font-semibold text-[color:var(--chart-2)]">
+          {fmt(r.availableRM, r.cur)} is what is actually left
+        </b>{' '}
+        on this limit. <span className="num">{fmt(r.blocked, r.cur)}</span> of instalment principal is
+        still blocking it and is released only as each month&rsquo;s share is paid.
+        {apparent > r.availableRM ? (
+          <>
+            {' '}
+            <span className="text-faint">
+              The balance alone would suggest {fmt(apparent, r.cur)}.
+            </span>
+          </>
+        ) : null}
+      </p>
+    </div>
+  )
+}
+
+/**
+ * One card account, opened from its row on Money.
+ *
+ * NOT A FIFTH RAIL ITEM. Two cards do not justify a screen, and commit 654ad24
+ * took Expenses off the rail for the same reason — two doors into one room read
+ * as two rooms to everyone but their author.
+ *
+ * The three-band bar is the whole argument of the card work. Revolving at APR,
+ * instalments billed each cycle, and instalments NOT YET BILLED — and the third
+ * band is the one no statement prints anywhere. A bill showing a third of the
+ * limit used can sit on an account with almost nothing free, because the unbilled
+ * principal keeps blocking it until each month's share is repaid.
+ */
+function CardSheet({ row, open, onClose }) {
+  const { deleteCardStatement, openCardStatement, openCardPlan } = useVantage()
+  if (!row) return null
+  const c = row.commitment
+  const limit = c.credit_limit || 0
+  const pct = v => (limit ? `${Math.max(0, Math.min(100, (v / limit) * 100))}%` : '0%')
+  const billed = row.instalments
+  const unbilled = Math.max(row.blocked - billed, 0)
+
+  return (
+    <Sheet open={open} onOpenChange={v => (v ? null : onClose())}>
+      <SheetContent className="w-full overflow-y-auto sm:max-w-[560px]">
+        <SheetHeader>
+          <SheetTitle className="flex flex-wrap items-baseline gap-2">{row.name}</SheetTitle>
+          <SheetDescription>
+            {limit ? `Limit ${fmt(limit, row.cur)} · ` : ''}
+            {c.apr}% if carried
+            {row.cycle ? ` · statement ${c.statement_day}, due ${c.due_day}` : ''}
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="grid gap-5 px-4 pb-6">
+          <div>
+            <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
+              <div>
+                <span className="eyebrow">Committed on this account</span>
+                <div className="stat mt-1.5">{fmt(row.owed, row.cur)}</div>
+              </div>
+              {row.availableRM != null ? (
+                <div>
+                  <span className="eyebrow">Actually available</span>
+                  <div className="stat mt-1.5" style={{ color: 'var(--chart-2)' }}>
+                    {fmt(row.availableRM, row.cur)}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            {limit ? (
+              <>
+                <div className="bg-muted mt-4 flex h-2 overflow-hidden rounded-full">
+                  <div style={{ width: pct(row.revolving), background: 'var(--loss)' }} />
+                  <div style={{ width: pct(billed), background: 'var(--chart-2)' }} />
+                  <div
+                    style={{ width: pct(unbilled), background: 'var(--chart-2)', opacity: 0.45 }}
+                  />
+                </div>
+                <div className="mt-3 grid gap-1.5">
+                  <BandLine
+                    colour="var(--loss)"
+                    value={fmt(row.revolving, row.cur)}
+                    label={`revolving, at ${c.apr}% — costs ${fmt(row.interestThisMonth, row.cur)} a month`}
+                  />
+                  {billed > 0 ? (
+                    <BandLine
+                      colour="var(--chart-2)"
+                      value={fmt(billed, row.cur)}
+                      label="instalments billed each cycle"
+                    />
+                  ) : null}
+                  {unbilled > 0 ? (
+                    <BandLine
+                      colour="var(--chart-2)"
+                      dim
+                      value={fmt(unbilled, row.cur)}
+                      label="unbilled principal, still blocking the limit"
+                    />
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <Meta className="mt-2 block">
+                No credit limit recorded, so utilisation and headroom cannot be shown.
+              </Meta>
+            )}
+          </div>
+
+          <div className="border-hairline border-t pt-4">
+            <span className="eyebrow">The cycle</span>
+            {row.cycle ? (
+              <>
+                <div className="mt-2.5 grid gap-1.5">
+                  <CycleLine label="Bill closes" value={dfmt(row.cycle.closesOn)} />
+                  <CycleLine label="And falls due" value={dfmt(row.cycle.dueOn)} strong />
+                </div>
+                <p className="text-muted-foreground mt-2.5 mb-0 text-[12px] leading-relaxed text-pretty">
+                  Anything bought today lands on that bill —{' '}
+                  <b className="font-semibold">
+                    {row.cycle.daysOfFloat} {row.cycle.daysOfFloat === 1 ? 'day' : 'days'}
+                  </b>{' '}
+                  before it has to be paid. The interest-free period runs from the day the bill
+                  closes, not the day it is due, which is why both are stored.
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground mt-2 mb-0 text-[12px] leading-relaxed text-pretty">
+                No statement day recorded. Without it this card cannot say when a purchase stops
+                being interest-free — the period runs from the close, and only the due day is known.
+              </p>
+            )}
+          </div>
+
+          <div className="border-hairline border-t pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="eyebrow">Instalment plans</span>
+              {row.plans.length ? (
+                <Badge
+                  variant="neutral"
+                  className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase"
+                >
+                  {fmt(row.instalments, row.cur)} a month
+                </Badge>
+              ) : null}
+              <div className="flex-1" />
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Add an instalment plan"
+                onClick={() => openCardPlan({ commitment_id: c.id })}
+              >
+                <PlusIcon />
+              </Button>
+            </div>
+
+            {row.plans.length ? (
+              <div className="mt-3 grid gap-3.5">
+                {row.plans.map(p => (
+                  <div key={p.id}>
+                    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                      <span className="text-[13px] font-semibold">{p.name}</span>
+                      {p.merchant ? <Meta>{p.merchant}</Meta> : null}
+                      <div className="flex-1" />
+                      <span className="num text-[13px] font-semibold">
+                        {fmt(p.instalment, row.cur)}
+                      </span>
+                      <Meta>&times; {p.left} left</Meta>
+                    </div>
+                    <Progress
+                      value={p.tenure ? (p.paid / p.tenure) * 100 : 0}
+                      aria-label={`${p.name}: ${p.paid} of ${p.tenure} paid`}
+                      className="mt-1.5 h-1.5"
+                    />
+                    <div className="mt-1 flex flex-wrap justify-between gap-2">
+                      <Meta>
+                        <span className="num">{p.paid}</span> of{' '}
+                        <span className="num">{p.tenure}</span> paid · {fmt(p.amount, row.cur)}{' '}
+                        financed
+                      </Meta>
+                      <Meta>
+                        <span className="num">{fmt(p.outstanding, row.cur)}</span> left
+                        {p.endsOn ? ` · ends ${p.endsOn.slice(0, 7)}` : ''}
+                      </Meta>
+                    </div>
+                    <p className="text-faint mt-1.5 mb-0 text-[11.5px] leading-relaxed text-pretty">
+                      {p.effective == null ? (
+                        <>
+                          <b className="text-gain font-semibold">Genuinely 0%.</b> No rate, no
+                          upfront fee — a merchant plan that really is free.
+                        </>
+                      ) : (
+                        <>
+                          <b className="text-loss font-semibold">{pct1(p.effective)} effective.</b>{' '}
+                          {p.upfront_fee > 0
+                            ? `The ${fmt(p.upfront_fee, row.cur)} upfront fee is where the cost of a 0% plan lives.`
+                            : 'Converted by the Seventh Schedule formula, so it compares with every other rate on screen.'}
+                        </>
+                      )}
+                      {p.isSpending ? '' : ' Not spending — never reaches the expense log.'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Meta className="mt-2 block">
+                None recorded. An EPP, a balance transfer or a cash instalment.
+              </Meta>
+            )}
+          </div>
+
+          <div className="border-hairline border-t pt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="eyebrow">Statements</span>
+              <div className="flex-1" />
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Record a statement"
+                onClick={() => openCardStatement({ commitment_id: c.id })}
+              >
+                <PlusIcon />
+              </Button>
+            </div>
+
+            {row.statements.length ? (
+              <div className="border-hairline mt-2 border-t">
+                {row.statements.map(st => (
+                  <div
+                    key={st.id}
+                    className="border-hairline flex flex-wrap items-center gap-x-3 gap-y-1 border-b py-2 last:border-b-0"
+                  >
+                    <span className="num min-w-[92px] text-[12.5px]">{dfmt(st.statement_date)}</span>
+                    <div className="min-w-0 flex-1">
+                      <Meta>
+                        due {dfmt(st.due_date)}
+                        {st.interest_charged > 0
+                          ? ` · ${fmt(st.interest_charged, row.cur)} interest`
+                          : ''}
+                        {st.fees_charged > 0 ? ` · ${fmt(st.fees_charged, row.cur)} fees` : ''}
+                      </Meta>
+                    </div>
+                    <div className="text-right">
+                      <div className="num text-[12.5px] font-semibold">
+                        {fmt(st.closing_balance, row.cur)}
+                      </div>
+                      {st.minimum_due != null ? (
+                        <Meta>{fmt(st.minimum_due, row.cur)} minimum</Meta>
+                      ) : null}
+                    </div>
+                    <RowAction
+                      icon={TrashIcon}
+                      label={`Remove the statement of ${st.statement_date}`}
+                      onClick={() => deleteCardStatement(c.id, st.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Meta className="mt-2 block">
+                None recorded. A statement is what lets the spending figure survive this card: the
+                float reads what was owed on two dates, and a single balance can only answer for
+                today.
+              </Meta>
+            )}
+            {row.statements.length === 1 ? (
+              <p className="text-faint mt-2 mb-0 text-[11px] leading-relaxed text-pretty">
+                One so far. Maybank keeps twelve months online — importing the rest would give the
+                float a year of history rather than a single window.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+function BandLine({ colour, value, label, dim = false }) {
+  return (
+    <div className="flex items-baseline gap-2.5">
+      <span
+        className="mt-1 size-2 shrink-0 rounded-full"
+        style={{ background: colour, opacity: dim ? 0.45 : 1 }}
+      />
+      <span className="num text-[12.5px] font-semibold">{value}</span>
+      <Meta className="min-w-0 flex-1">{label}</Meta>
+    </div>
+  )
+}
+
+function CycleLine({ label, value, strong = false }) {
+  return (
+    <div className="flex items-baseline gap-3 text-[12.5px]">
+      <span className={`flex-1 ${strong ? 'font-semibold' : 'text-muted-foreground'}`}>{label}</span>
+      <span className={`num ${strong ? 'font-semibold' : ''}`}>{value}</span>
+    </div>
+  )
+}
+
+function CommitmentRow({ r, onEdit, onRemove, onAddPlan, onRemovePlan, onAddStatement, onOpenSheet }) {
   const c = r.commitment
 
   return (
-    <div className="border-hairline flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 last:border-b-0">
+    <div className="border-hairline border-b last:border-b-0">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
       <span className="size-[9px] shrink-0 rounded-full" style={{ background: KIND_COLOR[r.kind] }} />
 
       <div className="min-w-[200px] flex-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-[13.5px] font-semibold">{r.name}</span>
+          {r.kind === 'REVOLVING' ? (
+            <button
+              type="button"
+              onClick={() => onOpenSheet(r.id)}
+              className="hover:text-primary text-left text-[13.5px] font-semibold underline-offset-4 transition-colors hover:underline"
+            >
+              {r.name}
+            </button>
+          ) : (
+            <span className="text-[13.5px] font-semibold">{r.name}</span>
+          )}
           {c.lender ? <Meta>{c.lender}</Meta> : null}
           {r.kind === 'LOAN' && r.flat ? (
             <Tooltip>
@@ -568,6 +1043,26 @@ function CommitmentRow({ r, onEdit, onRemove }) {
                 </>
               ) : null}{' '}
               · <span className="num">{r.quoted}%</span> if carried
+              {r.planOutstanding > 0 ? (
+                <>
+                  {' '}
+                  · <span className="num">{fmt(r.revolving, r.cur)}</span> revolving,{' '}
+                  <span className="num">{fmt(r.planOutstanding, r.cur)}</span> in{' '}
+                  {r.plans.length} plan{r.plans.length === 1 ? '' : 's'}
+                </>
+              ) : null}
+              {r.cycle ? (
+                <>
+                  {' '}
+                  · closes {r.cycle.closesOn.slice(8)}
+                  {r.cycle.daysOfFloat != null ? (
+                    <>
+                      , anything bought today is due{' '}
+                      <span className="num">{r.cycle.dueOn}</span>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
             </Meta>
           ) : (
             <Meta>
@@ -598,8 +1093,36 @@ function CommitmentRow({ r, onEdit, onRemove }) {
           <Meta>{r.everyMonths === 1 ? 'per month' : 'per month, spread'}</Meta>
         )}
       </div>
-      <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
-      <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
+        {r.kind === 'REVOLVING' ? (
+          <>
+            <RowAction
+              icon={PlusIcon}
+              label={`Add an instalment plan to ${r.name}`}
+              onClick={() => onAddPlan({ commitment_id: r.id })}
+            />
+            <RowAction
+              icon={FileTextIcon}
+              label={`Record a statement for ${r.name}`}
+              onClick={() => onAddStatement({ commitment_id: r.id })}
+            />
+          </>
+        ) : null}
+        <RowAction icon={PencilIcon} label={`Edit ${r.name}`} onClick={() => onEdit(r.commitment)} />
+        <RowAction icon={TrashIcon} label={`Remove ${r.name}`} onClick={() => onRemove(r.id)} />
+      </div>
+
+      {r.kind === 'REVOLVING' && r.plans?.length ? (
+        <>
+          <CardPlans r={r} onEditPlan={onAddPlan} onRemovePlan={onRemovePlan} />
+          <CardHeadroom r={r} />
+        </>
+      ) : null}
+      {r.kind === 'REVOLVING' && !r.cycle ? (
+        <p className="text-faint mb-3 ml-[33px] text-[11.5px] leading-relaxed text-pretty">
+          No statement day recorded, so this card cannot say when a purchase stops being
+          interest-free — the period runs from the day the bill closes, not the day it is due.
+        </p>
+      ) : null}
     </div>
   )
 }
@@ -610,6 +1133,9 @@ export default function Money() {
   const {
     state,
     openCommitment,
+    openCardPlan,
+    openCardStatement,
+    deleteCardPlan,
     openIncome,
     openIncomeEvent,
     deleteIncomeSource,
@@ -624,6 +1150,10 @@ export default function Money() {
   // changes. Jumping to either section opens it.
   const [openIn, setOpenIn] = useState(false)
   const [openOut, setOpenOut] = useState(false)
+  // Which card account has its sheet open. An id rather than the row, so the
+  // sheet re-reads a freshly derived row after every mutation instead of holding
+  // a stale copy from the moment it was opened.
+  const [sheetId, setSheetId] = useState(null)
 
   const w = useMemo(() => waterfall(state), [state])
   // One call, both halves: expensesFor() carries the residual it reconciles
@@ -868,6 +1398,10 @@ export default function Money() {
                         r={r}
                         onEdit={openCommitment}
                         onRemove={deleteCommitment}
+                        onAddPlan={openCardPlan}
+                        onRemovePlan={deleteCardPlan}
+                        onAddStatement={openCardStatement}
+                        onOpenSheet={setSheetId}
                       />
                     ))}
                     <div className="text-muted-foreground flex flex-wrap gap-x-5 gap-y-1 px-4 py-3 text-[12.5px]">
@@ -927,6 +1461,11 @@ export default function Money() {
           </>
         ) : null}
       </p>
+      <CardSheet
+        row={out.rows.find(r => r.id === sheetId) || null}
+        open={sheetId != null}
+        onClose={() => setSheetId(null)}
+      />
     </div>
   )
 }

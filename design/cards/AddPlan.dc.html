@@ -1,0 +1,259 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+      --chart-5: #d55181; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--card); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1;
+      letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 0 6px; font-size: 9.5px; line-height: 16px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-gain { background: rgba(63,178,127,0.12); color: var(--gain); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .label { font-size: 11.5px; font-weight: 600; color: var(--muted-foreground); display: block; margin-bottom: 6px; }
+    .input {
+      width: 100%; height: 34px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--background); color: var(--foreground); padding: 0 10px;
+      font-family: inherit; font-size: 13px; display: flex; align-items: center;
+    }
+    .input .num { font-size: 13px; }
+    .hint { font-size: 11px; color: var(--faint); margin-top: 5px; line-height: 1.45; display: block; }
+    .seg {
+      display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; height: 34px;
+    }
+    .seg > div {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; border-right: 1px solid var(--border); color: var(--muted-foreground);
+    }
+    .seg > div:last-child { border-right: 0; }
+    .seg > .on { background: rgba(217,89,38,0.14); color: var(--chart-2); font-weight: 600; }
+  </style>
+</helmet>
+
+<div style="min-height: 900px; background: var(--card); display: flex; flex-direction: column">
+
+  <header style="flex-shrink: 0; border-bottom: 1px solid var(--border); padding: 18px 24px 16px">
+    <h2 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Add an instalment plan</h2>
+    <div class="mut" style="font-size: 11.5px; margin-top: 4px">
+      On the <b style="font-weight: 600; color: var(--foreground)">Maybank card account</b> ·
+      RM 2,738.00 of limit actually free
+    </div>
+  </header>
+
+  <div style="padding: 20px 24px 24px; display: grid; gap: 18px; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr)">
+
+    <!-- ── the form ───────────────────────────────────────────────────────── -->
+    <div style="display: grid; gap: 16px; align-content: start">
+
+      <div>
+        <span class="label">What kind of plan</span>
+        <div class="seg">
+          <div class="on">Easy payment</div>
+          <div>Balance transfer</div>
+          <div>Cash instalment</div>
+          <div>Balance conversion</div>
+        </div>
+        <span class="hint">
+          The kind decides two things you would otherwise have to remember: whether this counts as
+          spending, and whether 0% is the sensible default. A balance transfer is refinancing, not a
+          purchase.
+        </span>
+      </div>
+
+      <div style="display: grid; gap: 14px; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr)">
+        <div>
+          <span class="label">What it was for</span>
+          <div class="input">Fridge &amp; aircond</div>
+        </div>
+        <div>
+          <span class="label">Where</span>
+          <div class="input mut">Senheng</div>
+        </div>
+      </div>
+
+      <div style="display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0,1fr))">
+        <div>
+          <span class="label">Amount financed</span>
+          <div class="input"><span class="mut" style="margin-right: 6px">RM</span><span class="num">4,800.00</span></div>
+        </div>
+        <div>
+          <span class="label">Over</span>
+          <div class="input"><span class="num">12</span><span class="mut" style="margin-left: 6px">months</span></div>
+        </div>
+        <div>
+          <span class="label">Upfront fee</span>
+          <div class="input"><span class="mut" style="margin-right: 6px">RM</span><span class="num faint">0.00</span></div>
+        </div>
+      </div>
+
+      <div>
+        <span class="label">The instalment, as the bank states it</span>
+        <div class="input"><span class="mut" style="margin-right: 6px">RM</span><span class="num">400.00</span></div>
+        <span class="hint">
+          Taken from the plan, not worked out here. RM 4,800.00 over 12 divides evenly this time; when it
+          does not, the bank rounds and puts the remainder on the last month, and a derived figure would
+          be wrong by sen every month for two years.
+        </span>
+      </div>
+
+      <div style="display: grid; gap: 14px; grid-template-columns: minmax(0,1fr) minmax(0,1fr)">
+        <div>
+          <span class="label">Bought on</span>
+          <div class="input"><span class="num">2026-09-03</span></div>
+          <span class="hint">When it was spent.</span>
+        </div>
+        <div>
+          <span class="label">First instalment</span>
+          <div class="input"><span class="num">2026-10-15</span></div>
+          <span class="hint">When money starts moving. A different month, and the app needs both.</span>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--hairline); padding-top: 15px">
+        <div style="display: flex; align-items: flex-start; gap: 10px">
+          <div style="width: 15px; height: 15px; border-radius: 4px; background: var(--chart-2); flex-shrink: 0; margin-top: 1px; display: flex; align-items: center; justify-content: center">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#151b21" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+          </div>
+          <div style="flex: 1">
+            <div style="font-size: 12.5px; font-weight: 600">Log RM 4,800.00 as spending on 3 September</div>
+            <span class="hint" style="margin-top: 4px">
+              It was spent that day, whatever the payments do afterwards. On a balance transfer this
+              starts unticked, because logging a debt you already had would invent living costs that
+              never happened.
+            </span>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding-left: 25px">
+          <span class="label">Under which category</span>
+          <div class="input" style="max-width: 260px">Shopping &rsaquo; Things</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── what it does ───────────────────────────────────────────────────── -->
+    <div style="display: grid; gap: 14px; align-content: start">
+
+      <div style="border: 1px solid var(--border); border-radius: 6px; padding: 15px">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span class="eyebrow">What this one costs</span>
+          <span class="badge badge-gain">genuinely 0%</span>
+        </div>
+        <div class="num gain" style="margin-top: 10px; font-size: 30px; font-weight: 600; letter-spacing: -0.02em">
+          RM 0.00
+        </div>
+        <div class="mut" style="font-size: 12px; margin-top: 5px">EzyPay, at the merchant. No fee, no rate.</div>
+
+        <div style="margin-top: 14px; border-top: 1px solid var(--hairline); padding-top: 12px">
+          <div class="eyebrow" style="font-size: 9.5px; color: var(--faint)">The near neighbours, on this card</div>
+          <div style="margin-top: 9px; display: grid; gap: 8px; font-size: 12px">
+            <div style="display: flex; align-items: baseline; gap: 10px">
+              <span class="mut" style="flex: 1">EzyPay <b style="font-weight: 600">Plus</b> &mdash; converts a posted charge</span>
+              <span class="num" style="color: var(--chart-2); font-weight: 600">16.6%</span>
+            </div>
+            <div style="display: flex; align-items: baseline; gap: 10px">
+              <span class="mut" style="flex: 1">Just carrying the RM 4,800 at your tier</span>
+              <span class="num loss" style="font-weight: 600">15.0%</span>
+            </div>
+          </div>
+          <p class="faint" style="margin: 11px 0 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+            EzyPay Plus is <b style="font-weight: 600">not</b> the 0% product its name suggests: it charges
+            0.75% a month, which is 9% flat, which the Seventh Schedule converter puts at
+            <span class="num">16.6%</span> effective &mdash; above the rate for simply not paying the bill.
+            One word apart, and the app should never let them look alike.
+          </p>
+        </div>
+      </div>
+
+      <div style="border: 1px solid rgba(229,83,75,0.45); border-radius: 6px; padding: 15px; background: rgba(229,83,75,0.06)">
+        <span class="eyebrow" style="color: var(--loss)">This does not fit</span>
+        <p class="mut" style="margin: 10px 0 0; font-size: 12px; line-height: 1.55; text-wrap: pretty">
+          RM 4,800.00 against <b class="num" style="font-weight: 600">RM 2,738.00</b> of room —
+          <b style="font-weight: 600">short by RM 2,062.00.</b>
+        </p>
+        <div style="margin-top: 12px; display: grid; gap: 9px">
+          <div style="display: flex; align-items: baseline; gap: 10px; font-size: 12.5px">
+            <span class="mut" style="flex: 1">Limit</span>
+            <span class="num" style="font-weight: 600">14,000.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 10px; font-size: 12.5px">
+            <span class="mut" style="flex: 1">&minus; Billed and unpaid</span>
+            <span class="num loss">4,180.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 10px; font-size: 12.5px">
+            <span class="mut" style="flex: 1">&minus; Instalments not yet billed</span>
+            <span class="num loss">7,082.00</span>
+          </div>
+          <div style="display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; border-top: 1px solid var(--hairline); padding-top: 9px">
+            <span style="flex: 1; font-weight: 600">= Available</span>
+            <span class="num" style="font-weight: 600">2,738.00</span>
+          </div>
+        </div>
+        <p class="faint" style="margin: 12px 0 0; font-size: 11.5px; line-height: 1.5; text-wrap: pretty">
+          <b style="font-weight: 600">The middle line is why this refusal exists.</b> Read only the
+          statement and the account looks a third used, with RM 9,820.00 free — and this plan would
+          appear to fit twice over. The instalments still to be billed keep blocking the limit until
+          each month&rsquo;s principal is paid, and no statement shows that total anywhere.
+        </p>
+      </div>
+
+      <div style="border: 1px solid var(--border); border-radius: 6px; padding: 15px; background: rgba(217,89,38,0.05); border-color: rgba(217,89,38,0.3)">
+        <span class="eyebrow" style="color: var(--chart-2)">If the limit allowed it</span>
+        <p class="mut" style="margin: 10px 0 0; font-size: 12px; line-height: 1.55; text-wrap: pretty">
+          It would add RM 4,800.00 of float in the month it was bought, and RM 400.00 a month to a minimum
+          already at RM 1,451.60 — of which RM 1,308.00 is contracted instalments. The app can say all of
+          that. Whether to ask Maybank for a limit increase is not its business.
+        </p>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 2px">
+        <div style="flex: 1; height: 34px; border-radius: 6px; background: var(--muted); color: var(--faint); display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 600">
+          Save plan
+        </div>
+        <div style="width: 96px; height: 34px; border-radius: 6px; border: 1px solid var(--border); color: var(--muted-foreground); display: flex; align-items: center; justify-content: center; font-size: 12.5px">
+          Cancel
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

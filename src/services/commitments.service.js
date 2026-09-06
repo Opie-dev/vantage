@@ -12,12 +12,16 @@
  */
 const commitments = require('../models/commitments.model');
 const payments = require('../models/commitmentPayments.model');
+const cardPlans = require('../models/cardPlans.model');
+const cardStatements = require('../models/cardStatements.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 
 /** Mirrors commitments_kind_check in the migration. */
 const KINDS = ['LOAN', 'REVOLVING', 'RECURRING'];
 /** Mirrors commitments_rate_type_check. See the migration for why this cannot be inferred. */
 const RATE_TYPES = ['FLAT', 'REDUCING'];
+/** Mirrors commitments_limit_release_check. See 20260906010000 for why it is per card. */
+const LIMIT_RELEASES = ['PROGRESSIVE', 'ON_SETTLEMENT'];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -91,6 +95,19 @@ function checkShape(kind, f) {
     // A balance with no date is a figure nobody can judge the age of, and a card
     // balance goes stale in days. The screen has to be able to say when.
     if (f.balance != null && !f.balance_as_of) throw badRequest('balance_as_of is required whenever a balance is given — a card balance is a snapshot, and the screen has to say how old it is');
+    // The day the bill CLOSES, which is not the day it falls due. BNM's
+    // interest-free period runs from the statement date (PD 028-141 para 18.2), so
+    // without this the app cannot say when a purchase stops being free.
+    if (f.statement_day != null
+        && (!Number.isInteger(f.statement_day) || f.statement_day < 1 || f.statement_day > 31)) {
+      throw badRequest('statement_day must be a day of the month, 1 to 31 — when the bill closes, not when it is due');
+    }
+    if (f.limit_release != null && !LIMIT_RELEASES.includes(f.limit_release)) {
+      throw badRequest(
+        'limit_release must be PROGRESSIVE (the limit comes back as each instalment of principal is ' +
+        'paid) or ON_SETTLEMENT (the whole plan blocks it until the last one). It cannot be inferred — ' +
+        'issuers publish both, and it comes off the card agreement');
+    }
     return;
   }
   if (!positive(f.amount)) throw badRequest('amount must be a positive number');
@@ -131,6 +148,8 @@ async function create(body) {
     apr: body.apr ?? null,
     min_payment_pct: body.min_payment_pct ?? 5,
     min_payment_floor: body.min_payment_floor ?? 50,
+    statement_day: body.statement_day ?? null,
+    limit_release: body.limit_release ?? null,
     amount: body.amount ?? null,
     every_months: body.every_months ?? 1,
     sort_order: body.sort_order ?? 0,
@@ -146,6 +165,7 @@ async function create(body) {
     termMonths: f.term_months, startedOn: f.started_on, instalment: f.instalment,
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
+    statementDay: f.statement_day, limitRelease: f.limit_release,
     amount: f.amount, everyMonths: f.every_months, sortOrder: f.sort_order,
   });
 }
@@ -183,6 +203,8 @@ async function update(id, body) {
     apr: body.apr === undefined ? c.apr : body.apr,
     min_payment_pct: body.min_payment_pct ?? c.min_payment_pct,
     min_payment_floor: body.min_payment_floor ?? c.min_payment_floor,
+    statement_day: body.statement_day === undefined ? c.statement_day : body.statement_day,
+    limit_release: body.limit_release === undefined ? c.limit_release : body.limit_release,
     amount: body.amount === undefined ? c.amount : body.amount,
     every_months: body.every_months ?? c.every_months,
     active: body.active === undefined ? c.active : body.active,
@@ -204,6 +226,7 @@ async function update(id, body) {
     termMonths: f.term_months, startedOn: f.started_on, instalment: f.instalment,
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
+    statementDay: f.statement_day, limitRelease: f.limit_release,
     amount: f.amount, everyMonths: f.every_months,
     active: f.active, endedOn: f.ended_on, sortOrder: f.sort_order,
   });
@@ -225,6 +248,23 @@ async function remove(id) {
       `${c.name} has ${n} recorded payment${n === 1 ? '' : 's'} — end it instead of deleting, ` +
       'or that record goes with it');
   }
+
+  // Same rule, one layer down. Without these the delete does not fail cleanly — it
+  // fails on a foreign key, with a message about a constraint name that tells the
+  // owner nothing about what they are actually being stopped from losing.
+  const plansN = await cardPlans.countForCard(id);
+  if (plansN > 0) {
+    throw badRequest(
+      `${c.name} carries ${plansN} instalment plan${plansN === 1 ? '' : 's'} — end the card instead ` +
+      'of deleting it, or remove the plans first');
+  }
+  const stmtsN = await cardStatements.countForCard(id);
+  if (stmtsN > 0) {
+    throw badRequest(
+      `${c.name} has ${stmtsN} statement${stmtsN === 1 ? '' : 's'} recorded — end it instead of ` +
+      'deleting, or the only dated record of what it owed goes with it');
+  }
+
   await commitments.remove(id);
 }
 

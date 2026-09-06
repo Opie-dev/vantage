@@ -1,0 +1,219 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+  <style>
+    :root {
+      --background: #0e1216; --foreground: #e6edf3;
+      --card: #151b21; --border: #243039; --hairline: #1c262e;
+      --muted: #1a222a; --muted-foreground: #8b98a5; --faint: #5c6a76;
+      --primary: #e8a33d; --gain: #3fb27f; --loss: #e5534b; --cash: #e8a33d;
+      --chart-1: #3987e5; --chart-2: #d95926; --chart-3: #199e70; --chart-4: #c98500;
+      --chart-5: #d55181; --chart-7: #9085e9;
+    }
+    * { box-sizing: border-box; border-color: var(--border); }
+    body {
+      margin: 0; background: var(--background); color: var(--foreground);
+      font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-size: 13.5px; -webkit-font-smoothing: antialiased; font-feature-settings: 'cv05' 1;
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { color: #f0b862; }
+    .num {
+      font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', monospace;
+      font-variant-numeric: tabular-nums; font-feature-settings: 'zero' 1;
+      letter-spacing: -0.01em;
+    }
+    .eyebrow {
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em;
+      text-transform: uppercase; color: var(--muted-foreground);
+    }
+    .card {
+      display: flex; flex-direction: column; gap: 12px;
+      border-radius: 6px; border: 1px solid var(--border);
+      background: var(--card); padding: 16px;
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+    }
+    .badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: fit-content; border-radius: 9999px; border: 1px solid transparent;
+      padding: 0 6px; font-size: 9.5px; line-height: 16px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap;
+    }
+    .badge-cash { background: rgba(232,163,61,0.12); color: var(--cash); }
+    .badge-gain { background: rgba(63,178,127,0.12); color: var(--gain); }
+    .badge-loss { background: rgba(229,83,75,0.12); color: var(--loss); }
+    .badge-neutral { background: var(--muted); color: var(--muted-foreground); }
+    .gain { color: var(--gain); } .loss { color: var(--loss); }
+    .faint { color: var(--faint); } .mut { color: var(--muted-foreground); }
+    .track { height: 6px; border-radius: 9999px; background: var(--muted); overflow: hidden; display: flex; }
+  </style>
+</helmet>
+
+<div style="min-height: 780px; background: var(--background); display: flex; flex-direction: column">
+
+  <header style="height: 60px; flex-shrink: 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; padding: 0 28px">
+    <h1 style="margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em">Spending</h1>
+    <div style="flex: 1"></div>
+    <span class="faint" style="font-size: 11.5px">the cycle of 9 Jul &rarr; 8 Aug 2026, 30 days</span>
+  </header>
+
+  <div style="padding: 26px 28px 24px; border-bottom: 1px solid var(--hairline); display: flex; gap: 44px; flex-wrap: wrap; align-items: flex-start">
+
+    <div style="min-width: 420px; flex: 1">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="eyebrow">What living took</span>
+        <span class="badge badge-cash">RM 3,060.00 of it has not left your account</span>
+      </div>
+      <div class="num" style="margin-top: 10px; font-size: 58px; line-height: 0.92; font-weight: 600; letter-spacing: -0.045em">
+        RM&nbsp;4,875<span class="faint">.65</span>
+      </div>
+
+      <div style="margin-top: 18px">
+        <div class="track" style="height: 13px">
+          <div style="width: 37.24%; background: var(--loss); opacity: 0.85"></div>
+          <div style="width: 62.76%; background: var(--chart-2)"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 9px; font-size: 11px" class="faint">
+          <span><span class="num" style="color: var(--foreground)">RM 1,815.65</span> left your pockets</span>
+          <span><span class="num" style="color: var(--chart-2)">RM 3,060.00</span> is riding on the card</span>
+        </div>
+      </div>
+
+      <p class="mut" style="margin: 16px 0 0; font-size: 12.5px; line-height: 1.6; max-width: 520px; text-wrap: pretty">
+        Two different true answers. <b style="font-weight: 600">RM 1,815.65</b> is what actually went out
+        of the wallet over this cycle — the figure the wallet readings support, and the one every screen
+        printed before today. <b style="font-weight: 600">RM 4,875.65</b> is what the cycle cost, whenever
+        the money happens to leave.
+        <span class="faint">The gap is one month of card purchases sitting on a bill not yet paid.</span>
+      </p>
+    </div>
+
+    <div style="min-width: 460px; flex: 1">
+      <div class="eyebrow" style="margin-bottom: 12px">How the two are related</div>
+      <div style="display: grid; gap: 7px; max-width: 500px">
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+          <span class="mut" style="width: 250px; flex-shrink: 0">Income that arrived</span>
+          <span class="num" style="flex: 1; text-align: right">8,719.50</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+          <span class="mut" style="width: 250px; flex-shrink: 0">&minus; Obligations paid</span>
+          <span class="num loss" style="flex: 1; text-align: right">5,547.57</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+          <span class="mut" style="width: 250px; flex-shrink: 0">&minus; Put into ASB</span>
+          <span class="num loss" style="flex: 1; text-align: right">2,000.00</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+          <span class="mut" style="width: 250px; flex-shrink: 0">&minus; Change in the wallets</span>
+          <span class="num gain" style="flex: 1; text-align: right">&minus;643.72</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px; border-top: 1px solid var(--hairline); padding-top: 8px">
+          <span style="width: 250px; flex-shrink: 0; font-weight: 600">= Left your pockets</span>
+          <span class="num" style="flex: 1; text-align: right; font-weight: 600">RM 1,815.65</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px">
+          <span class="mut" style="width: 250px; flex-shrink: 0">+ Float — what the card took on</span>
+          <span class="num" style="flex: 1; text-align: right; color: var(--chart-2)">3,060.00</span>
+        </div>
+        <div style="display: flex; align-items: baseline; gap: 12px; font-size: 13px; border-top: 1px solid var(--hairline); padding-top: 8px">
+          <span style="width: 250px; flex-shrink: 0; font-weight: 600">= What living took</span>
+          <span class="num" style="flex: 1; text-align: right; font-weight: 600">RM 4,875.65</span>
+        </div>
+      </div>
+      <p class="faint" style="margin: 13px 0 0; font-size: 11.5px; line-height: 1.55; max-width: 500px; text-wrap: pretty">
+        The float is the change in what the card owes over the same window — nothing else. No purchase
+        was entered, and the card repayment in the second line cancels against it exactly, so neither
+        month counts the same ringgit twice.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── the float, per card ──────────────────────────────────────────────── -->
+  <div style="padding: 20px 28px 26px; display: grid; gap: 14px; grid-template-columns: minmax(0,1.05fr) minmax(0,1fr)">
+
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="eyebrow">Where the float came from</span>
+        <div style="flex: 1"></div>
+        <span class="faint" style="font-size: 11px">owed on 31 Aug &rarr; owed on 30 Sep</span>
+      </div>
+
+      <div style="display: grid; gap: 11px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <div style="flex: 1; min-width: 0">
+            <div style="font-size: 13px; font-weight: 600">Maybank card account</div>
+            <div class="faint" style="font-size: 11.5px; margin-top: 2px">
+              <span class="num">1,120.00</span> &rarr; <span class="num">4,180.00</span>, with
+              <span class="num">1,120.00</span> paid off it on 10 Jul
+            </div>
+          </div>
+          <span class="num" style="font-size: 14px; font-weight: 600; color: var(--chart-2)">+3,060.00</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--hairline); padding-top: 11px; opacity: 0.55">
+          <div style="flex: 1; min-width: 0">
+            <div style="font-size: 13px; font-weight: 600" class="mut">BSN card</div>
+            <div class="faint" style="font-size: 11.5px; margin-top: 2px">no statement imported — not estimated, not assumed zero</div>
+          </div>
+          <span class="num faint" style="font-size: 14px">&mdash;</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--hairline); padding-top: 11px">
+          <div style="flex: 1; min-width: 0; font-weight: 600; font-size: 13px">Float this cycle</div>
+          <span class="num" style="font-size: 14px; font-weight: 600; color: var(--chart-2)">+3,060.00</span>
+        </div>
+      </div>
+
+      <p class="faint" style="margin: 0; font-size: 11.5px; line-height: 1.55; text-wrap: pretty">
+        A month where the card falls instead is a month you spent less than left your account. This one
+        rose by RM 3,060.00 — a bill paid in full on the 8th, then a full cycle of purchases and three
+        instalments charged back on top of it.
+      </p>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; align-items: center; gap: 9px">
+        <span class="eyebrow">The log, against the residual</span>
+        <span class="badge badge-gain">68.4% complete</span>
+      </div>
+
+      <div>
+        <div class="track" style="height: 13px">
+          <div style="width: 68.4%; background: var(--gain)"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 9px; font-size: 11.5px" class="faint">
+          <span><span class="num" style="color: var(--foreground)">RM 3,334.50</span> logged — 35 imported, the rest cash</span>
+          <span><span class="num">RM 1,541.15</span> unaccounted</span>
+        </div>
+      </div>
+
+      <div style="border-top: 1px solid var(--hairline); padding-top: 12px">
+        <div class="eyebrow" style="font-size: 9.5px; color: var(--faint)">What this said yesterday</div>
+        <div style="margin-top: 8px">
+          <div class="track" style="height: 13px; background: rgba(229,83,75,0.15)">
+            <div style="width: 100%; background: var(--loss)"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 9px; font-size: 11.5px" class="faint">
+            <span class="loss"><span class="num">183.7%</span> complete</span>
+            <span>RM 3,334.50 logged against a residual of RM 1,815.65</span>
+          </div>
+        </div>
+        <p class="mut" style="margin: 11px 0 0; font-size: 12px; line-height: 1.55; text-wrap: pretty">
+          A log cannot be 184% complete. The reconciliation was built to catch a log that had been
+          abandoned, and instead it was reporting a fault in the one number that was accurate — because
+          it measured July&rsquo;s spending against August&rsquo;s money.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

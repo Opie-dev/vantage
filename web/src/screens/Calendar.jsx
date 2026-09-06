@@ -341,7 +341,10 @@ function MoneyBlock({ events }) {
                     <span className="font-semibold">{e.label}</span>
                     {e.state !== 'recorded' ? (
                       <span className="text-faint text-[10.5px] tracking-[0.06em] uppercase">
-                        {e.state === 'due' ? 'due' : 'expected'}
+                        {/* 'informational' is a card's statement closing: the most
+                            consequential day in its month, and the only one on which
+                            no money moves. Calling it "expected" would be wrong. */}
+                        {e.state === 'due' ? 'due' : e.state === 'informational' ? 'closes' : 'expected'}
                       </span>
                     ) : null}
                   </span>
