@@ -325,8 +325,41 @@ produce everything on the page. What is new is the group drill-down and the "two
 gap between them" panel — which is the most valuable thing on that screen and the cheapest,
 because both figures already exist.
 
-**Phase 8 — Polish.** Drop `data-private`. Extend `web/smoke.mjs` to whatever the page count
-becomes.
+**Phase 8 — Polish.** **Done.** The smoke suite covers the thirteen screens and every side-panel
+form, plus `plan fit`, `equity`, `collected`, `two bases` and `overview`. `data-private` was never
+an app change — the app has always masked at the formatter — so it was the *canvas* that promised a
+blur, and the canvas now draws the mask instead. A blur is reversible from a screenshot, keeps the
+width of what it hides so the order of magnitude leaks, and cannot make the two exceptions the app
+makes on purpose: chart geometry and typed notes stay readable.
+
+---
+
+## 7. What running it found
+
+The whole plan was built, and then the app was actually started: both migrations applied to a live
+database, every new constraint exercised over HTTP, and the six screens driven in Chrome. Three
+things came out of it that no amount of reading had.
+
+**The Overview column had never been rendered by any test.** The fixture has no wallet, so
+`overviewRows()` returns `NO_WALLET` and the screen correctly refuses to draw a column — which
+means every assertion that claimed to cover Overview was asserting the refusal. It has real
+coverage now, including that the wallet row points the right way, which is §2.8 in test form.
+
+**A fixture can be wrong in a way that adds up.** `S.assetEntries` is newest-first and
+`assetBalance()` reverses it before replaying, because a `BALANCE` reading resets the running total.
+Readings pushed the other way round make both dates resolve to the opening figure: the delta comes
+out zero, the residual becomes a different number, and every identity still balances. It only
+surfaced when the delta was printed.
+
+**`db/schema.sql` hand-synced across two migrations was structurally correct** — every constraint,
+column, index and FK present — and differed from `pg_dump` only in ordering, parenthesisation and
+two column comments. Worth knowing the hand-sync is reliable; worth still regenerating it.
+
+**And one finding about the data, not the code.** The live database has no account marked `WALLET`.
+Overview, the residual, the coverage bar and the two-bases panel all sit behind one, so they
+correctly say they cannot compute. Every account in there is a savings or retirement product — ASB,
+EPF, Tabung Haji — so this is not a re-tagging job: the account money is actually spent from is not
+in the app at all.
 
 The critical path is 0 → 1 → 3. Phase 2 hangs off nothing and should probably go first in
 practice.
