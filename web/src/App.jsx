@@ -27,11 +27,16 @@
  * state on that screen's behalf.
  */
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
+  CalendarClockIcon,
   CalendarDaysIcon,
   CloudDownloadIcon,
+  CreditCardIcon,
+  LandmarkIcon,
+  ReceiptTextIcon,
+  TrendingUpIcon,
   HistoryIcon,
   LayersIcon,
   LayoutDashboardIcon,
@@ -114,7 +119,12 @@ import History from '@/screens/History'
 import CalendarScreen from '@/screens/Calendar'
 import Goals, { KIND_OPTIONS, WHOLE, isBalance, isIncome } from '@/screens/Goals'
 import Assets from '@/screens/Assets'
-import Money from '@/screens/Money'
+import Overview from '@/screens/Overview'
+import Income from '@/screens/Income'
+import Commitments from '@/screens/Commitments'
+import Cards from '@/screens/Cards'
+import Loans from '@/screens/Loans'
+import Expenses from '@/screens/Expenses'
 import Settings from '@/screens/Settings'
 
 const SCREENS = {
@@ -124,7 +134,12 @@ const SCREENS = {
   calendar: CalendarScreen,
   goals: Goals,
   assets: Assets,
-  money: Money,
+  overview: Overview,
+  income: Income,
+  commitments: Commitments,
+  cards: Cards,
+  loans: Loans,
+  expenses: Expenses,
   settings: Settings,
 }
 
@@ -139,7 +154,12 @@ const NAV_ICON = {
   calendar: CalendarDaysIcon,
   goals: TargetIcon,
   assets: PiggyBankIcon,
-  money: BanknoteIcon,
+  overview: BanknoteIcon,
+  income: TrendingUpIcon,
+  commitments: CalendarClockIcon,
+  cards: CreditCardIcon,
+  loans: LandmarkIcon,
+  expenses: ReceiptTextIcon,
   settings: SettingsIcon,
 }
 
@@ -256,11 +276,22 @@ function SideNav() {
         variant="line"
         className="w-full flex-1 items-stretch justify-start gap-0.5 overflow-y-auto rounded-none p-2"
       >
-        {TABS.map(t => {
+        {TABS.map((t, i) => {
           const Icon = NAV_ICON[t.id]
+          // A group heading opens on the first entry carrying that group. On the
+          // icon rail there is no room for the word, so the group becomes a rule
+          // instead — the break is the part that survives the narrow width.
+          const opensGroup = t.group && t.group !== TABS[i - 1]?.group
           return (
+            <Fragment key={t.id}>
+              {opensGroup ? (
+                wide ? (
+                  <span className="eyebrow px-3 pt-3 pb-1">{t.group}</span>
+                ) : (
+                  <span className="bg-border mx-auto my-2 h-px w-6" aria-hidden="true" />
+                )
+              ) : null}
             <TabsTrigger
-              key={t.id}
               value={t.id}
               // The label is hidden by width, never removed: sr-only keeps it as the
               // button's accessible name on the icon rail, where a tooltip would
@@ -277,6 +308,7 @@ function SideNav() {
                   would only reach a mouse. `title` gives that rail a hover hint. */}
               <span className={wide ? '' : 'sr-only'}>{t.label}</span>
             </TabsTrigger>
+            </Fragment>
           )
         })}
       </TabsList>

@@ -13,6 +13,21 @@ import * as api from './api'
 import { EMPTY_STATE, incomeOutlook, netWorth } from './calc'
 import { setPrivate as setFormatPrivate } from './format'
 
+/**
+ * The rail.
+ *
+ * `group` puts an entry under a heading. Money is six entries rather than one
+ * because the four sections it used to hold each carry a screen's worth of
+ * depth — a card's cycle, float, plans and statements; a loan's split
+ * instalment and projected balance — and 654ad24's consolidation was reversed
+ * deliberately for that reason (money-redesign-plan.md §3).
+ *
+ * The argument that consolidation was answering still stands and is the thing to
+ * hold onto here: the point of six entries is room, not separation. The month
+ * stepper and the segment strip are shared across all six precisely so the month
+ * still reads as one sentence, rather than as six screens that happen to be
+ * adjacent.
+ */
 export const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'portfolio', label: 'Portfolio' },
@@ -20,7 +35,12 @@ export const TABS = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'goals', label: 'Goals' },
   { id: 'assets', label: 'Assets' },
-  { id: 'money', label: 'Money' },
+  { id: 'overview', label: 'Overview', group: 'Money' },
+  { id: 'income', label: 'Income', group: 'Money' },
+  { id: 'commitments', label: 'Commitments', group: 'Money' },
+  { id: 'cards', label: 'Credit cards', group: 'Money' },
+  { id: 'loans', label: 'Loans', group: 'Money' },
+  { id: 'expenses', label: 'Expenses', group: 'Money' },
   { id: 'settings', label: 'Settings' },
 ]
 
@@ -31,6 +51,8 @@ const VantageContext = createContext(null)
  *   state: object, loading: boolean, refreshing: boolean, error: string|null,
  *   fx: number, ready: boolean, reload: () => Promise<void>,
  *   tab: string, setTab: (id: string) => void,
+ *   moneyMonth: {y: number, m: number}, setMoneyMonth: (next: {y: number, m: number}) => void,
+ *   stepMoneyMonth: (n: number) => void,
  *   modal: {kind: string, prefill: object}|null, closeModal: () => void,
  *   openInstrument: () => void,
  *   openTransaction: (prefill?: object) => void,
@@ -95,17 +117,19 @@ export function useVantage() {
 /**
  * Tab ids that were retired, and where they went.
  *
- * '#expenses' was a second door into Money for as long as spending had its own
- * screen. The screens are one now and the rail says so, but a bookmark or an
- * open window still carries the old hash, and falling through to the Dashboard
- * would answer a request for the spending log with a portfolio summary.
+ * '#money' was one screen holding income, commitments, cards, loans and
+ * spending. It is six now, and an old bookmark lands on Overview — the one that
+ * still answers "what happened to the month", which is what the single screen
+ * was for. Note that '#expenses' is NOT here any more: it was briefly a second
+ * door into Money and is a screen again, so the live tab list catches it before
+ * this map is ever consulted.
  *
  * The same is true three times over of Positions, Instruments and Wallet, which
  * are one Portfolio screen now. An old link lands on the screen that answers it
  * rather than on a summary of something else.
  */
 const RETIRED_TABS = {
-  expenses: 'money',
+  money: 'overview',
   positions: 'portfolio',
   instruments: 'portfolio',
   wallet: 'portfolio',
@@ -146,6 +170,34 @@ export function VantageProvider({ children }) {
   const [pricesPending, setPricesPending] = useState(false)
   const [syncPending, setSyncPending] = useState(false)
   const [tab, setTabState] = useState(hashTab)
+
+  /**
+   * The month every Money screen is reading.
+   *
+   * SHARED, BECAUSE THE MONTH IS ONE FACT. Income, Commitments, Credit cards,
+   * Loans and Expenses are five screens now (money-redesign-plan.md §3), and four
+   * of them print figures scoped to a month. Five independent steppers would let
+   * the statement say August while the log says July — precisely what the single
+   * screen's "Governs both halves" bar existed to prevent. Hoisting it here is
+   * what carries that guarantee across the split, and it is the reason the split
+   * does not cost the month its coherence.
+   *
+   * View state, not data: it sits beside `tab` and `railCollapsed` rather than in
+   * the server preferences, because which month you are looking at is not a
+   * setting anyone wants restored on another device a week later.
+   */
+  const [moneyMonth, setMoneyMonth] = useState(() => {
+    const now = new Date()
+    return { y: now.getFullYear(), m: now.getMonth() }
+  })
+
+  /** Step n months from wherever the screens are, letting Date roll the year. */
+  const stepMoneyMonth = useCallback(n => {
+    setMoneyMonth(({ y, m }) => {
+      const next = new Date(y, m + n, 1)
+      return { y: next.getFullYear(), m: next.getMonth() }
+    })
+  }, [])
 
   /**
    * Private mode — every figure renders as '••••'.
@@ -542,6 +594,10 @@ export function VantageProvider({ children }) {
       tab,
       setTab,
 
+      moneyMonth,
+      setMoneyMonth,
+      stepMoneyMonth,
+
       modal,
       closeModal: () => setModal(null),
       openInstrument: () => setModal({ kind: 'instrument', prefill: {} }),
@@ -613,7 +669,7 @@ export function VantageProvider({ children }) {
       syncMoomoo,
       syncPending,
     }
-  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate, railCollapsed, toggleRail])
+  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate, railCollapsed, toggleRail, moneyMonth, stepMoneyMonth])
 
   return <VantageContext.Provider value={value}>{children}</VantageContext.Provider>
 }

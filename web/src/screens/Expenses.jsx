@@ -1,20 +1,20 @@
 /**
- * Spending — the third section of Money, and the half that is measured.
+ * Expenses — inferred, never logged, and then checked against the log.
  *
- * NOT ITS OWN SCREEN ANY MORE. It was, briefly, and the split was wrong for a
- * reason the statement above it makes obvious: "what was logged" and "what
- * actually left the wallet" are two halves of one sentence, and putting them on
- * two screens meant the coverage figure was always somewhere the list was not.
- * Money now carries the whole month — what arrived, what was owed, what living
- * took — and this is the itemised end of it.
+ * ITS OWN SCREEN AGAIN. It was one, then a section of Money, and now one again —
+ * see money-redesign-plan.md §3, which reverses 654ad24 deliberately. The
+ * argument that consolidation was answering is still true and is what the
+ * Overview column is for: "what was logged" and "what actually left the wallet"
+ * are two halves of one sentence, so the coverage bar stayed on Overview beside
+ * the measured statement rather than following the list here. This screen is the
+ * itemised half; the half that checks it is one tab away and always agrees,
+ * because both read one expensesFor() for one shared month.
  *
  * THE RECONCILIATION IS WHY THE LOG IS HONEST. commitments-and-income-plan.md §2
  * argued against an expense log because one gets abandoned and then silently
  * under-reports. spendingFor() already infers what left the wallets from balance
  * readings, without anything being entered, so the log is measured against it and
- * told to say when it has gone stale. That measurement now lives in the statement
- * column and stays on screen while this list is read, because the list is what it
- * is being checked against.
+ * told to say when it has gone stale.
  *
  * EVERY COMPARISON HERE IS AGAINST A FACT. The month runs against the three
  * months before it, the day strip shows which days were typed into, and the pace
@@ -45,6 +45,7 @@ import {
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -72,11 +73,14 @@ import {
   EXPENSE_LABEL,
   expenseGroupOf,
   expenseHistory,
+  expensesFor,
   expenseTarget,
   toRM,
 } from '@/lib/calc'
 import { compact, dfmt, fmt, monthLabel, pct1, pctS } from '@/lib/format'
 import { useVantage } from '@/lib/store'
+
+import { MonthStepper } from './money/parts'
 
 /** Months in the history chart. */
 const WINDOW = 12
@@ -476,8 +480,14 @@ function FilterSelect({ name, value, onChange, items, disabled, width }) {
 
 const ALL = '__all__'
 
-export default function Spending({ y, m, ex, onMonth, onJumpCommitments }) {
-  const { state, openExpense, deleteExpense, setPreference } = useVantage()
+export default function Expenses() {
+  const { state, moneyMonth, setMoneyMonth, setTab, openExpense, deleteExpense, setPreference } =
+    useVantage()
+  const { y, m } = moneyMonth
+  // Its own call now, where Money used to pass one down. Pure and month-scoped,
+  // so Overview computing it too costs a little work and cannot disagree.
+  const ex = useMemo(() => expensesFor(state, y, m), [state, y, m])
+  const onMonth = (year, monthIndex) => setMoneyMonth({ y: year, m: monthIndex })
   const [query, setQuery] = useState('')
   const [pick, setPick] = useState({ group: null, category: null })
   const [sort, setSort] = useState('amount')
@@ -567,6 +577,9 @@ export default function Spending({ y, m, ex, onMonth, onJumpCommitments }) {
         ]
 
   return (
+    <div className="grid gap-4">
+      <MonthStepper note="The log and the measured month are the same month, on every Money screen." />
+      <Card className="min-w-0 gap-0 overflow-hidden py-0">
     <section id="spending" className="flex flex-col">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5">
         <span className="eyebrow">Spending · what was actually spent</span>
@@ -580,7 +593,7 @@ export default function Spending({ y, m, ex, onMonth, onJumpCommitments }) {
           advance and sit in{' '}
           <button
             type="button"
-            onClick={onJumpCommitments}
+            onClick={() => setTab('commitments')}
             className="text-muted-foreground underline underline-offset-2"
           >
             Commitments
@@ -908,5 +921,7 @@ export default function Spending({ y, m, ex, onMonth, onJumpCommitments }) {
         </div>
       )}
     </section>
+      </Card>
+    </div>
   )
 }
