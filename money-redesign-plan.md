@@ -194,7 +194,23 @@ earlier fix, and the reason a second pass is worth running after the first.
 
 ---
 
-## 3. The one decision that blocks everything else
+## 3. The decision that blocked everything else — settled
+
+**Settled: split into six, as drawn. One calendar, the standalone one. Both overview modes.**
+
+- **The rail takes six items** — Overview, Income, Commitments, Credit cards, Loans, Expenses —
+  as a Money group. Expenses goes back on the rail, reversing `654ad24` deliberately.
+- **The embedded calendars are dropped.** `Calendar.jsx` stays the one place dated flows live. The
+  canvas draws a filtered money grid on four pages; it is not built. Cheapest part of the canvas to
+  drop and the most duplicative to keep.
+- **Waterfall and Flow both ship**, as a stored preference alongside `dashboardTheme`. §2.4 is the
+  standing warning: two views of one month must be derived from one set of figures, never two.
+
+The reasoning that was open is kept below, because the argument against the split is still the
+thing to hold onto while building it: the point of six pages is room, not separation, and the month
+still has to read as one sentence across them.
+
+---
 
 **The canvas puts six items on the rail. Today there is one.**
 
@@ -217,7 +233,7 @@ Two smaller shape questions ride on the same decision and should be settled with
   correct forever. There is precedent (`dashboardTheme`), so it is viable; it should be a
   decision rather than a default. Note that they already disagree (§2.4).
 
-Nothing below can be scheduled until §3 is answered.
+Everything below is now schedulable.
 
 ---
 
@@ -270,8 +286,8 @@ the canvas and republished. Design only, no code. It was first because every pha
 figures off it, and because a canvas whose waterfall does not sum will be built exactly as drawn.
 Note that viewers on the shared link stay on the pinned pre-fix version until the pin is moved.
 
-**Phase 1 — Settle the shape.** §3: the rail, the calendar, one overview mode or two. Nothing else
-can be estimated until this lands.
+**Phase 1 — Settle the shape.** **Done** — six rail items, one standalone calendar, both overview
+modes. See §3.
 
 **Phase 2 — The Import screen.** §4(e). Backend complete; add the `api.js` caller and build the
 overlay — the three checks and the refusal, recorded-without-asking, plans matched against the
@@ -319,8 +335,6 @@ come out of it rather than being typed.
 
 **Genuinely open, and worth deciding before Phase 3:**
 
-- **The rail split** (§3). The only question on this page that changes the shape of the app
-  rather than its contents.
 - **Which basis is the headline.** Run rate answers "what does a usual month cost";
   falling-this-month answers "what happens in August". The canvas needs both somewhere and can
   only have one in the sidebar. The Commitments page already shows the pair side by side and
