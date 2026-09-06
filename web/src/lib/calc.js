@@ -474,6 +474,23 @@ export function dashboardTheme(S) {
   return t === DASHBOARD_THEME.EQUITY ? DASHBOARD_THEME.EQUITY : DASHBOARD_THEME.INCOME
 }
 
+export const OVERVIEW_MODE = { WATERFALL: 'waterfall', FLOW: 'flow' }
+
+export const OVERVIEW_MODE_LABEL = { waterfall: 'Waterfall', flow: 'Flow' }
+
+/**
+ * How the Money Overview draws the month.
+ *
+ * Both modes render the SAME derived figures — see overviewRows() below, which is
+ * the single source both read. money-redesign-plan.md §2.4 is why that is stated
+ * rather than assumed: the two views once disagreed about what share of income a
+ * card minimum was, because each carried its own copy of the number.
+ */
+export function overviewMode(S) {
+  const v = S.preferences && S.preferences.overviewMode
+  return v === OVERVIEW_MODE.FLOW ? OVERVIEW_MODE.FLOW : OVERVIEW_MODE.WATERFALL
+}
+
 /**
  * Positions decorated with their income and the P&L the chosen basis implies.
  *
@@ -2959,7 +2976,11 @@ export function previewStatementImport(rows, rules) {
 }
 
 /**
- * One row per active commitment, with everything the Money screen needs.
+ * One row per active commitment, with everything the Money screens need.
+ *
+ * ONE ROW SHAPE FOR THREE SCREENS. Commitments, Credit cards and Loans each
+ * render these, filtered by kind — see commitmentsTotal({ kinds }) — so a card
+ * row means the same thing wherever it appears.
  *
  * `monthlyOut` is what actually leaves in a typical month: a loan's instalment, a
  * card's minimum, a recurring charge spread over its own cadence so an annual
@@ -3064,14 +3085,21 @@ export function commitmentRows(S, { includeEnded = false, nowISO = isoOf(Date.no
 }
 
 /**
- * The strip at the top of the Money screen.
+ * The strip at the top of the Money Overview.
  *
  * `principalPerMonth` and `interestPerMonth` are kept apart because only the
  * second is spent — the first moves from cash into equity, and a screen that
  * totals them as "money out" gets cash flow right and net worth wrong.
  */
 export function commitmentsTotal(S, opts = {}) {
-  const rows = commitmentRows(S, opts)
+  // `kinds` narrows to one sort of obligation. Commitments, Credit cards and
+  // Loans are three screens now and each needs its own totals — without this
+  // they would each filter and re-sum, and three copies of "what a month costs"
+  // is three chances to disagree about it. Omitted, nothing is filtered, which
+  // is what waterfall() wants: it is asking about all of them at once.
+  const { kinds } = opts
+  const all = commitmentRows(S, opts)
+  const rows = kinds ? all.filter(r => kinds.includes(r.kind)) : all
   const sum = f => rows.reduce((t, r) => t + toRM(S, f(r) || 0, r.cur), 0)
   return {
     rows,
@@ -3221,6 +3249,60 @@ export function waterfall(S, opts = {}) {
     overclaimedRM: Math.max(claimedRM - uncommittedRM, 0),
     commitments: out,
   }
+}
+
+/**
+ * The month as one column of figures, for whichever way the Overview draws it.
+ *
+ * ONE SOURCE, TWO VIEWS. Waterfall reads it downward, Flow lays it out left to
+ * right, and neither holds a figure of its own. money-redesign-plan.md §2.4 is
+ * why: the design canvas drew both, each with its own copy of the numbers, and
+ * they disagreed about what share of income a card minimum was — 18.4% in one
+ * and 4.5% in the other, for the same ringgit.
+ *
+ * MEASURED, NOT RUN-RATE. Every row here comes from spendingFor(), which is
+ * bracketed by two wallet readings and closes exactly:
+ *
+ *   inflow − committed − saved − walletDelta = spent
+ *
+ * The canvas mixed these with the run rate — an annual charge amortised in one
+ * row and whole in the next — and the column stopped adding up by exactly the
+ * road tax. A run rate answers "what does a usual month cost" and belongs beside
+ * this, clearly labelled, never inside it.
+ *
+ * Returns `null` when the window cannot be closed, carrying the reason, because
+ * an unmeasurable month must say so rather than draw a plausible zero.
+ */
+export function overviewRows(S, year, monthIndex) {
+  const spend = spendingFor(S, year, monthIndex)
+  if (spend.reason) return { reason: spend.reason, spend, rows: [] }
+
+  // The wallet's own movement, in the direction the column reads: it fell, so it
+  // gave money up and that ADDS to what the month cost. A rise is the opposite.
+  const gaveUp = -spend.walletDeltaRM
+
+  const rows = [
+    { key: 'inflow', label: 'Income received', rm: spend.inflowRM, tone: 'gain', tab: 'income',
+      note: 'what actually arrived — a projection cannot close a residual' },
+    { key: 'committed', label: 'Commitments paid', rm: -spend.committedRM, tone: 'loss', tab: 'commitments',
+      note: 'what actually fell in the window, not what a usual month costs' },
+    { key: 'saved', label: 'Moved into savings', rm: -spend.savedRM, tone: 'loss', tab: 'assets',
+      note: 'out of pocket, but not spent' },
+    { key: 'wallet', label: gaveUp >= 0 ? 'Plus what the wallet gave up' : 'Less what the wallet kept',
+      rm: gaveUp, tone: 'cash', tab: 'assets',
+      note: gaveUp >= 0
+        ? 'the balances fell, so this much came out of the buffer'
+        : 'the balances rose, so this much never left' },
+    { key: 'spent', label: 'What you lived on', rm: spend.spentRM, tone: 'foreground', tab: 'expenses',
+      total: true, note: 'the remainder, and the first figure here nobody typed in' },
+  ]
+
+  // The identity, restated as an assertion rather than a hope. If this ever trips
+  // the column is lying and the screen should not be drawing it.
+  const check = rows.slice(0, 4).reduce((t, r) => t + r.rm, 0)
+  const closes = Math.abs(check - spend.spentRM) < 0.005
+
+  return { reason: null, spend, rows, closes, incomeRM: spend.inflowRM }
 }
 
 /* ── goals against real money ─────────────────────────────────────────────── */
@@ -3788,7 +3870,7 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
  *
  * Chosen for what they are NOT: none of these can be a RECURRING commitment.
  * There is no Housing, Insurance or Subscriptions group and there must never be
- * one — those are known in advance and already modelled on Money, and entering
+ * one — those are known in advance and already modelled on Commitments, and entering
  * them here as well would count them twice against income.
  */
 export const EXPENSE_GROUPS = [
