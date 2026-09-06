@@ -38,6 +38,9 @@
  *   POST   /api/prices/manual
  *   POST   /api/prices/refresh
  *   POST   /api/ingest/moomoo      from sync/moomoo_sync.py
+ *   POST   /api/ingest/statement   from sync/parse_maybank_statement.py --post
+ *   POST   /api/merchant-rules     what a statement merchant is; upserts on the pattern
+ *   DELETE /api/merchant-rules/:id
  *   POST   /api/declared-rates    record an institution's rate for one financial year
  *   DELETE /api/declared-rates/:id  drop it, falling back to the shipped catalogue
  *   POST   /api/sync              ask the host's sync agent to pull from moomoo
@@ -64,6 +67,7 @@ router.use('/income', require('./income.routes'));
 router.use('/declared-rates', require('./declaredRates.routes'));
 router.use('/prices', require('./prices.routes'));
 router.use('/ingest', require('./ingest.routes'));
+router.use('/merchant-rules', require('./merchantRules.routes'));
 router.use('/sync', require('./sync.routes'));
 router.use('/expenses', require('./expenses.routes'));
 router.use('/snapshot', require('./snapshots.routes'));

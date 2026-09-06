@@ -304,40 +304,21 @@ def check(header, rows):
 
 def post_statement(base, card_id, header, rows):
     """
-    Send the header to /api/commitments/:id/statements — and ONLY the header.
+    Send the whole parsed statement to /api/ingest/statement.
 
-    The statement row is the load-bearing one: the float reads two closing
-    balances and nothing else, so importing this alone already makes the month's
-    spending figure exact. The transaction rows are a convenience for the expense
-    log and need a human, because the statement genuinely does not contain the
-    answer: an electricity bill on a card is already a RECURRING commitment and
-    booking it again would count it twice, a cash-out is not spending at all, and
-    a payment gateway hides the merchant it was paid to. See cards-plan.md §8.
+    The server decides what lands. It re-runs the minimum gate before writing
+    anything — a claim that arrives over HTTP is not a claim that has been checked
+    — then records the header and books only the transactions a merchant rule
+    already accounts for. Everything else comes back unbooked, which is the point:
+    an electricity bill on a card is already a RECURRING commitment, a cash-out is
+    not spending, and a payment gateway hides the shop behind it. See §8.
     """
     import urllib.error
     import urllib.request
 
-    card = [c for c in header['cards'] if c['balance'] > 0]
-    if not card:
-        sys.exit('no card on this statement carries a balance — nothing to record')
-    card = card[-1]
-
-    charges = [r for r in rows if r['kind'] in ('retail', 'instalment')]
-    body = {
-        'statement_date': header['statement_date'],
-        'due_date': header['due_date'],
-        'closing_balance': card['balance'],
-        'minimum_due': card['minimum'],
-        # Interest and fees are not separated out by this parser yet: they sit in
-        # the retail rows under their own descriptions. Left at zero rather than
-        # guessed, so the card sheet shows an honest blank.
-        'interest_charged': 0,
-        'fees_charged': 0,
-        'source': 'import',
-        'note': f'imported from {header["statement_date"]}',
-    }
+    body = {'card_id': card_id, 'statement': header, 'rows': rows}
     req = urllib.request.Request(
-        f'{base.rstrip("/")}/api/commitments/{card_id}/statements',
+        base.rstrip('/') + '/api/ingest/statement',
         data=json.dumps(body).encode(),
         headers={'content-type': 'application/json'},
         method='POST')
@@ -345,20 +326,47 @@ def post_statement(base, card_id, header, rows):
         with urllib.request.urlopen(req) as r:
             out = json.loads(r.read())
     except urllib.error.HTTPError as e:
-        sys.exit(f'the server refused it: {e.code} {e.read().decode(errors="replace")[:300]}')
+        detail = e.read().decode(errors='replace')
+        try:
+            detail = json.loads(detail).get('error', detail)
+        except Exception:
+            pass
+        sys.exit('the server refused it: ' + detail[:400])
     except urllib.error.URLError as e:
-        sys.exit(f'could not reach {base}: {e.reason}')
+        sys.exit('could not reach ' + base + ': ' + str(e.reason))
 
-    print(f'recorded statement {out["statement_date"]}, closing {out["closing_balance"]:,.2f}, '
-          f'minimum {out["minimum_due"]:,.2f}')
+    st = out['statement']
+    print('recorded statement {}, closing {:,.2f}, minimum {:,.2f}'.format(
+        st['statement_date'], st['closing_balance'], st['minimum_due'] or 0))
 
-    plans = [r for r in rows if r['kind'] == 'instalment']
-    spend = [r for r in charges if r.get('spending_candidate')]
-    print(f'\nNOT sent, and deliberately:')
-    print(f'  {len(plans)} instalment line(s) - match these against the card\'s plans by hand once;')
-    print(f'     the bank prints its own counter, so a mismatch means a deferred or missed month')
-    print(f'  {len(spend)} purchase(s) - each needs a category, an existing commitment, or nothing.')
-    print(f'     An unmatched merchant is left uncategorised rather than guessed at.')
+    b = out['booked']
+    print('')
+    print('booked        {:>3} purchase(s)  RM {:,.2f}'.format(b['rows'], b['rm']))
+    if out['alreadyImported']:
+        print('already there {:>3}  (re-running changes nothing, by design)'.format(
+            out['alreadyImported']))
+    for m in out['matchedToCommitments']:
+        print('  already a commitment: {}  RM {:,.2f}  -> {}'.format(
+            m['description'], m['amount'], m['as']))
+    if out['ignored']:
+        print('ignored       {:>3}  (cash-outs, payments, plan instalments)'.format(out['ignored']))
+
+    un = out['unmatched']
+    if not un:
+        print('')
+        print('nothing left to decide.')
+        return
+
+    total = sum(u['total'] for u in un)
+    print('')
+    print('{} merchant(s) need a decision - RM {:,.2f} not in the log:'.format(len(un), total))
+    for u in un:
+        print('  {:<34} x{:<3} RM {:>9,.2f}'.format(u['description'][:34], u['rows'], u['total']))
+    print('')
+    print('Decide each once, on the Money screen or with:')
+    print('  POST ' + base.rstrip('/') + '/api/merchant-rules')
+    print('    {"pattern":"SHELL SELECT","action":"EXPENSE","category":"FUEL"}')
+    print('then run this again - the same lines cannot land twice.')
 
 
 def main():

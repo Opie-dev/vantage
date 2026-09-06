@@ -26,10 +26,25 @@ const update = (id, { date, amount, currency, category, note, assetId }) => run(
    WHERE id=$7`,
   date, amount, currency, category, note, assetId, id);
 
+/**
+ * An imported expense, keyed so the same statement line can never land twice.
+ *
+ * ON CONFLICT DO NOTHING against the UNIQUE `ext_id` is what makes re-running the
+ * importer a no-op rather than a duplicate — enforced by the database, not by the
+ * importer remembering to check. Returns null when the row was already there,
+ * which is how the caller counts what it actually added.
+ */
+const insertImported = ({ date, amount, currency, category, note, extId }) => one(
+  `INSERT INTO expenses (date,amount,currency,category,note,source,ext_id)
+   VALUES ($1,$2,$3,$4,$5,'import',$6)
+   ON CONFLICT (ext_id) DO NOTHING
+   RETURNING *`,
+  date, amount, currency, category, note, extId);
+
 const remove = id => run(`DELETE FROM expenses WHERE id=$1`, id);
 
 /** Guards the asset delete the same way asset entries do. */
 const countForAsset = async assetId =>
   Number((await one(`SELECT count(*)::int AS n FROM expenses WHERE asset_id=$1`, assetId)).n);
 
-module.exports = { listAll, findById, insert, update, remove, countForAsset };
+module.exports = { listAll, findById, insert, insertImported, update, remove, countForAsset };

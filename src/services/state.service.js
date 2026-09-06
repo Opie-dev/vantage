@@ -15,6 +15,7 @@ const brokerPositions = require('../models/brokerPositions.model');
 const commitmentPayments = require('../models/commitmentPayments.model');
 const cardPlans = require('../models/cardPlans.model');
 const cardStatements = require('../models/cardStatements.model');
+const merchantRules = require('../models/merchantRules.model');
 const income = require('../models/income.model');
 const snapshots = require('../models/snapshots.model');
 const fundMetrics = require('../models/fundMetrics.model');
@@ -49,6 +50,9 @@ async function getState() {
     // Dated readings of what a card owed. The float needs `owed` at TWO dates, and
     // a mutable balance column can only ever answer for today.
     cardStatements: await cardStatements.listAll(),
+    // What a statement merchant IS. The importer applies these and never guesses;
+    // an unmatched merchant is reported rather than filed. See §8.
+    merchantRules: await merchantRules.listAll(),
     // What arrives. Net pay is NOT stored: it is gross less the deducted half
     // of the statutory block, derived on the client so the two column groups
     // can never be conflated into one wrong figure.

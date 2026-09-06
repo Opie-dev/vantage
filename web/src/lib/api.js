@@ -187,6 +187,28 @@ export const addCommitmentPayment = (commitmentId, body) =>
 export const deleteCommitmentPayment = (commitmentId, paymentId) =>
   send('DELETE', `/api/commitments/${commitmentId}/payments/${paymentId}`)
 
+/* ── merchant rules ───────────────────────────────────────────────────────── */
+
+/**
+ * What a merchant on a card statement IS, decided once and applied thereafter.
+ *
+ * The importer never guesses: a merchant with no rule stays unmatched and is
+ * reported. Three actions — EXPENSE books it under a category, COMMITMENT records
+ * that it is already counted elsewhere and books nothing (which is what stops an
+ * electricity bill being counted twice against income), IGNORE is for what is not
+ * spending at all.
+ *
+ * Upserts on the pattern, so re-deciding a merchant corrects its rule rather than
+ * leaving two for the matcher to arbitrate between.
+ *
+ * @param {{pattern:string, action:'EXPENSE'|'COMMITMENT'|'IGNORE',
+ *          category?:string, commitment_id?:number, note?:string}} body
+ */
+export const saveMerchantRule = body => send('POST', '/api/merchant-rules', body)
+
+/** @param {number} id */
+export const deleteMerchantRule = id => send('DELETE', `/api/merchant-rules/${id}`)
+
 /* ── card plans and statements ────────────────────────────────────────────── */
 
 /**

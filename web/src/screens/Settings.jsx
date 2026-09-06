@@ -28,7 +28,9 @@ import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -39,6 +41,8 @@ import { INSTITUTIONS, totalRate, withRates } from '@/lib/institutions'
 import { useVantage } from '@/lib/store'
 import {
   DASHBOARD_THEME,
+  EXPENSE_GROUPS,
+  EXPENSE_LABEL,
   PNL_BASIS,
   dashboardTheme,
   income,
@@ -653,6 +657,169 @@ function RatesCard() {
   )
 }
 
+/**
+ * What a statement merchant is, decided once.
+ *
+ * THE IMPORTER NEVER GUESSES, and this is the list it consults instead. A
+ * merchant with no rule here stays unmatched and is reported back rather than
+ * filed — because a wrong category is worse than an empty one: the group totals
+ * on Money are read as fact, and nothing would ever flag them.
+ *
+ * The three actions are three different mistakes being prevented. EXPENSE books
+ * it. COMMITMENT records that it is ALREADY counted on the Money screen and books
+ * nothing, which is what stops an electricity bill on a card being subtracted from
+ * income twice. IGNORE is for what was never spending — a cash-out moves money
+ * into your own account, and logging it would invent living costs.
+ *
+ * The list shrinks on its own. On a real statement, 38 purchases were 22 merchants
+ * and one of them was sixteen of the rows.
+ */
+function MerchantRules() {
+  const { state, saveMerchantRule, deleteMerchantRule } = useVantage()
+  const rules = state.merchantRules || []
+  // A rule can only point at something that is already counted elsewhere, and a
+  // card is not that: a charge on a statement is not a payment of it.
+  const targets = state.commitments.filter(c => c.kind !== 'REVOLVING' && c.active)
+  const [f, setF] = useState({ pattern: '', action: 'EXPENSE', category: 'GROCERIES', commitment_id: '' })
+  const [busy, setBusy] = useState(false)
+  const set = (k, v) => setF(p => ({ ...p, [k]: v }))
+
+  const ready =
+    f.pattern.trim().length >= 3 &&
+    (f.action === 'EXPENSE' ? !!f.category : f.action === 'COMMITMENT' ? !!f.commitment_id : true)
+
+  const save = async () => {
+    if (!ready) return
+    setBusy(true)
+    const ok = await saveMerchantRule({
+      pattern: f.pattern.trim(),
+      action: f.action,
+      category: f.action === 'EXPENSE' ? f.category : undefined,
+      commitment_id: f.action === 'COMMITMENT' ? Number(f.commitment_id) : undefined,
+    })
+    setBusy(false)
+    if (ok) setF(p => ({ ...p, pattern: '' }))
+  }
+
+  return (
+    <Card className="gap-3">
+      <CardHeader className="px-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="eyebrow">Statement merchants</span>
+          <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
+            {rules.length} decided
+          </Badge>
+        </div>
+        <p className="text-muted-foreground mt-1 mb-0 text-[12px] leading-relaxed text-pretty">
+          What each merchant on an imported card statement is. The importer applies these and
+          never guesses — anything with no rule is reported back unbooked, because a wrong
+          category is read as fact and an empty one is not.
+        </p>
+      </CardHeader>
+
+      <CardContent className="grid gap-3 px-4 pb-4">
+        <div className="grid gap-2 sm:grid-cols-[1.3fr_1fr_1.3fr_auto]">
+          <Input
+            aria-label="Merchant pattern"
+            placeholder="SETEL FUEL"
+            value={f.pattern}
+            onChange={e => set('pattern', e.target.value)}
+          />
+          <Select value={f.action} onValueChange={v => set('action', v)}>
+            <SelectTrigger aria-label="What it is">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="EXPENSE">Spending</SelectItem>
+              <SelectItem value="COMMITMENT">Already a commitment</SelectItem>
+              <SelectItem value="IGNORE">Not spending</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {f.action === 'EXPENSE' ? (
+            <Select value={f.category} onValueChange={v => set('category', v)}>
+              <SelectTrigger aria-label="Category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_GROUPS.map(g => (
+                  <SelectGroup key={g.group}>
+                    <SelectLabel>{g.label}</SelectLabel>
+                    {g.categories.map(c => (
+                      <SelectItem key={c} value={c}>
+                        {EXPENSE_LABEL[c]}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : f.action === 'COMMITMENT' ? (
+            <Select value={f.commitment_id} onValueChange={v => set('commitment_id', v)}>
+              <SelectTrigger aria-label="Which commitment">
+                <SelectValue placeholder="Which one" />
+              </SelectTrigger>
+              <SelectContent>
+                {targets.map(c => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="text-faint self-center text-[11.5px]">
+              Booked nowhere — a cash-out or a transfer.
+            </div>
+          )}
+
+          <Button onClick={save} disabled={!ready || busy}>
+            {busy ? 'Saving…' : 'Decide'}
+          </Button>
+        </div>
+        <p className="text-faint m-0 text-[11px] leading-relaxed">
+          Matched as a case-insensitive prefix, longest rule first — statement descriptions are
+          truncated and inconsistently suffixed, so an exact match would fail on the same shop next
+          month.
+        </p>
+
+        {rules.length ? (
+          <div className="border-hairline mt-1 border-t">
+            {rules.map(r => (
+              <div
+                key={r.id}
+                className="border-hairline flex flex-wrap items-center gap-x-3 gap-y-1 border-b py-2 last:border-b-0"
+              >
+                <span className="num min-w-[150px] flex-1 text-[12.5px]">{r.pattern}</span>
+                <span className="text-muted-foreground text-[12px]">
+                  {r.action === 'EXPENSE'
+                    ? EXPENSE_LABEL[r.category]
+                    : r.action === 'COMMITMENT'
+                      ? `counted as ${r.commitment_name}`
+                      : 'not spending'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove the rule for ${r.pattern}`}
+                  onClick={() => deleteMerchantRule(r.id)}
+                >
+                  <TrashIcon />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-faint m-0 text-[11.5px] leading-relaxed">
+            Nothing decided yet. Run the statement importer once and it will tell you which
+            merchants it could not place, largest first.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Settings() {
   return (
     <div className="mx-auto grid max-w-[1180px] gap-3.5 lg:grid-cols-2 lg:items-start">
@@ -664,6 +831,7 @@ export default function Settings() {
       <div className="grid gap-3.5">
         <TaxCard />
         <RatesCard />
+        <MerchantRules />
         <DataCard />
       </div>
     </div>
