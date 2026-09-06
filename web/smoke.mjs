@@ -902,6 +902,39 @@ try {
     console.log(`  collected  ${rec.name} leaves on the ${after.leavesOnDay} via ${card.name}, costing the same`)
   }
 
+  /* ── the two bases, and that they are two ────────────────────────────────── */
+  {
+    const { expensesFor } = await server.ssrLoadModule('/src/lib/calc.js')
+    const w = JSON.parse(JSON.stringify(STATE))
+    const wallet = { id: 950, kind: 'SAVINGS', name: 'Current', slug: 'current', currency: 'MYR',
+      institution: '', account_ref: '', unit_label: '', unit_cap: null, fiscal_year: '12-31',
+      rate_basis: 'NONE', rate_quote: 'PERCENT', last_rate: null, last_bonus: null,
+      sort_order: 9, archived: false, created_at: ago(90), product_id: null, liquidity: 'WALLET' }
+    w.assets.push(wallet)
+    // Two readings bracketing the month, which is what makes the residual exist.
+    w.assetEntries.push(
+      { id: 9500, asset_id: 950, type: 'BALANCE', date: ago(40), amount: 5000, note: '', source: 'manual', ext_id: null },
+      { id: 9501, asset_id: 950, type: 'BALANCE', date: ago(2), amount: 4200, note: '', source: 'manual', ext_id: null },
+    )
+    const now = new Date()
+    const e = expensesFor(w, now.getFullYear(), now.getMonth())
+    if (e.spend.reason) throw new Error(`two bases: expected a closed window, got ${e.spend.reason}`)
+    if (e.unloggedRM == null) throw new Error('two bases: with two readings there must be a gap figure')
+
+    // The panel's whole claim: the log plus what was never logged is what the
+    // wallet says left. If this ever drifts the screen is showing three numbers
+    // that do not belong to each other.
+    const sum = e.loggedInWindowRM + e.unloggedRM
+    if (Math.abs(sum - e.spend.spentRM) > 0.005) {
+      throw new Error(`two bases: ${e.loggedInWindowRM} + ${e.unloggedRM} = ${sum}, not ${e.spend.spentRM}`)
+    }
+    // Coverage is capped and never invented from a non-positive residual.
+    if (e.coveragePct != null && (e.coveragePct < 0 || e.coveragePct > 100)) {
+      throw new Error(`two bases: coverage out of range at ${e.coveragePct}`)
+    }
+    console.log(`  two bases  ${e.loggedInWindowRM.toFixed(2)} logged + ${e.unloggedRM.toFixed(2)} never logged = ${e.spend.spentRM.toFixed(2)}`)
+  }
+
   // The month is shared, and that is the whole reason six screens are allowed to
   // exist. Stepping it on one must move it on every other, or the statement says
   // August while the log says July — which is exactly what the single screen's
