@@ -966,6 +966,38 @@ try {
     console.log(`  overview   5 rows closing on ${total.rm.toFixed(2)}, wallet ${wal.label.toLowerCase()}`)
   }
 
+  /* ── a payment converted at the rate it landed at ────────────────────────── */
+  {
+    const { eventToRM, incomeRows } = await server.ssrLoadModule('/src/lib/calc.js')
+    const ev = { date: ago(200), gross: 1000, fx_rate: 4.5, fx_date: ago(201) }
+
+    // The stored rate wins over the global one, which is the entire point: with
+    // only S.fx a March invoice is restated every time the ringgit moves.
+    const dated = eventToRM(STATE, 1000, 'USD', ev)
+    if (Math.abs(dated.rm - 4500) > 0.005) throw new Error(`fx: expected 4500, got ${dated.rm}`)
+    if (!dated.dated) throw new Error('fx: an event carrying a rate is dated')
+    if (dated.on !== ev.fx_date) throw new Error('fx: the published day must survive')
+
+    // No rate falls back rather than failing, and says it is undated so a screen
+    // can mark it approximate.
+    const undated = eventToRM(STATE, 1000, 'USD', { date: ago(200), gross: 1000 })
+    if (Math.abs(undated.rm - 1000 * STATE.fx) > 0.005) throw new Error('fx: fallback must use the global rate')
+    if (undated.dated) throw new Error('fx: an event with no rate is not dated')
+
+    // MYR never asks anyone anything.
+    const home = eventToRM(STATE, 1000, 'MYR', null)
+    if (home.rm !== 1000 || !home.dated) throw new Error('fx: MYR converts to itself')
+
+    // And a source is only "dated" when every event feeding its figure is.
+    const mixed = JSON.parse(JSON.stringify(STATE))
+    const src = mixed.incomeSources.find(x => x.cadence === 'IRREGULAR')
+    mixed.incomeSources = mixed.incomeSources.map(x =>
+      x.id === src.id ? { ...x, currency: 'USD' } : x)
+    const rows = incomeRows(mixed).find(r => r.id === src.id)
+    if (rows.fxDated) throw new Error('fx: a source with undated events must not claim to be dated')
+    console.log(`  fx         ${dated.rm.toFixed(2)} at a stored rate vs ${undated.rm.toFixed(2)} at the global one`)
+  }
+
   // The month is shared, and that is the whole reason six screens are allowed to
   // exist. Stepping it on one must move it on every other, or the statement says
   // August while the log says July — which is exactly what the single screen's

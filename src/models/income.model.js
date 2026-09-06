@@ -49,16 +49,16 @@ const findEvent = id => one(`SELECT * FROM income_events WHERE id=$1`, id);
 const insertEvent = (q, {
   sourceId, date, gross,
   epfEmployee, socsoEmployee, eisEmployee, skbbk, pcb, zakat, otherDeducted,
-  epfEmployer, socsoEmployer, eisEmployer, note, source,
+  epfEmployer, socsoEmployer, eisEmployer, note, source, fxRate = null, fxDate = null,
 }) => q.query(
   `INSERT INTO income_events
      (source_id,date,gross,
       epf_employee,socso_employee,eis_employee,skbbk,pcb,zakat,other_deducted,
-      epf_employer,socso_employer,eis_employer,note,source)
-   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+      epf_employer,socso_employer,eis_employer,note,source,fx_rate,fx_date)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
   [sourceId, date, gross,
     epfEmployee, socsoEmployee, eisEmployee, skbbk, pcb, zakat, otherDeducted,
-    epfEmployer, socsoEmployer, eisEmployer, note, source]);
+    epfEmployer, socsoEmployer, eisEmployer, note, source, fxRate, fxDate]);
 
 const removeEvent = id => run(`DELETE FROM income_events WHERE id=$1`, id);
 

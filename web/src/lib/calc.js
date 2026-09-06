@@ -75,6 +75,28 @@ export function toRM(S, v, cur) {
 }
 
 /**
+ * An income event in ringgit, at the rate it actually landed at.
+ *
+ * PREFERS THE STORED RATE, and the difference is the whole point of storing one:
+ * `toRM()` applies today's global rate to everything, so a March invoice is
+ * restated every time the ringgit moves and the twelve-month chart has no fixed
+ * shape. An event carrying `fx_rate` is converted at the day it arrived and stays
+ * where it is.
+ *
+ * FALLS BACK RATHER THAN FAILING. An event recorded before this existed, or one
+ * saved while Bank Negara was unreachable, has no rate — it uses the global one,
+ * exactly as before, and `dated` is false so a screen can say which figures are
+ * fixed and which still drift.
+ */
+export function eventToRM(S, v, cur, event) {
+  if (!cur || cur === 'MYR') return { rm: v, dated: true, rate: 1, on: null }
+  if (event && event.fx_rate > 0) {
+    return { rm: v * event.fx_rate, dated: true, rate: event.fx_rate, on: event.fx_date || null }
+  }
+  return { rm: toRM(S, v, cur), dated: false, rate: S.fx, on: null }
+}
+
+/**
  * How many --chart-N colours the theme defines, and how many of them a ticker
  * may take.
  *
@@ -3220,7 +3242,21 @@ export function incomeRows(S, { includeEnded = false, nowISO = isoOf(Date.now())
         cur: s.currency,
         variable,
         monthly,
-        monthlyRM: toRM(S, monthly, s.currency),
+        // Dated where the events carry a rate. An irregular source averages
+        // several events, each converted at its own day, so the mean is of what
+        // actually arrived rather than of today's restatement of it.
+        monthlyRM: variable
+          ? events
+              .filter(e => e.date >= from)
+              .reduce((t, e) => t + eventToRM(S, netOf(e), s.currency, e).rm, 0) / VARIABLE_MONTHS
+          : eventToRM(S, monthly, s.currency, last).rm,
+        // False when any event feeding this figure is undated, so a screen can
+        // say the number still drifts with the ringgit.
+        fxDated:
+          s.currency === 'MYR' ||
+          (variable
+            ? events.filter(e => e.date >= from).every(e => e.fx_rate > 0)
+            : !!(last && last.fx_rate > 0)),
         last,
         events,
         // True when the figure is a guess rather than a recorded payment: either
