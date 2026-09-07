@@ -114,7 +114,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import { parseStatementPdf } from '@/lib/api'
 import { TABS, useVantage } from '@/lib/store'
-import { dtfmt, fmt, pct1, today } from '@/lib/format'
+import { dtfmt, fmt, fmtBare, pct1, today } from '@/lib/format'
 
 import Dashboard from '@/screens/Dashboard'
 import Portfolio from '@/screens/Portfolio'
@@ -2213,6 +2213,21 @@ function StatementImportDialog({ prefill }) {
   const gates = payload?.gates || []
   const failed = gates.filter(g => !g.ok)
   const view = payload ? previewStatementImport(payload.rows, state.merchantRules || []) : null
+  // The canvas heads the row area with what it is about to ask of you: how many
+  // purchases and merchants it found, and how many of them it cannot decide
+  // alone. A merchant is a DECISION, a row is a line — 16 fuel rows are one
+  // question, which is the whole argument for asking per merchant.
+  const PILL = 'px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase'
+  const knownRows = view ? view.known.reduce((t, k) => t + k.rows, 0) : 0
+  const unnamedRows = view ? view.unnamed.reduce((t, u) => t + u.rows, 0) : 0
+  const undecidedRows = view ? view.undecided.reduce((t, u) => t + u.rows, 0) : 0
+  const purchases = knownRows + undecidedRows + unnamedRows + (view ? view.asCommitment.length : 0)
+  const merchants = view
+    ? view.known.length + view.undecided.length + view.unnamed.length + view.asCommitment.length
+    : 0
+  // Only the ones a person can answer. A gateway row cannot be decided from the
+  // statement, so counting it here would overstate what is being asked for.
+  const needYou = view ? view.undecided.length : 0
   const carrying = (payload?.statement?.cards || []).filter(c => c.balance > 0)
   const summary = carrying[carrying.length - 1] || null
 
@@ -2415,72 +2430,156 @@ function StatementImportDialog({ prefill }) {
             </div>
           ) : null}
 
-          <div className="grid gap-1">
-            <span className="eyebrow">The rows</span>
-            <div className="flex justify-between gap-3 text-[12px]">
-              <span>Instalment billing — a plan&rsquo;s, not a purchase</span>
-              <span className="num">
-                {view.instalments.rows} · {fmt(view.instalments.rm)}
-              </span>
-            </div>
-            <div className="flex justify-between gap-3 text-[12px]">
-              <span>Not spending — payments, cash-outs, ignored merchants</span>
-              <span className="num">
-                {view.notSpending.rows} · {fmt(view.notSpending.rm)}
-              </span>
-            </div>
-            {view.known.map(k => (
-              <div key={k.pattern} className="flex justify-between gap-3 text-[12px]">
-                <span className="num">
-                  {k.pattern} → {EXPENSE_LABEL[k.category] || k.category}
-                </span>
-                <span className="num">
-                  ×{k.rows} · {fmt(k.total)}
-                </span>
+          {/* PLANS, ONE ROW EACH. Maybank bills EzyPay Plus as a principal line
+              and an interest line at the same position, so the two are folded
+              into one plan here — two rows both reading "4 of 12" look like a
+              duplicate rather than a plan and what it cost. */}
+          {view.plans.length ? (
+            <div className="grid gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="eyebrow">Plans matched</span>
+                <Badge variant="gain" className={PILL}>
+                  {view.plans.length} of {view.plans.length}
+                </Badge>
               </div>
-            ))}
-            {view.asCommitment.map((m, i) => (
-              <div key={i} className="text-muted-foreground flex justify-between gap-3 text-[12px]">
-                <span className="num">
-                  {m.description} — already {m.as}
-                </span>
-                <span className="num">{fmt(m.amount)}</span>
-              </div>
-            ))}
-            {view.asCommitment.length ? (
-              <p className="text-faint text-[11px]">
-                Already subtracted from income on the Money screen. Logging them here would count
-                them twice.
-              </p>
-            ) : null}
-          </div>
+              {view.plans.map(p => (
+                <div key={`${p.name}-${p.no}`} className="flex justify-between gap-3 text-[12px]">
+                  <span>
+                    {p.name}
+                    {p.lines > 1 ? <span className="text-faint"> + its interest line</span> : null}
+                  </span>
+                  <span className="num text-muted-foreground">
+                    {p.no}/{p.of} · {fmt(p.rm)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <div className="grid gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="eyebrow">The statement does not say who</span>
-              <Badge
-                variant={view.undecided.length ? 'neutral' : 'gain'}
-                className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase"
-              >
-                {view.undecided.length
-                  ? `${view.undecided.length} to decide`
-                  : 'nothing to decide'}
+              <span className="eyebrow">
+                {purchases} purchase{purchases === 1 ? '' : 's'} · {merchants} merchant
+                {merchants === 1 ? '' : 's'}
+              </span>
+              {needYou ? (
+                <Badge variant="cash" className={PILL}>
+                  {needYou} need you
+                </Badge>
+              ) : null}
+              <Badge variant="neutral" className={PILL}>
+                decided once, remembered after
               </Badge>
             </div>
-            <p className="text-faint text-[11px]">
-              Decided once, remembered after. Anything left undecided imports as nothing rather
-              than as a guess — a wrong category is read as fact on Expenses and nothing would
-              ever flag it.
-            </p>
-            {view.undecided.map(u => (
-              <UndecidedMerchant
-                key={u.description}
-                row={u}
-                rows={payload.rows}
-                targets={targets}
-              />
-            ))}
+            {view.notSpending.rows ? (
+              <div className="text-muted-foreground flex justify-between gap-3 text-[12px]">
+                <span>Not spending — payments, cash-outs, ignored merchants</span>
+                <span className="num">
+                  {view.notSpending.rows} · {fmt(view.notSpending.rm)}
+                </span>
+              </div>
+            ) : null}
           </div>
+
+          {view.asCommitment.length ? (
+            <div className="grid gap-1">
+              <span className="eyebrow">Already a commitment — matched, not logged</span>
+              {view.asCommitment.map((m, i) => (
+                <div key={i} className="flex justify-between gap-3 text-[12px]">
+                  <span className="num">{m.description}</span>
+                  <span className="text-muted-foreground num">
+                    {fmt(m.amount)} · {m.as}
+                  </span>
+                </div>
+              ))}
+              <p className="text-faint text-[11px]">
+                Already subtracted from income on Money. Logging them as expenses too would count
+                them twice — the one error this whole screen exists to prevent.
+              </p>
+            </div>
+          ) : null}
+
+          {view.known.length ? (
+            <div className="grid gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="eyebrow">Known merchants</span>
+                <Badge variant="gain" className={PILL}>
+                  {knownRows} rows, no questions
+                </Badge>
+              </div>
+              {view.known.map(k => (
+                <div key={k.pattern} className="flex justify-between gap-3 text-[12px]">
+                  <span className="num">
+                    {k.pattern}
+                    {k.rows > 1 ? <span className="text-faint"> ×{k.rows}</span> : null}
+                  </span>
+                  <span className="num text-muted-foreground">
+                    {fmt(k.total)} · {EXPENSE_LABEL[k.category] || k.category}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* NEVER GUESSED, and drawn so that reads as deliberate rather than as
+              a gap. A wrong category is read as fact on Expenses and nothing
+              would ever flag it, so an undecided row imports as nothing. */}
+          {view.undecided.length ? (
+            <div
+              className="grid gap-1 rounded-md p-3"
+              style={{
+                border: '1px solid color-mix(in srgb, var(--cash) 30%, transparent)',
+                background: 'color-mix(in srgb, var(--cash) 6%, transparent)',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--cash)' }}>
+                New — never guessed
+              </span>
+              {view.undecided.map(u => (
+                <UndecidedMerchant
+                  key={u.description}
+                  row={u}
+                  rows={payload.rows}
+                  targets={targets}
+                />
+              ))}
+            </div>
+          ) : null}
+
+          {/* The row the statement itself cannot answer. Separated from the one
+              above because the two ask different questions: a new merchant wants
+              a category, and this wants a payee the document never printed —
+              offering "choose a category" here would be asking the impossible. */}
+          {view.unnamed.length ? (
+            <div className="grid gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="eyebrow">The statement does not say who</span>
+                <Badge variant="neutral" className={PILL}>
+                  {unnamedRows} row{unnamedRows === 1 ? '' : 's'}
+                </Badge>
+              </div>
+              {view.unnamed.map(u => (
+                <div key={u.description} className="flex justify-between gap-3 text-[12px]">
+                  <span className="num">
+                    {u.description}
+                    {u.foreign ? (
+                      <span className="text-faint">
+                        {' '}· {u.foreign.currency} {fmtBare(u.foreign.amount)} @ {u.foreign.rate}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="text-muted-foreground num">
+                    {fmt(u.total)} · Uncategorised
+                  </span>
+                </div>
+              ))}
+              <p className="text-faint text-[11px]">
+                A payment gateway is named where the merchant should be, so there is nothing here
+                to categorise. Write a merchant rule if you know what one of these was — a rule you
+                wrote always beats what the app guessed.
+              </p>
+            </div>
+          ) : null}
         </>
       ) : null}
 
