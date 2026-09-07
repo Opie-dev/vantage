@@ -259,10 +259,11 @@ Maybank card account*, and the Cards page draws a "Which account collects what" 
 `commitments` (`db/schema.sql:275`) has no FK from a RECURRING row to a REVOLVING one. One
 nullable column, one CHECK, and the calendar logic to move a charge's date when it moves account.
 
-**(c) Per-date FX does not exist.** The income sheet promises a USD amount "is converted at the
-rate on the day it landed, and both figures are kept". There is one global scalar,
-`settings.fx_usd_myr`, applied by `toRM()` (`calc.js:73`) and written by the moomoo sync. Storing
-the pair on the event is the smaller half; deciding where the daily rate comes from is the larger.
+**(c) Per-date FX — ~~does not exist~~ built, and the promise is kept.** The income sheet's
+"converted at the rate on the day it landed, and both figures are kept" is now true.
+`income_events.fx_rate` and `fx_date` hold the pair, `fx_rates` caches it, and
+`src/services/fx.service.js` fetches from Bank Negara. The global `settings.fx_usd_myr` survives
+only as the labelled-approximate fallback for a date BNM has nothing for. See §6.
 
 **(d) "Pay this card" has no UI.** The overlay offers statement / minimum / everything-owed /
 custom, paid from a named wallet. `POST /api/commitments/:id/payments` exists and nothing branches
@@ -322,10 +323,9 @@ the day the money leaves. The two bases are now shown together on Commitments wi
 named and broken down, which is the permanent fix for §2.1 and §2.2 — a single figure labelled
 "committed" is exactly how one basis silently became the other.
 
-**§4(c) per-date FX is deferred, and not for want of time.** Storing the pair on the event is the
-easy half; the open question in §6 is where a daily rate comes from, and a wrong rate kept forever
-is worse than one global rate that is visibly approximate. It wants a decision before it wants
-code.
+**§4(c) per-date FX ~~is deferred~~ shipped**, decision and all. The deferral was right at the
+time — a wrong rate kept forever is worse than one global rate that is visibly approximate — and
+the answer that unblocked it was a source that never has to guess. See §6.
 
 **Phase 7 — Expenses.** **Done** (#33). Mostly shipped: `spendingFor`, `expensesFor` and `expenseHistory` already
 produce everything on the page. What is new is the group drill-down and the "two bases, and the
@@ -388,8 +388,15 @@ come out of it rather than being typed.
   explains the RM 40.00 gap well — that treatment may simply be the answer, promoted.
 - **Whether a FLAT loan has an "outstanding principal" at all** (§2.7). Saying no is more honest
   and makes net worth RM 9,282.00 worse. Saying yes requires modelling the rebate.
-- **Where a daily FX rate comes from** (§4c). Storing the pair is easy; sourcing it is not, and a
-  wrong rate kept forever is worse than one global rate that is visibly approximate.
+- ~~**Where a daily FX rate comes from** (§4c).~~ **Answered, and shipped.** **Bank Negara** —
+  `api.bnm.gov.my/public/exchange-rate`, free and unauthenticated, and the source a Malaysian tax
+  filing uses, so the app's figure and the return agree by construction rather than by luck. The
+  middle rate, not buying or selling: those are counter prices, this is a reference. BNM publishes
+  on working days, so a Saturday walks back up to four days and `fx_date` records which day was
+  actually used rather than attributing Friday's number to Saturday. **It never guesses** —
+  unreachable, or a date BNM has nothing for, returns null and the screen falls back to the global
+  rate labelled approximate, which is exactly what this entry was afraid of. Wired at
+  `income.service.js:180`, caching in `fx_rates`. See `open-decisions.md` §1.
 
 **Standing risk.** The canvas is a mock — every figure on it is seeded in the component, not
 fetched. It reads as a working app, which makes it easy to mistake a drawn number for a derived

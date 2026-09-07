@@ -340,9 +340,17 @@ instalment within sixty calendar days.
 
 That matters here because **`instalment` is not stable across a loan's life**. Store the bank's
 current figure, treat the derived schedule as "if this rate holds", and expect to re-base it
-when the OPR moves. Today SBR = OPR = **2.75%**, unchanged since July 2025, and housing spreads
-run SBR + 1.25% to + 2.35% — published effective rates of **4.00% to 5.10%**, clustering near
-4.50%.
+when the OPR moves. Today SBR = OPR = **2.75%**, unchanged since July 2025 and reconfirmed at the
+MPC of 3 September 2026. Housing spreads were **observed** at SBR + 1.25% to + 2.35% — published
+effective rates of **4.00% to 5.10%**, clustering near 4.50% — sampled 1 September 2026.
+
+That range is market pricing, not regulation, and the distinction matters more than the numbers.
+**BNM publishes no spread guidance of any kind** — no cap, no floor, no range. The Reference Rate
+Framework defines only `lending rate = SBR + spread` (para 9.4), lists what the spread must cover
+(9.5), and restricts when it may rise after signing to a change in the customer's own credit risk
+profile (9.8/9.9); para 1.4 leaves the rate itself to the banks' "internal and commercial
+considerations". So this range will drift with no announcement to signal the drift — re-sample it
+rather than trusting it, and never cite it as a regulatory bound.
 
 **Flat rate (Malaysian hire purchase — car loans).** Completely different arithmetic, and
 the difference is not academic:
@@ -781,7 +789,8 @@ tables, and banks' product disclosure sheets. What follows is only what remains.
 | Flat → effective | The Hire-Purchase Act's **Seventh Schedule** closed form, matching an exact IRR to 0.015pp |
 | HP reform | Flat rate and Rule of 78 abolished for **new** agreements from 1 June 2026; existing ones keep their original terms unless both parties elect otherwise |
 | Rate changes | Since 1 July 2026 an OPR move revises the **instalment**, not the tenure — reversing the old convention |
-| Reference rate | SBR = OPR exactly, **2.75%**, unchanged since July 2025; housing spreads SBR + 1.25% to + 2.35% |
+| Reference rate | SBR = OPR exactly, **2.75%**, unchanged since July 2025 and reconfirmed 3 Sep 2026 — Reference Rate Framework paras 9.2–9.3, so this holds by regulation rather than by observation |
+| Housing spreads | **Observed market pricing, NOT BNM guidance** — SBR + 1.25% to + 2.35%, sampled 1 Sep 2026. BNM publishes no spread range at all; see §5.2. Re-sample before relying on it |
 | Mortgage accrual | Daily rest, but the monthly annuity is within ~RM 50 on RM 500k over 5 years |
 | Card rates | The tiered 15 / 17 / 18% survives; grace period is lost entirely if any balance is carried |
 | Payroll | SOCSO and EIS banded to a RM 6,000 ceiling (PERKESO primary); **SKBBK new from 1 June 2026**; EPF 11% employee, 13% at or below RM 5,000 and 12% above — *EPF is second-hand, KWSP blocks automated access* |
@@ -871,8 +880,9 @@ does not exist in the API it claims to mirror.
 
 ### Known to go stale, and roughly when
 
-- **The OPR decision on 3 September 2026** — two days after this was written. Everything
-  priced off SBR = 2.75% needs re-checking after it.
+- ~~**The OPR decision on 3 September 2026.**~~ **Checked 7 September 2026 — held at 2.75%**, the
+  seventh consecutive hold since the −25bp cut of 9 July 2025, so everything priced off
+  SBR = 2.75% still stands. **The next MPC is 5 November 2026**; re-check after that one.
 - **The HP transition runs to 31 March 2027.** Until then both interest regimes are being
   written simultaneously, which is exactly why `rate_type` cannot be inferred from a start date
   and must be captured from the agreement.
@@ -884,7 +894,9 @@ does not exist in the API it claims to mirror.
 
 ### Sources worth not re-deriving
 
-Bank Negara's Reference Rate Framework (BNM/RH/PD 028-23) and its Credit Card policy document;
+Bank Negara's Reference Rate Framework (BNM/RH/PD 028-23 — **reissued 27 March 2026**, effective
+1 July 2026, superseding the 1 August 2021 issue; the PD number did not change but the content
+did, so cite the version date) and its Credit Card policy document;
 the Hire-Purchase Act 1967 Seventh Schedule and BNM's consumer guide to the 2026 amendment;
 LHDN's *Specification for MTD Calculations Using Computerized Calculation for 2026*; PERKESO's
 contribution rate tables; ASNB's and Tabung Haji's own distribution FAQs; Bank Negara's Kijang

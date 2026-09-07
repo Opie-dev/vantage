@@ -232,8 +232,22 @@ mid-band wage — RM 11,850 gives 1,309 / 1,428 banded against 1,303.50 / 1,422.
 **Nothing in §1–§5 needs a migration.** Every figure the canvas shows is derivable from
 `income_sources` and `income_events` as they stand, and the per-date FX pair is already there.
 
-**Statutory rate tables** `large · migration · decision first`. Only if the app is ever to compute
-a deduction rather than record one. Today it stores per-payslip amounts and sums them, which is the
+**Statutory rate tables** `large · migration` — **decided 7 September 2026: ship nothing.**
+
+Recorded as a decision so it stops reading as an omission. **What would reopen it:** the app
+needing to *project* a future payslip rather than record a past one. Nothing else — not a new
+statutory rate, not a screen that wants to show a rule beside a deduction, both of which the
+current shape already handles by recording and by quoting verified copy.
+
+The reasoning, short version: the failure mode here is not being unable to find the rates, it is
+reading them carefully and still getting them wrong. LHDN's own spec carries a stale
+`≤ RM 6,000.00 (limit)` label above arithmetic using RM 4,000 in four places, and the statute
+itself ships ringgit amounts band by band with no percentage in it. An app that types in what the
+payslip already computed is not the lazy option; it is the accurate one. Full reasoning in
+`open-decisions.md` §4.
+
+The rest of this entry stands as the specification for whoever ever does reopen it. Only if the
+app is ever to compute a deduction rather than record one. Today it stores per-payslip amounts and sums them, which is the
 right shape and carries no exposure — the primary-source reader's conclusion was that *all* the
 risk is in the copy, not the arithmetic. If tables are ever added they must be versioned and keyed
 by effective-from date: the EPF Third Schedule changed on 1 Oct 2025 (Parts B and D deleted, Part F
