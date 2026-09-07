@@ -11,6 +11,7 @@
  * label and a figure, a rule above a total, an icon with its words in a tooltip.
  * Every figure they render is derived in calc.js and passed in already formatted.
  */
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -99,17 +100,71 @@ export function MonthStepper({ note }) {
  * delete an income source that has recorded payments and says why, and that
  * refusal arrives as a toast from mutate() — a rule enforced in one place cannot
  * drift from a copy of itself in another.
+ *
+ * `stop` is for an action that sits inside a row which is itself a control: on
+ * Credit cards the whole row opens the account's sheet, and a click on the plus
+ * inside it must not also open the sheet. The pattern lives here so every action
+ * on such a row stops the event the same way rather than each remembering to.
  */
-export function RowAction({ icon: Icon, label, onClick }) {
+export function RowAction({ icon: Icon, label, onClick, stop = false }) {
+  const handle = stop
+    ? e => {
+        e.stopPropagation()
+        onClick?.(e)
+      }
+    : onClick
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={onClick}>
+        <Button variant="ghost" size="icon-sm" aria-label={label} onClick={handle}>
           <Icon />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
+  )
+}
+
+/**
+ * What a card's state is, as a chip — or nothing.
+ *
+ * Shared by the account row and the sheet so the two cannot disagree about the
+ * same card. UNKNOWN renders nothing on purpose: a chip saying "not known" would
+ * be read as a state, and the caption under the row is where the absence is
+ * explained. "Paid late" is its own chip because the balance was proven cleared
+ * but the interest-free period was lost for the cycle after it.
+ */
+export function StateBadge({ row, className = '' }) {
+  const cls = `px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase ${className}`
+  if (row.state === 'CARRYING') {
+    return <Badge variant="loss" className={cls}>Carrying</Badge>
+  }
+  if (row.state === 'SETTLED') {
+    return row.bill?.timing === 'LATE' ? (
+      <Badge variant="cash" className={cls}>Paid late</Badge>
+    ) : (
+      <Badge variant="gain" className={cls}>Paid in full</Badge>
+    )
+  }
+  return null
+}
+
+/**
+ * The three bands of a card's limit in one bar: carried, billed and unpaid, and
+ * the instalment principal not yet billed. `pct` is the row's `bandPct`.
+ *
+ * A zero-width band is hidden rather than drawn at 0%, because the 1px gap
+ * between bands would otherwise leave a sliver where nothing is — an account
+ * that carries nothing must not show a hairline of loss colour.
+ */
+export function BandBar({ pct, className = '' }) {
+  const bands = ['band-1', 'band-2', 'band-3']
+  return (
+    <div className={`bg-muted flex gap-px overflow-hidden rounded-full ${className}`}>
+      {bands.map((band, i) => (
+        <div key={band} className={band} style={{ width: `${pct[i] || 0}%` }} hidden={!(pct[i] > 0)} />
+      ))}
+    </div>
   )
 }
 
@@ -132,9 +187,11 @@ export function Line({ label, value, tone = '', strong = false, rule = false }) 
  * The header of a section that can be folded away.
  *
  * Kept from the one-screen layout because a screen can still hold more than one
- * section — Credit cards has an account list and a cycle panel, Loans has one
- * card per loan. What changed is that folding is now a convenience rather than
- * the only way to see past a section to the one below it.
+ * section — Credit cards has its accounts and, below them, which account collects
+ * what; Loans has one card per loan. There is no cycle panel: what each cycle
+ * does to the month was drawn on the canvas and never built. What changed is
+ * that folding is now a convenience rather than the only way to see past a
+ * section to the one below it.
  */
 export function SectionHead({ id, open, onToggle, label, badge, summary, add, addLabel }) {
   const Chevron = open ? ChevronUpIcon : ChevronDownIcon

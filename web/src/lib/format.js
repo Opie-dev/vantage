@@ -219,4 +219,81 @@ export function monthLabel(year, monthIndex) {
   return new Date(year, monthIndex, 1).toLocaleDateString(LOCALE, { month: 'long', year: 'numeric' })
 }
 
+/**
+ * 'YYYY-MM-DD' -> '7 July'. The float panel names a date range in prose, where
+ * 'Jul' reads as a note and 'July' as a sentence. dfmtLong already means
+ * '6 Aug 2026', so the long-month form takes its own name.
+ */
+export function dfmtMonth(d) {
+  if (!d) return ''
+  return new Date(d + 'T00:00').toLocaleDateString(LOCALE, { day: 'numeric', month: 'long' })
+}
+
+/** 'YYYY-MM-DD' -> 'July' — the month a card cycle was lived in, or pays in. */
+export function monthOf(d) {
+  if (!d) return ''
+  return new Date(d + 'T00:00').toLocaleDateString(LOCALE, { month: 'long' })
+}
+
+/**
+ * A day of the month as words: ordinal(22) -> '22nd', ordinal(13) -> '13th'.
+ * null -> '—' (no day recorded), -1 -> 'last day' (the payroll convention
+ * dueDayIn() honours in calc.js).
+ */
+export function ordinal(n) {
+  if (n == null) return '—'
+  if (n === -1) return 'last day'
+  const v = Math.abs(Number(n))
+  const teens = v % 100 >= 11 && v % 100 <= 13
+  const suffix = teens ? 'th' : ['th', 'st', 'nd', 'rd'][v % 10] || 'th'
+  return `${n}${suffix}`
+}
+
+/**
+ * Tone for what is actually free on a card, by how much of the limit is used.
+ *
+ * The canvas drew two states. The middle one exists because the app has a
+ * --cash token and an account 60% used is neither tight nor clear — painting it
+ * green would say more than the figure does, and red would cry wolf.
+ */
+export function availabilityTone(pct) {
+  if (pct == null) return 'text-faint'
+  if (pct >= 80) return 'text-loss'
+  if (pct >= 50) return 'text-cash'
+  return 'text-gain'
+}
+
+const NUMBER_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+const numberWord = n => (n >= 0 && n <= 9 ? NUMBER_WORDS[n] : String(n))
+
+/**
+ * The caption under the cards header: "one account carries · one settles in
+ * full". Number words, as the canvas wrote it — the header's own sub-line uses
+ * digits for the account count, and the two are meant to read differently
+ * because one is a figure and this is a sentence.
+ *
+ * `counts` is commitmentsTotal().counts. The overdue clause names the WHOLE
+ * bill, not the minimum: it is explaining why a row carries no badge, and the
+ * thing nothing is recorded against is the bill.
+ */
+export function stateCaption(counts, { overdueRM = 0, overdueISO = null } = {}) {
+  const c = counts || {}
+  const parts = [
+    [c.carrying, 'carries', 'carry'],
+    [c.late, 'paid late', 'paid late'],
+    [c.settled, 'settles in full', 'settle in full'],
+    [c.unknownNoPayment, 'has no payment recorded', 'have no payment recorded'],
+    [c.unknownOneBill, 'has one bill so far', 'have one bill so far'],
+    [c.unknownNoBill, 'has no bill yet', 'have no bill yet'],
+  ].filter(([n]) => n > 0)
+  const fragments = parts.map(([n, one, many], i) => {
+    const verb = n === 1 ? one : many
+    return i === 0 ? `${numberWord(n)} account${n === 1 ? '' : 's'} ${verb}` : `${numberWord(n)} ${verb}`
+  })
+  if (overdueRM > 0 && overdueISO) {
+    fragments.push(`${fmt(overdueRM, 'MYR')} of it fell due on ${dfmt(overdueISO)} with no payment recorded`)
+  }
+  return fragments.join(' · ')
+}
+
 export { MINUS, LOCALE }

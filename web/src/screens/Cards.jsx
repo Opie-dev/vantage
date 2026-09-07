@@ -13,22 +13,75 @@
  * limit used can sit on an account with almost nothing left, because instalments
  * not yet billed keep blocking the limit until each month's principal is paid,
  * and no statement prints that total anywhere. `availableRM` is the figure that
- * does — see calc.js commitmentRows(), and CardHeadroom, which only appears when
- * the two disagree.
+ * does — see calc.js cardState() — and the hatched third band on each row is
+ * the part of the limit no statement shows.
+ *
+ * ONE CARD, ONE ROW PER ACCOUNT. The header states what is committed across
+ * every account and what falls due in the next thirty days; under it each
+ * account is one row that opens its sheet; and the block at the foot names the
+ * two limits by account and amount, so the rule above is read against the
+ * figures it protects rather than in the abstract.
  */
 import { useMemo, useState } from 'react'
 import { PlusIcon } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { commitmentRows, commitmentsTotal } from '@/lib/calc'
-import { fmt } from '@/lib/format'
+import { fmt, fmtBare, ordinal, stateCaption } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
+import AccountRow from './money/AccountRow'
 import CardSheet from './money/CardSheet'
-import CommitmentRow from './money/CommitmentRow'
 import { Meta, MonthStepper } from './money/parts'
+
+/**
+ * The one paragraph this screen exists for, with the accounts named. Two
+ * accounts: the looser limit cannot pay the tighter bill. One: its room is
+ * stated alone, never added to a second. None with a limit: nothing to say.
+ */
+function TwoLimits({ rows }) {
+  const withLimit = rows.filter(r => r.availableRM != null)
+  if (!withLimit.length) return null
+  const short = r => r.commitment.lender || r.name
+  const cls =
+    'text-muted-foreground border-hairline m-0 border-t pt-2.5 text-[12px] leading-relaxed text-pretty'
+  // Ordered by room, so two accounts with the same room to the sen are still
+  // two accounts: the rule is about there being two limits, not about one of
+  // them being looser.
+  const byRoom = [...withLimit].sort((a, b) => b.availableRM - a.availableRM)
+  const loose = byRoom[0]
+  const tight = byRoom[byRoom.length - 1]
+  if (withLimit.length >= 2) {
+    const la = loose.commitment.apr
+    const ta = tight.commitment.apr
+    const rate =
+      la > ta
+        ? `at ${la}% instead of ${ta}%`
+        : la < ta
+          ? `at ${la}% rather than ${ta}% — a cheaper rate on the same debt, not less of it`
+          : `at the same ${la}%`
+    return (
+      <p className={cls}>
+        <b className="text-foreground font-semibold">Two limits, not one pool.</b>{' '}
+        {fmt(loose.availableRM, loose.cur)} free on the {short(loose)} account cannot pay the{' '}
+        {short(tight)} bill — it can only move the debt, {rate}. Adding the limits together would
+        make the tighter account disappear inside the total, which is the one thing this page must
+        never do.
+      </p>
+    )
+  }
+  const r = withLimit[0]
+  return (
+    <p className={cls}>
+      <b className="text-foreground font-semibold">One account, one limit.</b>{' '}
+      {fmt(r.availableRM, r.cur)} is what is actually free on {r.name}
+      {r.apparentFree != null ? `, where the bill would suggest ${fmt(r.apparentFree, r.cur)}` : ''}.
+      It is stated on its own: a second account&rsquo;s room would be listed beside it, never added
+      to it.
+    </p>
+  )
+}
 
 export default function Cards() {
   const {
@@ -36,7 +89,6 @@ export default function Cards() {
     openCommitment,
     deleteCommitment,
     openCardPlan,
-    deleteCardPlan,
     openCardStatement,
     openStatementImport,
   } = useVantage()
@@ -71,7 +123,6 @@ export default function Cards() {
   }
 
   const cards = out.rows.length
-  const withLimit = out.rows.filter(r => r.commitment.credit_limit)
   // Recurring charges these accounts collect. They are counted on Commitments and
   // NOT here — this panel says where the money goes out through, never what it
   // costs, which is why it prints no total of its own alongside the ones above.
@@ -79,77 +130,63 @@ export default function Cards() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="Minimums are a month's figure; what is owed is today's." />
+      <MonthStepper note="What is due is keyed to each bill's own date; what is committed is today's." />
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card>
-          <CardContent className="px-4">
-            <span className="eyebrow">Minimums, a month</span>
-            <div className="stat num text-loss">{fmt(out.monthlyOutRM, 'MYR')}</div>
-            <Meta>
-              across {cards} account{cards === 1 ? '' : 's'} · the minimum, never the balance
-            </Meta>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="px-4">
-            <span className="eyebrow">Owed today</span>
-            <div className="stat num">{fmt(out.owedRM, 'MYR')}</div>
-            <Meta>billed and unbilled instalments together</Meta>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="px-4">
-            <span className="eyebrow">Accounts with a limit</span>
-            <div className="stat num">
-              {withLimit.length}
-              <span className="text-faint text-[13px]"> of {cards}</span>
-            </div>
-            <Meta>what is free is stated per account below, and never added up</Meta>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="grid gap-3 px-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex-1" />
+            <Button variant="outline" size="sm" onClick={() => openStatementImport()}>
+              Import a statement
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => openCommitment({ kind: 'REVOLVING' })}>
+              <PlusIcon />
+              Add a card account
+            </Button>
+          </div>
 
-      {withLimit.length ? (
-        <Card>
-          <CardContent className="grid gap-2.5 px-4">
-            <span className="eyebrow">Room, per account</span>
-            {withLimit.map(r => (
-              <div key={r.id} className="grid gap-1">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-[12.5px]">{r.name}</span>
-                  <span className="num text-[12.5px] font-semibold">
-                    {fmt(r.availableRM, r.cur)} free
-                  </span>
-                </div>
-                <div className="bg-muted h-[5px] overflow-hidden rounded-full">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.min(100, Math.max(0, r.utilisationPct || 0))}%`,
-                      background: 'var(--loss)',
-                    }}
-                  />
-                </div>
-                <Meta>
-                  {fmt(r.commitment.credit_limit, r.cur)} limit ·{' '}
-                  {fmt(r.revolving, r.cur)} billed ·{' '}
-                  {fmt(r.blocked, r.cur)} still blocked by instalments
-                </Meta>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <span className="eyebrow">Committed across every card</span>
+              <div className="num text-[30px] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap">
+                {fmt(out.owedRM, 'MYR')}
               </div>
+              <div className="num text-muted-foreground mt-1 text-[11.5px]">
+                {fmtBare(out.billedRM)} billed · {fmtBare(out.unbilledRM)} still to be · across{' '}
+                {cards} account{cards === 1 ? '' : 's'}
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="eyebrow">Due in the next 30 days</span>
+              {/* A loss only where something leaves: a red RM 0.00 on a month
+                  nothing falls due would paint the absence of a bill as one. */}
+              <div
+                className={`num text-[22px] leading-none font-semibold tracking-[-0.02em] whitespace-nowrap ${out.due30RM > 0 ? 'text-loss' : 'text-muted-foreground'}`}
+              >
+                {out.due30AtLeast ? 'at least ' : ''}
+                {fmt(out.due30RM, 'MYR')}
+              </div>
+              <Meta className="num mt-1 block">{stateCaption(out.counts, out)}</Meta>
+            </div>
+          </div>
+
+          <div>
+            {out.rows.map(r => (
+              <AccountRow
+                key={r.id}
+                r={r}
+                onOpenSheet={setSheetId}
+                onEdit={openCommitment}
+                onRemove={deleteCommitment}
+                onAddPlan={openCardPlan}
+                onAddStatement={openCardStatement}
+              />
             ))}
-            {/* The one thing this screen must never do. Two limits added together
-                make the tighter account disappear inside the total, and a total
-                is what someone reads before deciding a purchase fits. */}
-            <p className="text-faint m-0 mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-pretty">
-              These are not added together, and there is no figure on this screen that adds them.
-              Room free on one account cannot pay another&rsquo;s bill — it can only move the debt,
-              usually at a worse rate. A combined total would make the tightest account vanish
-              inside it, which is the one error this page exists to prevent.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+          </div>
+
+          <TwoLimits rows={out.rows} />
+        </CardContent>
+      </Card>
 
       {collected.length ? (
         <Card>
@@ -161,7 +198,7 @@ export default function Cards() {
               return (
                 <div key={card.id} className="grid gap-1">
                   <Meta>
-                    {card.name} · leaves on the {card.commitment.due_day ?? '—'}
+                    {card.name} · leaves on the {ordinal(card.commitment.due_day)}
                   </Meta>
                   {mine.map(r => (
                     <div
@@ -190,47 +227,10 @@ export default function Cards() {
         </Card>
       ) : null}
 
-      <Card className="min-w-0 gap-0 overflow-hidden py-0">
-        <div className="flex items-center gap-2.5 px-4 py-3">
-          <span className="eyebrow">The accounts</span>
-          <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
-            {cards}
-          </Badge>
-          <div className="flex-1" />
-          <Button variant="outline" size="sm" onClick={() => openStatementImport()}>
-            Import a statement
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label="Add a card account"
-            title="Add a card account"
-            onClick={() => openCommitment({ kind: 'REVOLVING' })}
-          >
-            <PlusIcon />
-          </Button>
-        </div>
-        <div className="border-hairline border-t">
-          {out.rows.map(r => (
-            <CommitmentRow
-              key={r.id}
-              r={r}
-              onEdit={openCommitment}
-              onRemove={deleteCommitment}
-              onAddPlan={openCardPlan}
-              onRemovePlan={deleteCardPlan}
-              onAddStatement={openCardStatement}
-              onOpenSheet={setSheetId}
-            />
-          ))}
-        </div>
-      </Card>
-
       <p className="text-faint m-0 max-w-[78ch] text-[11.5px] leading-relaxed text-pretty">
-        A card is the one commitment whose monthly figure is a guess. For a loan the instalment
-        is the instalment; here what actually left is whatever was actually paid, anywhere between
-        the minimum and the whole bill — so a recorded payment always wins over the derived
-        minimum, and the month on {' '}
+        What leaves on a due date is the minimum where a balance is carried and the whole bill
+        where the account settles in full. A recorded payment always wins over either — anywhere
+        between the minimum and the whole bill — which is why the month on{' '}
         <span className="text-muted-foreground">Overview</span> reads the payment rather than this
         figure.
       </p>
