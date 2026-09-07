@@ -4183,6 +4183,20 @@ export function netWorth(S, opts = {}) {
  */
 
 /** Clamp a due day to a month that is shorter than it — the 31st in February. */
+/**
+ * Days from a statement closing to its due date.
+ *
+ * WRAPS THE MONTH END, which is the only reason this is a function. A card that
+ * closes on the 28th and falls due on the 18th gives 21 days, not −10, and the
+ * naive subtraction is wrong for every card whose due day precedes its closing
+ * day — which is most of them, since the interest-free period Bank Negara
+ * requires runs past the month boundary by design.
+ */
+export function cycleGapDays(statementDay, dueDay) {
+  if (!statementDay || !dueDay) return null
+  return (dueDay - statementDay + 31) % 31
+}
+
 function dueDayIn(year, monthIndex, day) {
   if (day == null) return null
   const last = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
