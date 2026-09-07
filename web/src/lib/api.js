@@ -175,6 +175,7 @@ export const deleteAssetEntry = (assetId, entryId) =>
  *          principal?:number, rate?:number, rate_type?:'FLAT'|'REDUCING',
  *          term_months?:number, started_on?:string, instalment?:number|null,
  *          apr?:number, balance?:number, balance_as_of?:string, credit_limit?:number,
+ *          card_count?:number|null,
  *          amount?:number, every_months?:number, due_day?:number|null}} body
  *   `rate_type` has no default and cannot be inferred — FLAT charges interest on
  *   the original amount, REDUCING on what is left, and Malaysian marketing calls

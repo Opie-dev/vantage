@@ -104,6 +104,11 @@ function checkShape(kind, f) {
     if (!nonNegative(f.apr)) throw badRequest('apr must be a number of zero or more');
     if (f.balance != null && !nonNegative(f.balance)) throw badRequest('balance must be a number of zero or more');
     if (f.credit_limit != null && !positive(f.credit_limit)) throw badRequest('credit_limit must be a positive number');
+    // NULL is "never asked" and stays legal. What is refused is a nonsense
+    // answer: an account with no cards on it, or a wallet holding twenty-one.
+    if (f.card_count != null && (!Number.isInteger(f.card_count) || f.card_count < 1 || f.card_count > 20)) {
+      throw badRequest('card_count must be a whole number of cards between 1 and 20');
+    }
     if (f.balance_as_of != null) checkDate(f.balance_as_of, 'balance_as_of');
     // A balance with no date is a figure nobody can judge the age of, and a card
     // balance goes stale in days. The screen has to be able to say when.
@@ -183,6 +188,7 @@ async function create(body) {
     apr: body.apr ?? null,
     min_payment_pct: body.min_payment_pct ?? 5,
     min_payment_floor: body.min_payment_floor ?? 50,
+    card_count: body.card_count ?? null,
     statement_day: body.statement_day ?? null,
     limit_release: body.limit_release ?? null,
     // What the loan bought, if it is tracked. Only a LOAN may carry one —
@@ -207,6 +213,7 @@ async function create(body) {
     termMonths: f.term_months, startedOn: f.started_on, instalment: f.instalment,
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
+    cardCount: f.card_count,
     statementDay: f.statement_day, limitRelease: f.limit_release, assetId: f.asset_id,
     amount: f.amount, everyMonths: f.every_months, collectedById: f.collected_by_id,
     sortOrder: f.sort_order,
@@ -246,6 +253,7 @@ async function update(id, body) {
     apr: body.apr === undefined ? c.apr : body.apr,
     min_payment_pct: body.min_payment_pct ?? c.min_payment_pct,
     min_payment_floor: body.min_payment_floor ?? c.min_payment_floor,
+    card_count: body.card_count === undefined ? c.card_count : body.card_count,
     statement_day: body.statement_day === undefined ? c.statement_day : body.statement_day,
     limit_release: body.limit_release === undefined ? c.limit_release : body.limit_release,
     asset_id: body.asset_id === undefined ? c.asset_id : body.asset_id,
@@ -273,6 +281,7 @@ async function update(id, body) {
     termMonths: f.term_months, startedOn: f.started_on, instalment: f.instalment,
     creditLimit: f.credit_limit, balance: f.balance, balanceAsOf: f.balance_as_of,
     apr: f.apr, minPaymentPct: f.min_payment_pct, minPaymentFloor: f.min_payment_floor,
+    cardCount: f.card_count,
     statementDay: f.statement_day, limitRelease: f.limit_release, assetId: f.asset_id,
     amount: f.amount, everyMonths: f.every_months,
     active: f.active, endedOn: f.ended_on, sortOrder: f.sort_order,

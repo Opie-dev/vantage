@@ -545,6 +545,16 @@ export default function CardSheet({ row, open, onClose }) {
           <SheetTitle className="flex flex-wrap items-baseline gap-2">
             {row.name}
             <StateBadge row={row} />
+            {/* Neutral on purpose. How many cards share a limit is a fact about
+                the account, not a judgement on it — a loss or gain tone here
+                would make two cards read as a problem. Absent entirely when the
+                count was never given, because "1 CARD" asserted by default is
+                the invention the nullable column exists to avoid. */}
+            {c.card_count > 0 ? (
+              <Badge variant="neutral" className={PILL}>
+                {c.card_count === 1 ? '1 card' : `${c.card_count} cards, 1 limit`}
+              </Badge>
+            ) : null}
           </SheetTitle>
           <SheetDescription>
             {/* The limit as a bank prints it, without sen — the row's terms line

@@ -339,6 +339,7 @@ CREATE TABLE public.commitments (
     apr double precision,
     min_payment_pct double precision DEFAULT 5,
     min_payment_floor double precision DEFAULT 50,
+    card_count integer,
     amount double precision,
     every_months integer DEFAULT 1,
     active boolean DEFAULT true NOT NULL,
@@ -349,6 +350,7 @@ CREATE TABLE public.commitments (
     asset_id integer,
     collected_by_id integer,
     CONSTRAINT commitments_asset_is_loan_check CHECK (((asset_id IS NULL) OR (kind = 'LOAN'::text))),
+    CONSTRAINT commitments_card_count_check CHECK (((card_count IS NULL) OR ((kind = 'REVOLVING'::text) AND ((card_count >= 1) AND (card_count <= 20))))),
     CONSTRAINT commitments_collected_is_recurring_check CHECK (((collected_by_id IS NULL) OR (kind = 'RECURRING'::text))),
     CONSTRAINT commitments_collected_not_self_check CHECK (((collected_by_id IS NULL) OR (collected_by_id <> id))),
     CONSTRAINT commitments_due_day_check CHECK (((due_day IS NULL) OR ((due_day >= 1) AND (due_day <= 31)))),
@@ -386,6 +388,11 @@ COMMENT ON COLUMN public.commitments.asset_id IS 'What this loan bought, if it i
 --
 
 COMMENT ON COLUMN public.commitments.collected_by_id IS 'The REVOLVING account that collects this recurring charge, if a card does. Adds no money to the month — the charge is still counted once, on Commitments. It says which day the money actually leaves.';
+--
+-- Name: COLUMN commitments.card_count; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.commitments.card_count IS 'Pieces of plastic sharing this limit. NULL means never asked, never 1 by default.';
 
 
 --

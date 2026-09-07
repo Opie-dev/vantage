@@ -2818,6 +2818,7 @@ function CommitmentDialog({ prefill }) {
     apr: str(prefill.apr, '18'),
     balance: str(prefill.balance),
     credit_limit: str(prefill.credit_limit),
+    card_count: str(prefill.card_count),
     statement_day: str(prefill.statement_day),
     min_payment_floor: str(prefill.min_payment_floor, '50'),
     limit_release: prefill.limit_release || 'PROGRESSIVE',
@@ -2867,6 +2868,7 @@ function CommitmentDialog({ prefill }) {
               ...common,
               apr: num(f.apr),
               credit_limit: num(f.credit_limit),
+              card_count: num(f.card_count),
               balance: num(f.balance),
               // The day the bill CLOSES, which is not the day it falls due. The
               // interest-free period runs from it, so without it the app cannot
@@ -3075,6 +3077,18 @@ function CommitmentDialog({ prefill }) {
             </Field>
             <Field label="Credit limit" htmlFor="cm-limit">
               <Input id="cm-limit" className="num" type="number" step="100" value={f.credit_limit} onChange={e => set('credit_limit', e.target.value)} />
+            </Field>
+            {/* Plastic and limits are different quantities, and nothing else
+                in the app can tell them apart: a limit is per account, and the
+                statement parser emits card numbers but drops any card that
+                settled to zero — so counting them undercounts exactly the
+                cards that behaved. Left blank it stays unasked, never 1. */}
+            <Field
+              label="Cards on this account"
+              htmlFor="cm-cards"
+              hint="Two cards can share one limit — a principal and a supplementary, or a Visa and a Mastercard. Blank if you would rather not say."
+            >
+              <Input id="cm-cards" className="num" type="number" min="1" max="20" placeholder="2" value={f.card_count} onChange={e => set('card_count', e.target.value)} />
             </Field>
             <Field
               label="Balance now"
