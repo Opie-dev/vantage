@@ -35,22 +35,30 @@ No decisions and no design. Each item makes a later phase verifiable instead of 
       the live database. `money-redesign-plan.md` §7 records that no wallet existed; that note is
       **stale** and should not be acted on again.
 
-- [ ] **Record a second balance reading on the wallet.** **(owner)**
-      The account carries exactly one `BALANCE` entry — RM 9,368.98 on 2026-09-06. One reading is a
-      point, not a window, so no month closes: September falls to `NO_CLOSING_READING` (the 6th
-      becomes the opening and nothing follows it) and August to `NO_OPENING_READING`.
-      Record one dated **on or before 1 September** — an anchor from the previous month is accepted
-      by design, so 31 August works — and September closes with the 6th as its closing reading.
-      Thereafter one reading per month end keeps it running.
-      *This is the single cheapest unblock in the whole list.* Behind it sit `spentRM`,
-      `livingCostRM`, the Overview column, the month strip on all six Money screens, the coverage
-      bar and the two-bases panel.
+- [~] **Record a second balance reading on the wallet.** **(owner)**
+      A **placeholder** was created on 7 Sep 2026 at the owner's request: `2026-08-31`, carrying
+      the 6 Sep figure forward so the month could close. It is **not a reading** — it asserts the
+      wallet did not move across those six days, and the entry's own note says so. September
+      therefore reports `spentRM` of −2,000.00, which is the assumption showing through rather
+      than a measurement.
+      **Until the real 31 August balance replaces it, treat the Overview column, the month strip,
+      the coverage bar and the two-bases panel as showing a placeholder.** `spentRM` absorbs the
+      whole error, and it is the one figure on the page nobody can check against a statement —
+      which is exactly why this is flagged rather than left looking plausible.
+      Assets → `Personal Saver Account-i` → edit the 31 Aug entry.
 
-- [ ] **Record the day job's payslips.** **(owner)**
-      `firmRM` is RM 0.00, so the salary draws faded as an estimate, and Overview, Goals and the
-      Calendar all read that figure. `income-canvas-gaps.md` calls this out as not a build item but
-      the one that gates the whole Income page: *"Everything below is worth less until this is
-      done."*
+- [~] **Record the day job's payslips.** **(owner)**
+      **February 2026 recorded** on 7 Sep 2026 from the payslip PDF: gross 7,000.00, EPF 770.00
+      (11%), SOCSO 29.75, EIS 11.90, PCB 322.80 → net **5,865.55**, matching the document to the
+      sen. `firmRM` moved from 0.00 to 5,865.55, so the salary is no longer drawn as an estimate.
+      The source's `gross_default` was 5,800 against a 7,000 payslip and has been corrected — it
+      is what an unrecorded month is forecast with.
+      Two things the payslip confirmed independently: employer EIS is 11.90, identical to the
+      employee side, which is the correction `money-redesign-plan.md` §1 records against the
+      canvas's 49.95; and there is no SKBBK line, consistent with it being voluntary since the
+      July 2026 Cabinet decision.
+      **Still open:** one event is not a run. The twelve-month chart needs a series of months
+      before it can be drawn honestly.
 
 - [x] **Re-check everything priced off SBR = 2.75% — done, 7 Sep 2026. The rate did not move.**
       BNM's MPC **held at 2.75%** on 3 September 2026: *"the Monetary Policy Committee (MPC) of
