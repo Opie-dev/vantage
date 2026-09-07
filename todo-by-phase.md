@@ -355,8 +355,12 @@ it. Typed charges are a genuinely separate blocker, and not on a table.
       Constraints exercised against the live schema in a rolled-back transaction: a booked row
       with no expense and a half-filled foreign block are both refused; an unmatched retail line,
       a complete foreign line and an instalment billing are accepted. `db/schema.sql` was
-      regenerated from `pg_dump` **with the file's CRLF preserved**, so the diff is 99 lines of
-      new table and zero deletions — the trick that makes regeneration safe here.
+      regenerated from `pg_dump`, giving 99 lines of new table and zero deletions.
+      **A correction to an earlier note here:** that clean diff was credited to converting the
+      dump to CRLF before writing. It was not. `core.autocrlf=true` with no `.gitattributes`
+      means git stores `db/schema.sql` as LF whichever way the working copy is written — verified
+      on both branches — so a plain `pg_dump` would have committed identically. The earlier fear
+      that regeneration produces a whole-file EOL diff was unfounded for anything git tracks.
       **Note:** the migration is applied to the dev database, but the migration FILE lives only on
       that branch. `npm run db:status` from another branch will show a row it has no file for
       until the branch lands.
@@ -398,7 +402,16 @@ it. Typed charges are a genuinely separate blocker, and not on a table.
       Scope out the annual-fee waiver line — it needs a per-card swipe tally, i.e. the transactions
       table above.
 
-- [ ] **A card count on the account.** **(migration, large — but the cheap resolution is small)**
+- [x] **A card count on the account — done 7 Sep 2026**, on `cards-count-the-plastic` (off
+      `main`). Migration applied, threaded through model, service, form, both card screens, and
+      covered by a smoke assertion. **NULL means never asked, never 1** — defaulting would invent
+      the fact the badge exists to report. The all-cards line prints the card clause only when it
+      *differs* from the account count, and refuses a partial sum where any account has not
+      answered, since that would undercount by exactly the accounts that stayed silent.
+      `db/schema.sql` was hand-synced rather than regenerated: the dev database also carries
+      `card_transactions` from another branch, so a full dump would have claimed a table that
+      branch does not create. Worth remembering whenever two migration branches are open at once.
+      The original entry, for reference:
       Nothing currently knows how many cards share a limit; `credit_limit` even carries a comment
       saying two cards can share one without recording how many, and it cannot be inferred from an
       import. Two verified corrections disagree on shape (a `cards` child table vs a single
