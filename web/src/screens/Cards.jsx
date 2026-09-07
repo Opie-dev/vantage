@@ -27,12 +27,13 @@ import { PlusIcon } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { commitmentRows, commitmentsTotal } from '@/lib/calc'
 import { fmt, fmtBare, ordinal, stateCaption } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 import AccountRow from './money/AccountRow'
-import CardSheet from './money/CardSheet'
+import AccountPanel from './money/AccountPanel'
 import { Meta, MonthStrip } from './money/parts'
 
 /**
@@ -96,7 +97,16 @@ export default function Cards() {
   const out = useMemo(() => commitmentsTotal(state, { kinds: ['REVOLVING'] }), [state])
   // The id and not the row: a row is rebuilt on every state change, so holding
   // one would pin a stale copy open behind a fresh list.
-  const [sheetId, setSheetId] = useState(null)
+  // 'all', or an account id as a string.
+  //
+  // A TAB AND NOT A SHEET. The canvas puts a strip above everything switching
+  // the page between the all-cards summary and one account's full page, and
+  // cards-canvas-gaps.md §1 names this as the one gap that contradicts a
+  // written decision — the old sheet's own header argued for an overlay.
+  // Decided the other way: an account is a place you go, not a thing that
+  // covers up what you were looking at.
+  const [tab, setTab] = useState('all')
+  const selected = out.rows.find(r => String(r.id) === tab) || null
 
   if (!out.rows.length) {
     return (
@@ -141,6 +151,35 @@ export default function Cards() {
   return (
     <div className="grid gap-4">
       <MonthStrip />
+
+      {/* Short labels, already stored: the lender where there is one, the
+          account name otherwise — "Maybank", not "Maybank card account". */}
+      {/* `orientation` is explicit and `flex-row` is not redundant: the rail is
+          itself a vertical Tabs, and Tailwind's `group/tabs` variants match ANY
+          ancestor carrying the class — so a nested strip inherits the rail's
+          orientation and stacks its triggers down the page. */}
+      <Tabs value={tab} onValueChange={setTab} orientation="horizontal">
+        {/* The direction is a style and not a class on purpose: the rail's
+            `group-data-[orientation=vertical]/tabs:flex-col` still matches from
+            an ancestor, and tailwind-merge does not treat a variant class and a
+            bare one as conflicting, so `flex-row` loses to it silently. */}
+        <TabsList
+          variant="line"
+          className="h-9 w-fit justify-start gap-1 [&>button]:flex-none [&>button]:px-3"
+          style={{ flexDirection: 'row' }}
+        >
+          <TabsTrigger value="all">All cards</TabsTrigger>
+          {out.rows.map(r => (
+            <TabsTrigger key={r.id} value={String(r.id)}>
+              {r.commitment.lender || r.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {selected ? <AccountPanel row={selected} /> : null}
+      {selected ? null : (
+        <>
 
       <Card>
         <CardContent className="grid gap-3 px-4">
@@ -194,7 +233,7 @@ export default function Cards() {
               <AccountRow
                 key={r.id}
                 r={r}
-                onOpenSheet={setSheetId}
+                onOpenSheet={id => setTab(String(id))}
                 onEdit={openCommitment}
                 onRemove={deleteCommitment}
                 onAddPlan={openCardPlan}
@@ -254,11 +293,8 @@ export default function Cards() {
         figure.
       </p>
 
-      <CardSheet
-        row={out.rows.find(r => r.id === sheetId) || null}
-        open={sheetId != null}
-        onClose={() => setSheetId(null)}
-      />
+        </>
+      )}
     </div>
   )
 }
