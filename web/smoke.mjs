@@ -2553,6 +2553,29 @@ try {
       if (!labels.includes('All cards')) throw new Error('cards: no All cards tab')
       if (!labels.includes('CIMB Visa')) throw new Error('cards: no per-account tab')
     }
+    // The cycle panel is ABSENT here, and that is the correct behaviour: this
+    // account has a due day and no statement day, so there is no cycle to
+    // describe. The shared fixture is deliberately minimal — giving it one
+    // moves figures four screens assert on, which its own guard catches.
+    if (pane.includes('What each cycle does to the month')) {
+      throw new Error('cards: a card with no statement day has no cycle to describe')
+    }
+
+    // The collects panel shows EVERY recurring charge. Gating it on the ones a
+    // card collects hid it entirely from anyone whose charges are all direct
+    // debits — and that contrast is the panel's whole argument, so the rows with
+    // no card are the ones that make it worth drawing.
+    if (!pane.includes('Which account collects what')) {
+      throw new Error('cards: the collects panel is missing with recurring charges present')
+    }
+    if (!pane.includes('Direct debit — no card involved')) {
+      throw new Error('cards: a charge no card collects has no row')
+    }
+    // Each row carries ITS day, not the collector's — `leavesOnDay` returns the
+    // card's day for exactly these rows, which is why it is not used here.
+    if (!/due the \d+\w+/.test(pane)) {
+      throw new Error('cards: a charge does not name its own due day')
+    }
     if (!pane.includes('2 cards, 1 limit')) {
       throw new Error('cards: the row does not say two cards share one limit')
     }
@@ -3059,6 +3082,28 @@ try {
     STATE.transactions = txns0
     await act(async () => { await ctl.reload() })
     await tick(() => ctl.setTab('dashboard'))
+  }
+
+  // The closes-to-due gap, which wraps the month end. Asserted directly because
+  // the case that matters cannot be reached from the shared fixture: its card
+  // has no statement day, and giving it one moves figures four screens assert
+  // on — the guard at "the shared state does not move" catches exactly that.
+  {
+    const { cycleGapDays } = await server.ssrLoadModule('/src/lib/calc.js')
+    const cases = [
+      [6, 26, 20, 'the ordinary case, closing before due'],
+      [28, 18, 21, 'due day BEFORE closing day wraps the month end'],
+      [1, 1, 0, 'same day is no gap, not a month'],
+      [31, 1, 1, 'the 31st to the 1st is one day, not thirty'],
+    ]
+    for (const [close, due, want, why] of cases) {
+      const got = cycleGapDays(close, due)
+      if (got !== want) throw new Error(`cycleGapDays(${close}, ${due}) = ${got}, expected ${want} — ${why}`)
+    }
+    if (cycleGapDays(null, 26) !== null) {
+      throw new Error('cycleGapDays: a card with no statement day has no gap to state')
+    }
+    console.log('  cycle gap  wraps the month end, and refuses without a statement day')
   }
 
   const real = errors.filter(e =>

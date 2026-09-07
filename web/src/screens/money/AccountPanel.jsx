@@ -388,7 +388,7 @@ function Float({ row }) {
 
   if (f.reason) {
     return (
-      <div className="border-hairline border-t pt-4">
+      <div className="border-hairline rounded-md border p-4">
         <span className="eyebrow">Float, over the cycle just closed</span>
         <p className="text-muted-foreground mt-2 mb-0 text-[12px] leading-relaxed text-pretty">
           {f.reason === 'NO_STATEMENTS'
@@ -433,7 +433,7 @@ function Float({ row }) {
   ]
 
   return (
-    <div className="border-hairline border-t pt-4">
+    <div className="border-hairline rounded-md border p-4">
       <span className="eyebrow">Float, over the cycle just closed</span>
       <div className="mt-1 flex flex-wrap items-baseline gap-2.5">
         <span
@@ -558,8 +558,8 @@ export default function AccountPanel({ row }) {
           </div>
         </div>
 
-        <div className="grid gap-5 px-4 pb-6">
-          <div>
+        <div className="grid gap-3 px-4 pb-6">
+          <div className="border-hairline rounded-md border p-4">
             <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
               <div>
                 <span className="eyebrow">Committed on this account</span>
@@ -601,7 +601,7 @@ export default function AccountPanel({ row }) {
             ) : null}
           </div>
 
-          <div className="border-hairline border-t pt-4">
+          <div className="border-hairline rounded-md border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="eyebrow">The cycle</span>
               {pill ? (
@@ -681,7 +681,7 @@ export default function AccountPanel({ row }) {
 
           <Float row={row} />
 
-          <div className="border-hairline border-t pt-4">
+          <div className="border-hairline rounded-md border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="eyebrow">Instalment plans</span>
               {row.plans.length ? (
@@ -769,7 +769,7 @@ export default function AccountPanel({ row }) {
             )}
           </div>
 
-          <div className="border-hairline border-t pt-4">
+          <div className="border-hairline rounded-md border p-4">
             <div className="flex flex-wrap items-center gap-2">
               <span className="eyebrow">Statements</span>
               <div className="flex-1" />
