@@ -361,7 +361,25 @@ it. Typed charges are a genuinely separate blocker, and not on a table.
       that branch. `npm run db:status` from another branch will show a row it has no file for
       until the branch lands.
 
-- [ ] **Typed statement charges — BLOCKED, and not on a table.** **(large · migration)**
+- [ ] **Typed statement charges — still blocked, but the reason is now known rather than
+      guessed.** **(large · migration)**
+      A real statement was read on 7 Sep 2026 (an August cycle), and it changes the shape of this
+      item:
+      **Maybank's statement has no charges box at all.** The summary carries only the combined
+      credit limit, the previous balance, total credit and total debit this month, and a sub-total.
+      Every charge is a *transaction line*, so the canvas's "Charges this cycle, each printed even
+      at zero" cannot be transcribed from the statement — it would have to be **derived by
+      classifying descriptions**, and a type that was not incurred leaves no line to classify.
+      **A clean month exhibits almost no charge types.** That cycle was settled in full, so there
+      was no retail interest, no late payment, no cash advance fee and no annual fee — the only
+      charge line present was `EZYPAY PLUS -E12 INTEREST`, billed beside its principal line at the
+      same plan position, exactly as the `card_plans` migration anticipated. And that is the one
+      type the audit says to **derive from `card_plans` rather than store**.
+      So: one more statement does not unblock this. What would is a cycle that actually **carried**
+      a balance or a late payment, since only an incurred charge prints its own wording.
+      Also worth knowing: the canvas lists "overseas conversion" as a charge, and there is **no
+      such line** — a foreign purchase posts as one converted ringgit amount with the original
+      currency and amount beneath it. Any markup is inside the rate, not itemised beside it.
       `card_statements.interest_charged` and `fees_charged` are still hardcoded to 0 on every
       import, and a new table would inherit the same empty pipe. The blocker is upstream of both:
       **the parser has no rule that recognises a charge line.** The only thing it matches near
