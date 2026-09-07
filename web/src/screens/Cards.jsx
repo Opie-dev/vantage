@@ -168,6 +168,23 @@ function ChargeLine({ r }) {
   )
 }
 
+/**
+ * The selected tab takes the surface of the panel it introduces.
+ *
+ * DRIVEN FROM STATE AND SET AS A STYLE, both deliberately. The component's own
+ * `data-[state=active]:` rules fight this: the `line` variant forces the
+ * selected tab to `bg-transparent`, and the default variant gives it
+ * `background` — which in this theme is #0e1216, DARKER than the `muted` strip
+ * around it and the same colour as the page behind it, so the selection reads
+ * as a hole rather than a chip. Both of those selectors carry an attribute and
+ * so out-rank a plain class; a style attribute is the one thing that does not
+ * have to win a specificity argument.
+ */
+const TAB = 'flex-none rounded-md px-3'
+
+const tabStyle = on =>
+  on ? { background: 'var(--card)', borderColor: 'var(--border)' } : undefined
+
 export default function Cards() {
   const {
     state,
@@ -253,18 +270,29 @@ export default function Cards() {
             `group-data-[orientation=vertical]/tabs:flex-col` still matches from
             an ancestor, and tailwind-merge does not treat a variant class and a
             bare one as conflicting, so `flex-row` loses to it silently. */}
-        {/* The DEFAULT variant, not `line`. A line strip is transparent, so on
-            this page it sat on the same ground as everything around it and read
-            as two words rather than as a control. The segmented look gives the
-            strip its own surface and the selected tab a raised one, which is
-            what says the page below belongs to it. */}
+        {/* THE SELECTED TAB TAKES THE SURFACE OF THE PANEL IT INTRODUCES, which
+            is `card`, and the strip stays on the page's own ground.
+            The component's default does the opposite: the strip is `muted`
+            (#1a222a) and the selected tab is `background` (#0e1216) — darker
+            than the strip it sits in AND the same colour as the page behind it,
+            so in this theme the selection reads as a hole rather than a chip.
+            Light mode has the same shape (#eef1f4 strip, #f7f8fa selected), so
+            this is not a dark-mode-only slip. */}
         <TabsList
-          className="h-9 w-fit justify-start [&>button]:flex-none [&>button]:px-3"
+          variant="line"
+          className="h-9 w-fit justify-start gap-1 bg-transparent p-0"
           style={{ flexDirection: 'row' }}
         >
-          <TabsTrigger value="all">All cards</TabsTrigger>
+          <TabsTrigger value="all" className={TAB} style={tabStyle(tab === 'all')}>
+            All cards
+          </TabsTrigger>
           {out.rows.map(r => (
-            <TabsTrigger key={r.id} value={String(r.id)}>
+            <TabsTrigger
+              key={r.id}
+              value={String(r.id)}
+              className={TAB}
+              style={tabStyle(tab === String(r.id))}
+            >
               {r.commitment.lender || r.name}
             </TabsTrigger>
           ))}
