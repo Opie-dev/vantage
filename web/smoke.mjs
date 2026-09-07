@@ -479,6 +479,9 @@ try {
       { kind: 'retail', description: 'NSK SELAYANG', amount: 377.35 },
       { kind: 'retail', description: 'GATEWAY XYZ', amount: 12.5 },
       { kind: 'retail', description: 'GATEWAY XYZ', amount: 7.5 },
+      // FPX is a rail, not a payee. This descriptor names a real merchant behind
+      // it and must stay answerable rather than being filed as unnameable.
+      { kind: 'retail', description: 'FPX-XOX COM SDN BHD', amount: 41.35 },
       { kind: 'instalment', description: 'EZYPAY PLUS 3/12', amount: 400 },
       { kind: 'credit', description: 'PAYMENT - THANK YOU', amount: 1375.33 },
       { kind: 'retail', description: 'CASH OUT', amount: 500, spending_candidate: false },
@@ -506,13 +509,24 @@ try {
     if (v.asCommitment.length !== 1 || v.asCommitment[0].as !== 'Electricity')
       throw new Error('import preview: a commitment row would have been double-counted')
 
-    // Undecided, biggest gap in the log first.
+    // Undecided, biggest gap in the log first — and a gateway descriptor is NOT
+    // among them. The two ask different questions: one wants a category, the
+    // other names an intermediary and cannot be given one from the statement.
     if (v.undecided.length !== 2 || v.undecided[0].description !== 'NSK SELAYANG')
       throw new Error('import preview: undecided merchants are not worst-first')
-    if (v.undecided[1].rows !== 2 || v.undecided[1].total !== 20)
-      throw new Error('import preview: repeated undecided rows were not summed')
+    if (v.undecided[1].description !== 'FPX-XOX COM SDN BHD')
+      throw new Error('import preview: an FPX row naming a merchant was filed as unnameable')
+    if (v.unnamed.length !== 1 || v.unnamed[0].rows !== 2 || v.unnamed[0].total !== 20)
+      throw new Error('import preview: the gateway rows were not split out and summed')
 
-    console.log(`  import     preview ok (${v.known.length} known, ${v.undecided.length} to decide)`)
+    // One entry per plan, not per line.
+    if (v.plans.length !== 1 || v.plans[0].rm !== 400)
+      throw new Error('import preview: instalment lines did not group into one plan')
+
+    console.log(
+      `  import     preview ok (${v.known.length} known, ${v.undecided.length} to decide, ` +
+        `${v.unnamed.length} unnameable)`,
+    )
   }
 
 

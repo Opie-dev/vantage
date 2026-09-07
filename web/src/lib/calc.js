@@ -3284,6 +3284,29 @@ function matchStatementRule(sortedRules, row) {
  *   known:Array<{pattern:string, category:string, rows:number, total:number}>,
  *   undecided:Array<{description:string, rows:number, total:number}>}}
  */
+/**
+ * Payment-gateway operators, whose name on a statement is the RAIL rather than
+ * the payee.
+ *
+ * NOT A PREFIX RULE, and `FPX` is deliberately absent. FPX is Malaysia's
+ * bank-transfer rail, so `FPX-` says how a charge was paid, not that the payee
+ * is unknown — `FPX-UNITED CARPARKS` and `FPX-XOX COM` name a merchant
+ * perfectly well, and filing those under "the statement does not say who" would
+ * refuse to ask a question the owner can easily answer. What makes a row
+ * unnameable is the payee ITSELF being an intermediary.
+ *
+ * Same shape as the parser's NOT_SPENDING list, and with the same escape hatch:
+ * a merchant rule matching the descriptor wins over this, because a rule is
+ * something the owner wrote and this is only something the app guessed.
+ */
+const GATEWAY_OPERATORS = ['IPAY88', 'EGHL', 'RAZER', 'MOLPAY', 'BILLPLZ', 'SENANGPAY', 'GATEWAY']
+
+/** Does the descriptor name an intermediary rather than a merchant? */
+const namesNobody = d => {
+  const u = String(d || '').toUpperCase()
+  return GATEWAY_OPERATORS.some(g => u.includes(g))
+}
+
 export function previewStatementImport(rows, rules) {
   const r2 = n => Math.round(n * 100) / 100
   // Longest pattern first, so a specific rule beats a general one. The server
@@ -3296,6 +3319,10 @@ export function previewStatementImport(rows, rules) {
   const asCommitment = []
   const known = new Map()
   const undecided = new Map()
+  // Rows whose descriptor names an intermediary. Kept apart from `undecided`
+  // because the two ask different questions: one wants a category, the other
+  // cannot be given one from the statement alone.
+  const unnamed = new Map()
 
   for (const r of rows || []) {
     if (r.kind === 'instalment') {
@@ -3308,10 +3335,14 @@ export function previewStatementImport(rows, rules) {
     }
     const rule = matchStatementRule(sorted, r)
     if (!rule) {
-      const u = undecided.get(r.description) || { description: r.description, rows: 0, total: 0 }
+      const bucket = namesNobody(r.description) ? unnamed : undecided
+      const u = bucket.get(r.description) || { description: r.description, rows: 0, total: 0 }
       u.rows += 1
       u.total = r2(u.total + (r.amount || 0))
-      undecided.set(r.description, u)
+      // Carried so a foreign row can show what it cost before conversion, often
+      // the only clue to what an unnamed charge actually was.
+      if (r.foreign) u.foreign = r.foreign
+      bucket.set(r.description, u)
       continue
     }
     if (rule.action === 'COMMITMENT') {
@@ -3334,7 +3365,22 @@ export function previewStatementImport(rows, rules) {
   }
 
   const sum = a => r2(a.reduce((t, r) => t + (r.amount || 0), 0))
+  // One entry per PLAN, not per line. Maybank bills EzyPay Plus as a principal
+  // line and an interest line at the SAME position, and two rows both saying
+  // "4 of 12" read as a duplicate rather than as a plan and what it cost.
+  const plans = []
+  for (const r of instalments) {
+    const name = String(r.description || '').replace(/\s+INTEREST$/i, '').trim()
+    const hit = plans.find(p => p.name === name && p.no === r.instalment_no)
+    if (hit) {
+      hit.rm = r2(hit.rm + (r.amount || 0))
+      hit.lines += 1
+      continue
+    }
+    plans.push({ name, no: r.instalment_no, of: r.instalment_of, rm: r.amount || 0, lines: 1 })
+  }
   return {
+    plans,
     instalments: { rows: instalments.length, rm: sum(instalments) },
     notSpending: { rows: notSpending.length, rm: sum(notSpending) },
     asCommitment,
@@ -3342,6 +3388,7 @@ export function previewStatementImport(rows, rules) {
     // is the first decision offered — the same order the server reports in.
     known: [...known.values()].sort((a, b) => b.total - a.total),
     undecided: [...undecided.values()].sort((a, b) => b.total - a.total),
+    unnamed: [...unnamed.values()].sort((a, b) => b.total - a.total),
   }
 }
 
