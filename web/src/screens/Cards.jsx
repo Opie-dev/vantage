@@ -253,9 +253,13 @@ export default function Cards() {
             `group-data-[orientation=vertical]/tabs:flex-col` still matches from
             an ancestor, and tailwind-merge does not treat a variant class and a
             bare one as conflicting, so `flex-row` loses to it silently. */}
+        {/* The DEFAULT variant, not `line`. A line strip is transparent, so on
+            this page it sat on the same ground as everything around it and read
+            as two words rather than as a control. The segmented look gives the
+            strip its own surface and the selected tab a raised one, which is
+            what says the page below belongs to it. */}
         <TabsList
-          variant="line"
-          className="h-9 w-fit justify-start gap-1 [&>button]:flex-none [&>button]:px-3"
+          className="h-9 w-fit justify-start [&>button]:flex-none [&>button]:px-3"
           style={{ flexDirection: 'row' }}
         >
           <TabsTrigger value="all">All cards</TabsTrigger>
