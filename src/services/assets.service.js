@@ -85,7 +85,9 @@ const ENTRY_TYPES = ['DEPOSIT', 'WITHDRAW', 'DISTRIBUTION', 'FEE', 'BALANCE'];
  * Where an entry came from, which is what decides whether it is a CASH FLOW.
  *
  *   manual   you moved this money — the calendar counts it
- *   payroll  an EPF contribution that booked itself; net pay never contained it
+ *   payroll  EPF, or anything else taken from pay before you saw it. Recorded by
+ *            hand like the rest, but net pay was already short of it, so counting
+ *            it again would deduct the same ringgit twice
  *   opening  the balance the account was first recorded with. Real money, but it
  *            moved before this ledger existed, so counting it as spending on the
  *            day you typed it in overstates that month by the whole balance.

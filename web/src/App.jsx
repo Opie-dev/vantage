@@ -1386,8 +1386,9 @@ function AssetEntryDialog({ prefill }) {
       amount: Math.abs(Number(f.amount) || 0),
       date: f.date,
       note: f.note.trim(),
-      // The API refuses 'opening' on anything but a DEPOSIT, so a type changed
-      // after the box was set must not carry the old answer along with it.
+      // The API refuses 'opening' on anything but a DEPOSIT, and neither it nor
+      // 'payroll' means anything on money coming out, so a type changed after the
+      // box was set must not carry the old answer along with it.
       source: f.type === 'DEPOSIT' ? f.source : 'manual',
     })
     setBusy(false)
@@ -1465,16 +1466,20 @@ function AssetEntryDialog({ prefill }) {
           />
         </Field>
         {/* Only for a deposit, and only because the money calendar has to tell
-            the two apart. Recording an account you have held for years starts
-            with a balance that moved long before this ledger existed; counting
-            it as spending on the day you type it in overstates that month by the
-            whole balance. Both are equally real to the Assets screen. */}
+            these apart. Two of the three never passed through your wallet, for
+            different reasons. An opening balance moved long before this ledger
+            existed; counting it as spending on the day you type it in overstates
+            that month by the whole balance. A payroll contribution was taken from
+            your pay before you saw it, so net pay is already short of it and
+            counting it again deducts the same ringgit twice on one screen — which
+            is the case that matters now that a payslip books nothing itself. All
+            three are equally real to the Assets screen. */}
         {f.type === 'DEPOSIT' ? (
           <Field
             label="What this is"
             htmlFor="ae-source"
             className="col-span-2"
-            hint="An opening balance is money the account already held. It counts towards the balance, but never as money leaving your pocket this month."
+            hint="An opening balance and money from your pay both reached the account without passing through your wallet — they count towards the balance, but never as money you spent this month."
           >
             <Select value={f.source} onValueChange={v => set('source', v)}>
               <SelectTrigger id="ae-source" className="w-full">
@@ -1483,6 +1488,7 @@ function AssetEntryDialog({ prefill }) {
               <SelectContent>
                 <SelectItem value="manual">Contribution — money you paid in</SelectItem>
                 <SelectItem value="opening">Opening balance — what it already held</SelectItem>
+                <SelectItem value="payroll">From your pay — EPF, deducted before you saw it</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -3152,15 +3158,22 @@ function CommitmentDialog({ prefill }) {
 /*
  * An income source records what arrives. It does NOT touch the savings side.
  *
- * There was a field here linking an employment source to an EPF account, and
- * a payslip recorded against it booked the contribution as a deposit. That is
- * gone by choice: a contribution entered as an EPF entry on the Assets screen
- * is one the owner has actually seen on a statement, where one generated from
- * a payslip is a figure the app inferred and then had to be trusted about.
+ * A field here once linked an employment source to an EPF account, and a payslip
+ * recorded against it booked the contribution as a deposit. The field went first
+ * and the write stayed live for months behind it; both are gone now, along with
+ * income_sources.epf_asset_id itself.
+ *
+ * WHY, and not merely that it was tidier: EPF splits every contribution 75/15/10
+ * across Akaun Persaraan, Akaun Sejahtera and Akaun Fleksibel. A single foreign
+ * key names one account, so the write could only ever put the whole contribution
+ * in one of the three — three balances wrong, and a total that happens to be
+ * right. Nothing here models the split, so nothing here may write it.
  *
  * The payslip's own EPF columns stay — they are part of what the payslip says
- * and are what net pay is computed from. They simply no longer write anywhere
- * else.
+ * and are what net pay is computed from. They no longer write anywhere else, and
+ * there is no longer anywhere else for them to write to. The contribution is
+ * recorded on Assets from a statement, as a `payroll` deposit, which the money
+ * calendar knows not to count as spending: net pay never contained it.
  */
 function IncomeDialog({ prefill }) {
   const { closeModal, addIncomeSource, updateIncomeSource } = useVantage()
@@ -3171,6 +3184,7 @@ function IncomeDialog({ prefill }) {
     name: str(prefill.name),
     payer: str(prefill.payer),
     cadence: prefill.cadence || 'MONTHLY',
+    currency: prefill.currency || 'MYR',
     pay_day: str(prefill.pay_day, '25'),
     gross_default: str(prefill.gross_default),
   })
@@ -3184,6 +3198,7 @@ function IncomeDialog({ prefill }) {
     const body = {
       name: f.name.trim(),
       payer: f.payer.trim(),
+      currency: f.currency,
       pay_day: monthly ? Number(f.pay_day) : null,
       gross_default: f.gross_default === '' ? null : Number(f.gross_default),
     }
@@ -3286,6 +3301,33 @@ function IncomeDialog({ prefill }) {
           <Input id="in-payer" value={f.payer} onChange={e => set('payer', e.target.value)} />
         </Field>
 
+        {/* The column and the API have taken a currency since income_sources
+            existed; the form never asked. A foreign source could therefore only
+            be made through the API, and every figure it produced was converted
+            by a rate nothing on screen had mentioned.
+            TWO OPTIONS, NOT AN OPEN FIELD. toRM() knows one rate — USD — so a
+            third code would be added into ringgit totals as though it were
+            ringgit. The list is what the app can convert, not what BNM
+            publishes, and widening it is a calc.js change first. */}
+        <Field
+          label="Currency"
+          htmlFor="in-cur"
+          hint={
+            editing
+              ? 'Changing it re-reads every recorded payment as the new currency — the stored figures do not convert.'
+              : 'Each payment is converted at the rate on the day it landed, and both figures are kept.'
+          }
+        >
+          <Select value={f.currency} onValueChange={v => set('currency', v)}>
+            <SelectTrigger id="in-cur" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="MYR">MYR</SelectItem>
+              <SelectItem value="USD">USD</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={closeModal}>
@@ -3428,8 +3470,8 @@ function IncomeEventDialog({ prefill }) {
           <div>
             <p className="eyebrow">Paid on top by your employer</p>
             <p className="text-faint mt-1 text-[11px]">
-              Never subtracted from net. EPF from both groups is booked into your EPF account in the
-              same write.
+              Never subtracted from net. EPF from both groups is yours, but nothing here books it —
+              record the contribution on Assets when the statement shows it.
             </p>
             <div className="mt-2 grid grid-cols-3 gap-3">
               {money('EPF', 'epf_employer')}

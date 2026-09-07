@@ -144,8 +144,11 @@ export const deleteDeclaredRate = id => send('DELETE', `/api/declared-rates/${id
 /**
  * @param {number} assetId
  * @param {{type:'DEPOSIT'|'WITHDRAW'|'DISTRIBUTION'|'FEE', date:string,
- *          amount:number, note?:string}} body   date is 'YYYY-MM-DD',
- *   amount always POSITIVE — `type` carries the direction.
+ *          amount:number, note?:string,
+ *          source?:'manual'|'opening'|'payroll'}} body   date is 'YYYY-MM-DD',
+ *   amount always POSITIVE — `type` carries the direction. `source` decides
+ *   whether the money calendar reads the entry as cash flow: 'opening' moved
+ *   before this ledger existed, 'payroll' never passed through your wallet.
  */
 export const addAssetEntry = (assetId, body) => send('POST', `/api/assets/${assetId}/entries`, body)
 
@@ -334,10 +337,13 @@ export const parseStatementPdf = (file, { password } = {}) =>
 /**
  * Where money arrives from.
  * @param {{kind:'EMPLOYMENT'|'FREELANCE'|'RENTAL'|'OTHER', name:string,
- *          cadence:'MONTHLY'|'IRREGULAR', pay_day?:number|null,
- *          gross_default?:number|null, epf_asset_id?:number|null}} body
+ *          cadence:'MONTHLY'|'IRREGULAR', payer?:string, currency?:'MYR'|'USD',
+ *          pay_day?:number|null, gross_default?:number|null}} body
  *   A monthly source needs `pay_day` (-1 = last working day); an irregular one
  *   must not have it, because storing one invents a certainty it does not have.
+ *   `currency` is what every payment on it is recorded in, and what each one is
+ *   converted from at the rate on the day it landed. The server takes any code;
+ *   the two here are the ones calc.js can convert.
  */
 export const addIncomeSource = body => send('POST', '/api/income', body)
 
@@ -353,8 +359,11 @@ export const deleteIncomeSource = id => send('DELETE', `/api/income/${id}`)
  * and never touches net. Sending employer contributions in the first group is
  * rejected by name once they push deductions past gross.
  *
- * An employment payment with EPF on it also books the FULL contribution — both
- * halves — into the linked EPF asset, in the same database transaction.
+ * EPF is recorded here and written nowhere else. Both halves are stored because
+ * they are what the payslip says and what net is computed from, but EPF splits
+ * every contribution across three accounts and nothing here models that split —
+ * so the contribution is entered on Assets from a statement, as a `payroll`
+ * deposit, rather than guessed at from a payslip.
  * @param {number} sourceId
  * @param {{date:string, gross:number, epf_employee?:number, socso_employee?:number,
  *          eis_employee?:number, skbbk?:number, pcb?:number, zakat?:number,

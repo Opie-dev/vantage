@@ -33,7 +33,7 @@
  *   POST   /api/income                     salary, freelance — what arrives
  *   PATCH  /api/income/:id
  *   DELETE /api/income/:id                 refused once payments exist; end it instead
- *   POST   /api/income/:id/events          one payslip; books its EPF into the asset
+ *   POST   /api/income/:id/events          one payslip; its EPF is recorded, not booked
  *   DELETE /api/income/:id/events/:eventId
  *   POST   /api/prices/manual
  *   POST   /api/prices/refresh

@@ -1577,6 +1577,10 @@ export function historyRows(S) {
     })
   }
 
+  // A PAY row carries `currency: 'MYR'` like every other row in this list, so a
+  // foreign payment left unconverted would not merely be unconverted — it would
+  // be labelled ringgit. Converted at the rate it landed at, as everywhere else.
+  const incomeCur = new Map((S.incomeSources || []).map(s => [s.id, s.currency]))
   for (const e of S.incomeEvents || []) {
     rows.push({
       key: `i${e.id}`,
@@ -1590,7 +1594,7 @@ export function historyRows(S) {
       price: 0,
       // What actually reached you. Gross would overstate the row against every
       // other amount in this list, all of which are money that moved.
-      amount: netOf(e),
+      amount: eventToRM(S, netOf(e), incomeCur.get(e.source_id) || 'MYR', e).rm,
       direction: 1,
       source: e.source,
       domain: HISTORY_DOMAIN.INCOME,
@@ -2089,7 +2093,8 @@ const ASSET_RESET = 'BALANCE'
 /**
  * Asset entries that never passed through your hands, and so are not cash flow.
  *
- *   payroll  an EPF contribution that booked itself; net pay never contained it
+ *   payroll  EPF, or anything else taken from pay before you saw it — net pay
+ *            never contained it
  *   opening  the balance an account was first recorded with, which moved before
  *            this ledger existed
  *
@@ -3534,9 +3539,13 @@ export function incomeRows(S, { includeEnded = false, nowISO = isoOf(Date.now())
       const last = events[0] || null
       const variable = s.cadence === 'IRREGULAR'
 
+      // The window an irregular source averages over, hoisted because it is
+      // needed three times: the mean, the ringgit mean, and the one question
+      // `every` cannot answer on its own — whether any payment fed the figure.
+      const recent = events.filter(e => e.date >= from)
+
       let monthly
       if (variable) {
-        const recent = events.filter(e => e.date >= from)
         monthly = recent.reduce((t, e) => t + netOf(e), 0) / VARIABLE_MONTHS
       } else if (last) {
         monthly = netOf(last)
@@ -3557,16 +3566,16 @@ export function incomeRows(S, { includeEnded = false, nowISO = isoOf(Date.now())
         // several events, each converted at its own day, so the mean is of what
         // actually arrived rather than of today's restatement of it.
         monthlyRM: variable
-          ? events
-              .filter(e => e.date >= from)
-              .reduce((t, e) => t + eventToRM(S, netOf(e), s.currency, e).rm, 0) / VARIABLE_MONTHS
+          ? recent.reduce((t, e) => t + eventToRM(S, netOf(e), s.currency, e).rm, 0) / VARIABLE_MONTHS
           : eventToRM(S, monthly, s.currency, last).rm,
         // False when any event feeding this figure is undated, so a screen can
-        // say the number still drifts with the ringgit.
+        // say the number still drifts with the ringgit — and false when NO event
+        // feeds it, because `every` on an empty window is true and would have let
+        // a source whose payments have all aged out claim a rate none supplied.
         fxDated:
           s.currency === 'MYR' ||
           (variable
-            ? events.filter(e => e.date >= from).every(e => e.fx_rate > 0)
+            ? recent.length > 0 && recent.every(e => e.fx_rate > 0)
             : !!(last && last.fx_rate > 0)),
         last,
         events,
@@ -3961,6 +3970,10 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
 
   // ── things that actually happened ────────────────────────────────────────
   const sourceName = new Map((S.incomeSources || []).map(s => [s.id, s.name]))
+  // Every amount on this grid is printed as RM and summed into one monthly
+  // total, so a foreign payment is converted before it is placed — at its own
+  // day's rate, or a closed month restates itself each time the ringgit moves.
+  const sourceCur = new Map((S.incomeSources || []).map(s => [s.id, s.currency]))
   const recordedSources = new Set()
   for (const e of S.incomeEvents || []) {
     if (!inMonth(e.date)) continue
@@ -3969,7 +3982,7 @@ export function moneyByDay(S, year, monthIndex, nowISO = isoOf(Date.now())) {
       key: `ie${e.id}`,
       dir: 1,
       label: sourceName.get(e.source_id) || e.name || 'Income',
-      amount: netOf(e),
+      amount: eventToRM(S, netOf(e), sourceCur.get(e.source_id) || 'MYR', e).rm,
       state: 'recorded',
       domain: 'INCOME',
     })
@@ -4196,7 +4209,9 @@ export function moneyMonthNotes(S, year, monthIndex, nowISO = isoOf(Date.now()))
       key: `v${r.id}`,
       dir: 1,
       label: r.name,
-      amount: r.monthly,
+      // The ringgit one. `monthly` is in whatever the source is paid in, and the
+      // note is rendered beside dated ringgit figures with an RM sign on it.
+      amount: r.monthlyRM,
       why: 'irregular — no date to place it on, averaged over three months',
     })
   }
@@ -4335,8 +4350,16 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
 
   // Income that actually arrived. An estimated payslip is a projection and
   // reconciling against it would invent spending in the months it is wrong.
+  //
+  // CONVERTED, and at the payment's own rate. This figure is reconciled against
+  // a wallet delta measured in ringgit, so a dollar invoice added raw does not
+  // merely mislabel itself — the shortfall lands in `spentRM`, which is the one
+  // figure on the page nobody can check against a statement.
+  const eventCur = new Map((S.incomeSources || []).map(s => [s.id, s.currency]))
   for (const e of S.incomeEvents || []) {
-    if (e.date > from && e.date <= to) inflowRM += netOf(e)
+    if (e.date > from && e.date <= to) {
+      inflowRM += eventToRM(S, netOf(e), eventCur.get(e.source_id) || 'MYR', e).rm
+    }
   }
 
   // Distributions the broker paid in cash over the window, which arrive in a

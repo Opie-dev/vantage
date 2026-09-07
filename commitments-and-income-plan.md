@@ -111,8 +111,10 @@ CREATE TABLE IF NOT EXISTS income_sources (
   cadence     TEXT NOT NULL DEFAULT 'MONTHLY',  -- MONTHLY | IRREGULAR
   pay_day     INTEGER,                    -- 1..31, or -1 for last working day; NULL if irregular
   gross_default DOUBLE PRECISION,         -- the expected gross, for forecasting an unrecorded month
-  epf_member  BOOLEAN NOT NULL DEFAULT false,  -- drives the statutory block below
-  epf_asset_id INTEGER REFERENCES assets(id), -- where contributions land (see §6.4)
+  -- epf_member was never built. The form gates the statutory block on
+  -- kind = 'EMPLOYMENT' instead, which is the same question asked of data that
+  -- already had to be right.
+  -- epf_asset_id was built and then dropped — see §6.4.
   active      BOOLEAN NOT NULL DEFAULT true,
   started_on  TEXT, ended_on TEXT,
   sort_order  INTEGER NOT NULL DEFAULT 0
@@ -273,23 +275,34 @@ The waterfall uses `net`. `gross` appears only where it is the honest figure.
 Five things about the Malaysian statutory block that a naive model gets wrong:
 
 - **There is a new deduction line.** **SKBBK / LINDUNG 24 JAM** started **1 June 2026** —
-  0.75% of wages, **employee-borne with no employer share**, capped at RM 44.65/month. It was
-  made voluntary in July, but the opt-out window closed **31 August 2026**, so anyone who did
-  not file a declaration is enrolled by default. Any payslip model written before mid-2026 is
-  missing this line, and it must appear as its own row rather than folded into SOCSO.
+  0.75% of wages, **employee-borne with no employer share**, capped at RM 44.65/month
+  (5,950 × 0.75%, on the band's assumed wage — not 0.75% of the RM 6,000 ceiling). It was made
+  **voluntary for local employees** in July, and for anyone already employed the opt-out window
+  closed **31 August 2026**, so a person who filed nothing by then is enrolled by default. A new
+  local hire still gets a fresh thirty days from registration, so the window is not closed in
+  general — which is why the app must never tell its owner they are enrolled. It can only record
+  the line when a payslip carries one. Any payslip model written before mid-2026 is missing it,
+  and it must appear as its own row rather than folded into SOCSO. The rate is phased and the
+  steps are already gazetted: 1.00% from 1 June 2028, 1.25% from 1 June 2031.
 - **None of these are flat percentages.** EPF uses a banded Third Schedule up to RM 20,000
   (contribution computed on the band's upper limit, rounded **up** to the next ringgit); SOCSO
-  and EIS use banded tables computed on each band's **midpoint**, rounded up to 5 sen. At the
-  RM 6,000 ceiling that fixes the employee side at exactly RM 29.75 SOCSO and RM 11.90 EIS.
+  and EIS use banded tables computed on each band's **midpoint**, to the **nearest** 5 sen with
+  ties resolved to the odd multiple — not rounded up. Band 5,400–5,500 gives 5,450 × 1.75% =
+  95.375 and the published figure is 95.35, not 95.40, so "rounded up" fails mid-table. That is
+  not a rule worth expressing in prose and not one to re-derive: ship the table. At the
+  RM 6,000 ceiling the employee side is exactly RM 29.75 SOCSO and RM 11.90 EIS.
 - **Employer EPF is 13% at or below RM 5,000 of wages and 12% above it.** The employee side is
   always 11%. Only the employer rate moves.
 - **PCB is not computed on take-home.** Its base is gross less EPF — **capped at RM 4,000 a
   year** — less reliefs. SOCSO, EIS and SKBBK do *not* reduce it unless a TP1 is filed claiming
   the RM 350 relief, which is why PCB slightly over-withholds for most people and most filers
   get a small refund.
-- **Bonus is EPF-wages; overtime is not.** So is commission and most allowances. That asymmetry
-  is why component classification has to be a per-line flag rather than one "is this wages?"
-  boolean — a line can be EPF-wages, SOCSO-wages and PCB-taxable independently.
+- **The two regimes disagree about which lines are wages.** Bonus is EPF-wages and overtime is
+  not; commission and most allowances are EPF-wages too. For SOCSO, EIS and SKBBK it is the other
+  way round — Act 4 s.2(24) includes overtime and excludes the annual bonus. So one bonus line is
+  wages to EPF and not to PERKESO, and one overtime line is the reverse. That asymmetry is why
+  component classification has to be a per-line flag rather than one "is this wages?" boolean — a
+  line can be EPF-wages, SOCSO-wages and PCB-taxable independently.
 
 An irregular freelance source has no statutory block, so `net = gross` — but the tax is real
 and arrives later. Malaysia bills it in advance through CP500 instalments, which map onto a
@@ -579,18 +592,30 @@ EPF is a balance that earns an annual dividend computed on contributions through
 That is precisely the `SAVINGS` kind from the assets plan — same shape as ASB and Tabung
 Haji, no new code.
 
-What is new is that **it is funded by payroll, not by you**. So an `EMPLOYMENT` income event
-with `epf_employee` and `epf_employer` set generates a matching `asset_entries` DEPOSIT into
-the linked EPF asset, in the same write:
+What is new is that **it is funded by payroll, not by you**.
 
-```
-income_events row  →  asset_entries DEPOSIT of (epf_employee + epf_employer)
-                       into income_sources.epf_asset_id
-```
+**Superseded on 7 September 2026.** What this section specified was built and has been removed.
+The reasoning is kept rather than deleted, because the mistake in it is the instructive part.
 
-One record, two effects, no double entry and no chance of the two drifting. It also means
-the EPF balance grows without any separate maintenance, and the assets plan's
-minimum-balance estimator works on it unchanged.
+The plan was that an `EMPLOYMENT` income event carrying `epf_employee` and `epf_employer` would
+write a matching `asset_entries` DEPOSIT of the two into `income_sources.epf_asset_id`, in the
+same transaction — one record, two effects, no chance of the two drifting.
+
+It assumed one EPF account. There are three — Akaun Persaraan, Akaun Sejahtera and Akaun
+Fleksibel — and a contribution splits across them 75/15/10. `epf_asset_id` was a single foreign
+key, so the write could only ever put the whole contribution into one of the three: three wrong
+balances and a right total. Nothing in the app models the split, and modelling it would mean
+carrying the percentages as effective-dated data, since they change.
+
+The write, the column and the form field are gone (`20260907000000_drop_income_epf_link.sql`).
+What replaces it is one hand-entered row: the contribution is recorded on Assets when the
+statement shows it, as a DEPOSIT with source `payroll`, which `NON_FLOW_SOURCES` already excludes
+from spending because net pay never contained it.
+
+The removal is also a lesson about half-finishing one. The field was taken out of the form months
+before the write was, so the write simply stopped firing while three sentences in the UI went on
+promising it — the app told its owner their EPF was being booked, and for every source it could
+create, it was not. `income-canvas-gaps.md` §0.1 is the record of finding that.
 
 *(Whether EPF's dividend is computed on the same monthly-minimum basis as ASB is a question
 for the research in §9 — if it uses a daily aggregate instead, that is what `rate_basis`

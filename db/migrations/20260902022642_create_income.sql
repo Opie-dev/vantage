@@ -57,10 +57,11 @@ CREATE TABLE IF NOT EXISTS income_events (
   epf_employee   DOUBLE PRECISION NOT NULL DEFAULT 0,
   socso_employee DOUBLE PRECISION NOT NULL DEFAULT 0,
   eis_employee   DOUBLE PRECISION NOT NULL DEFAULT 0,
-  -- SKBBK / LINDUNG 24 JAM, live since 1 June 2026: 0.75% of wages, employee-borne
-  -- with NO employer share, and enrolled by default since the opt-out window
-  -- closed on 31 August 2026. Its own column because it must appear as its own
-  -- payslip line and has no counterpart on the employer side.
+  -- SKBBK / LINDUNG 24 JAM, live since 1 June 2026: employee-borne, with NO employer
+  -- share. Voluntary for local employees and gazetted to step twice more, so this
+  -- records the amount one payslip charged — never a rate, never an enrolment. Its
+  -- own column because it must appear as its own payslip line and has no counterpart
+  -- on the employer side.
   skbbk          DOUBLE PRECISION NOT NULL DEFAULT 0,
   pcb            DOUBLE PRECISION NOT NULL DEFAULT 0,
   zakat          DOUBLE PRECISION NOT NULL DEFAULT 0,

@@ -209,6 +209,10 @@ const STATE = {
   // Every entry type, so the sign handling and the badges all get exercised.
   assetEntries: [
     { id: 1, asset_id: 1, slug: 'asb', type: 'DEPOSIT', date: ago(4), amount: 1000, note: '', source: 'manual', ext_id: null },
+    // Hand-entered from an EPF statement now that no payslip writes one. It must
+    // stay a 'payroll' deposit: net pay is already short of it, so the money
+    // calendar and spendingFor() both have to leave it out — see the savedRM
+    // assertion in the spending block.
     { id: 2, asset_id: 3, slug: 'epf', type: 'DEPOSIT', date: ago(7), amount: 1955, note: 'August payslip', source: 'payroll', ext_id: null },
     { id: 3, asset_id: 2, slug: 'tabung-haji', type: 'WITHDRAW', date: ago(30), amount: 200, note: '', source: 'manual', ext_id: null },
     { id: 4, asset_id: 2, slug: 'tabung-haji', type: 'DISTRIBUTION', date: ago(160), amount: 742.3, note: '2025 hibah', source: 'manual', ext_id: null },
@@ -248,11 +252,14 @@ const STATE = {
   // column groups are both covered; the freelance ones are dated inside the
   // 3-month window so the average is exercised rather than the fallback.
   incomeSources: [
-    { id: 1, kind: 'EMPLOYMENT', name: 'Day job', payer: '', currency: 'MYR', cadence: 'MONTHLY',
-      pay_day: 25, gross_default: 8500, epf_asset_id: 3, active: true, started_on: null,
+    // Both carry a payer: the column has always been written by the form and the
+    // empty string it used to hold here would have let the row render nothing
+    // and still pass.
+    { id: 1, kind: 'EMPLOYMENT', name: 'Day job', payer: 'Perdana Systems', currency: 'MYR',
+      cadence: 'MONTHLY', pay_day: 25, gross_default: 8500, active: true, started_on: null,
       ended_on: null, sort_order: 1 },
-    { id: 2, kind: 'FREELANCE', name: 'Design work', payer: '', currency: 'MYR',
-      cadence: 'IRREGULAR', pay_day: null, gross_default: null, epf_asset_id: null,
+    { id: 2, kind: 'FREELANCE', name: 'Design work', payer: 'Studio Kuala', currency: 'MYR',
+      cadence: 'IRREGULAR', pay_day: null, gross_default: null,
       active: true, started_on: null, ended_on: null, sort_order: 2 },
   ],
   incomeEvents: [
@@ -274,11 +281,16 @@ const STATE = {
   fx: 4.22,
   lastSync: new Date(NOW - 3600000).toISOString(),
 }
+// A FRESH OBJECT PER CALL, not STATE itself. reload() ends in setState(next),
+// and handing React the object it is already holding is a no-op it correctly
+// skips — so a block that edits the fixture and reloads would assert against the
+// screen it had before. A real server returns parsed JSON, which is never the
+// same reference twice; this matches that.
 globalThis.fetch = async path => ({
   ok: true,
   status: 200,
   statusText: 'OK',
-  json: async () => (String(path).includes('/api/state') ? STATE : { ok: true }),
+  json: async () => (String(path).includes('/api/state') ? { ...STATE } : { ok: true }),
 })
 
 const errors = []
@@ -622,6 +634,239 @@ try {
     console.log(`  ${id.padEnd(10)} income surfaces ok (${needed.length})`)
   }
   await tick(() => ctl.setTab('dashboard'))
+
+  /* ── a source row's two totals, its payer, and a foreign source's twin ──── */
+  //
+  // Driven through the mounted app rather than through incomeRows() alone,
+  // because none of this was ever a derivation gap: `deducted`, `onTop`, `payer`
+  // and `fxDated` were all computed or stored, and not one of the four reached a
+  // screen. A unit test of calc.js would have passed the whole time.
+  {
+    const { deductionsOf, netOf } = await server.ssrLoadModule('/src/lib/calc.js')
+    const { fmt } = await server.ssrLoadModule('/src/lib/format.js')
+    const incomePane = async () => {
+      await tick(() => ctl.setTab('income'))
+      return document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+    }
+
+    // Derived from the fixture's own payslip, never stated here — the six lines
+    // are already on the page and their sum is what turns gross into net.
+    const slip = STATE.incomeEvents.find(e => e.source_id === 1)
+    const d = deductionsOf(slip)
+    // The fixture has to be able to tell a total from a line, or a row wired to
+    // one field would print a plausible figure under a bold label and pass.
+    for (const k of ['epf_employee', 'pcb', 'epf_employer']) {
+      if (Math.abs(d.deducted - slip[k]) < 0.005 || Math.abs(d.onTop - slip[k]) < 0.005) {
+        throw new Error(`income: fixture cannot distinguish a total from ${k}`)
+      }
+    }
+
+    let pane = await incomePane()
+    if (!pane.includes(`−${fmt(d.deducted, 'MYR')}`)) {
+      throw new Error(`income: no total deducted — expected −${fmt(d.deducted, 'MYR')}`)
+    }
+    if (!pane.includes(fmt(d.onTop, 'MYR'))) {
+      throw new Error(`income: no employer total — expected ${fmt(d.onTop, 'MYR')}`)
+    }
+    // Signed one way only. The employer group is not a subtraction from your pay
+    // and must not be drawn as one.
+    if (pane.includes(`−${fmt(d.onTop, 'MYR')}`)) {
+      throw new Error('income: what the employer paid on top is not money taken off you')
+    }
+
+    for (const src of STATE.incomeSources) {
+      if (!pane.includes(src.payer)) {
+        throw new Error(`income: "${src.payer}" is stored on ${src.name} and shown nowhere`)
+      }
+    }
+
+    // Two ringgit sources print one currency. Whatever the foreign half renders
+    // below, it has to be the source's doing and not something the page always
+    // draws.
+    if (pane.includes('$')) throw new Error('income: an all-MYR page must print no second figure')
+
+    /* A source paid in dollars — creatable only through the API until this slice,
+     * and shown as one figure or none once it existed.
+     *
+     * BUILT BY SWAPPING STATE AND RELOADING, not by putting a USD source in the
+     * fixture: it would move `RM 8,719.50`, `RM 4,668.00` and every figure the
+     * waterfall feeds, and this block would be paid for in unrelated churn. */
+    const srcs = STATE.incomeSources
+    const evs = STATE.incomeEvents
+    const usdSource = { id: 3, kind: 'FREELANCE', name: 'Overseas retainer',
+      payer: 'Northwind LLC', currency: 'USD', cadence: 'MONTHLY', pay_day: 15,
+      gross_default: null, active: true, started_on: null, ended_on: null, sort_order: 3 }
+    // Something is withheld, so net differs from gross — otherwise the twin
+    // figure and the `last ... gross` already on the meta line are the same
+    // string and either one would satisfy the assertion.
+    const usdEvent = { id: 5, source_id: 3, name: 'Overseas retainer', kind: 'FREELANCE',
+      cadence: 'MONTHLY', date: ago(9), gross: 400, epf_employee: 0, socso_employee: 0,
+      eis_employee: 0, skbbk: 0, pcb: 0, zakat: 0, other_deducted: 25, epf_employer: 0,
+      socso_employer: 0, eis_employer: 0, note: '', source: 'manual', ext_id: null,
+      fx_rate: 4.35, fx_date: ago(10) }
+    const net = netOf(usdEvent)
+
+    const withUsd = async ev => {
+      STATE.incomeSources = [...srcs, usdSource]
+      STATE.incomeEvents = [ev, ...evs]
+      await act(async () => { await ctl.reload() })
+      return incomePane()
+    }
+
+    // Both figures kept, which is what the record-payment sheet has always
+    // promised, and the ringgit one at the STORED rate rather than the global
+    // one — 4.35 against 4.22, so a screen reaching for S.fx fails here.
+    pane = await withUsd(usdEvent)
+    if (!pane.includes(fmt(net, 'USD'))) {
+      throw new Error(`income: a foreign source hides what arrived — expected ${fmt(net, 'USD')}`)
+    }
+    if (!pane.includes(fmt(net * usdEvent.fx_rate, 'MYR'))) {
+      throw new Error(`income: expected ${fmt(net * usdEvent.fx_rate, 'MYR')} at the stored rate`)
+    }
+    if (!pane.includes('at the rate on the day it landed')) {
+      throw new Error('income: a dated conversion has to say the figure is fixed')
+    }
+
+    // The same payment with no rate stored. It converts at the global one and
+    // the row must stop claiming a day it does not have.
+    pane = await withUsd({ ...usdEvent, fx_rate: null, fx_date: null })
+    if (!pane.includes(fmt(net * STATE.fx, 'MYR'))) {
+      throw new Error(`income: expected ${fmt(net * STATE.fx, 'MYR')} at the global rate`)
+    }
+    if (pane.includes('at the rate on the day it landed')) {
+      throw new Error('income: an undated conversion must not claim a day')
+    }
+    if (!pane.includes('at today’s rate')) {
+      throw new Error('income: an undated conversion must say the figure still moves')
+    }
+
+    /* AN IRREGULAR SOURCE HAS NO SINGLE DAY BEHIND ITS RINGGIT FIGURE.
+     *
+     * Its mean is of several payments, each converted on its own day, so the two
+     * figures on the row are not one rate apart and a row claiming they are
+     * states a relationship the reader cannot check against either of them. Two
+     * events at different stored rates is the only fixture that can tell the two
+     * phrasings apart — with one event the mean IS the payment and the wrong
+     * copy passes. */
+    const irregular = { ...usdSource, id: 4, name: 'Overseas invoices', cadence: 'IRREGULAR', pay_day: null }
+    const recent = { ...usdEvent, id: 6, source_id: 4, name: 'Overseas invoices', cadence: 'IRREGULAR' }
+    const earlier = { ...usdEvent, id: 7, source_id: 4, name: 'Overseas invoices', cadence: 'IRREGULAR',
+      date: ago(40), gross: 320, other_deducted: 20, fx_rate: 4.1, fx_date: ago(41) }
+    const withSource = async (source, events) => {
+      STATE.incomeSources = [...srcs, source]
+      STATE.incomeEvents = [...events, ...evs]
+      await act(async () => { await ctl.reload() })
+      return incomePane()
+    }
+
+    const meanUSD = (netOf(recent) + netOf(earlier)) / 3
+    const meanRM = (netOf(recent) * recent.fx_rate + netOf(earlier) * earlier.fx_rate) / 3
+    // The fixture has to be one no single rate explains, or the assertion below
+    // proves nothing about the copy.
+    for (const rate of [recent.fx_rate, earlier.fx_rate, STATE.fx]) {
+      if (Math.abs(meanRM - meanUSD * rate) < 0.005) {
+        throw new Error(`income: a mean explained by ${rate} cannot test the mean's own wording`)
+      }
+    }
+    pane = await withSource(irregular, [recent, earlier])
+    if (!pane.includes(fmt(meanUSD, 'USD')) || !pane.includes(fmt(meanRM, 'MYR'))) {
+      throw new Error(`income: expected the pair ${fmt(meanUSD, 'USD')} / ${fmt(meanRM, 'MYR')}`)
+    }
+    if (pane.includes('at the rate on the day it landed')) {
+      throw new Error('income: an average has no day, and must not borrow the last payment\'s')
+    }
+    if (!pane.includes('each payment at the rate on its own day')) {
+      throw new Error('income: an average must say the rates are per payment')
+    }
+
+    // One of the two carries no rate. Part of the figure is fixed and part of it
+    // drifts, and the row may claim neither in full.
+    pane = await withSource(irregular, [recent, { ...earlier, fx_rate: null, fx_date: null }])
+    if (!pane.includes('where a payment carried none')) {
+      throw new Error('income: a part-dated average must say which part still moves')
+    }
+
+    // NOTHING IN THE WINDOW. `every` on an empty list is true, which used to make
+    // fxDated true with no payment behind it — a dated conversion of RM 0.00.
+    // There is no figure to twin, so the row says nothing about a rate at all.
+    pane = await withSource(irregular, [{ ...earlier, date: ago(400) }])
+    for (const claim of ['at the rate on the day it landed', 'on its own day', 'at today’s rate']) {
+      if (pane.includes(claim)) {
+        throw new Error(`income: a source with no payment in the window claimed "${claim}"`)
+      }
+    }
+
+    STATE.incomeSources = srcs
+    STATE.incomeEvents = evs
+    await act(async () => { await ctl.reload() })
+    console.log(`  income row −${fmt(d.deducted, 'MYR')} deducted, ${fmt(d.onTop, 'MYR')} on top, `
+      + `${fmt(net, 'USD')} twinned at ${usdEvent.fx_rate} not ${STATE.fx}`)
+    console.log(`  income row a 3-month mean of two rates prints ${fmt(meanRM, 'MYR')}, claiming no single day`)
+  }
+  await tick(() => ctl.setTab('dashboard'))
+
+  /* ── a foreign payment is converted before it is handed to a screen ─────── */
+  //
+  // FOUR CALLERS, ONE MISTAKE. Every one of these prints or sums its figure as
+  // ringgit — the calendar grid with fmt(x,'MYR'), the note beneath it, a PAY row
+  // that declares `currency: 'MYR'`, and spendingFor(), where the figure is not
+  // labelled at all but reconciled against a wallet delta so the error lands in
+  // `spentRM`. Asserted together because they failed together: netOf() returns
+  // the source's own currency and each of the four added it raw.
+  {
+    const { moneyByDay, moneyMonthNotes, historyRows, spendingFor, netOf } =
+      await server.ssrLoadModule('/src/lib/calc.js')
+    const S = JSON.parse(JSON.stringify(STATE))
+    // A wallet with two readings, so spendingFor() computes rather than refusing.
+    S.assets.push({ id: 99, name: 'MAE', slug: 'mae', currency: 'MYR', liquidity: 'WALLET',
+      kind: 'SAVINGS', archived: false, rate_basis: 'NONE', fiscal_year: '12-31', created_at: '2026-01-01' })
+    S.assetEntries.unshift(
+      { id: 990, asset_id: 99, type: 'BALANCE', date: '2026-01-01', amount: 5000, source: 'manual' },
+      { id: 991, asset_id: 99, type: 'BALANCE', date: '2026-01-31', amount: 5600, source: 'manual' })
+    const before = spendingFor(JSON.parse(JSON.stringify(S)), 2026, 0, '2026-02-01')
+
+    S.incomeSources.push({ id: 5, kind: 'FREELANCE', name: 'Overseas invoices', payer: 'Northwind LLC',
+      currency: 'USD', cadence: 'IRREGULAR', pay_day: null, gross_default: null,
+      active: true, started_on: null, ended_on: null, sort_order: 5 })
+    const ev = { id: 9, source_id: 5, name: 'Overseas invoices', kind: 'FREELANCE', cadence: 'IRREGULAR',
+      date: '2026-01-09', gross: 400, epf_employee: 0, socso_employee: 0, eis_employee: 0, skbbk: 0,
+      pcb: 0, zakat: 0, other_deducted: 25, epf_employer: 0, socso_employer: 0, eis_employer: 0,
+      note: '', source: 'manual', ext_id: null, fx_rate: 4.35, fx_date: '2026-01-09' }
+    S.incomeEvents.unshift(ev)
+    const usd = netOf(ev)
+    const rm = usd * ev.fx_rate
+    if (Math.abs(rm - usd) < 1) throw new Error('income fx: a rate of 1 cannot test a conversion')
+
+    const grid = moneyByDay(S, 2026, 0, '2026-02-01')
+    const cell = (grid[9] || []).find(x => x.key === `ie${ev.id}`)
+    if (!cell) throw new Error('income fx: the payment is not on the calendar grid at all')
+    if (Math.abs(cell.amount - rm) > 0.005) {
+      throw new Error(`income fx: the grid prints ${cell.amount} as RM, expected ${rm}`)
+    }
+
+    const note = moneyMonthNotes(S, 2026, 1, '2026-02-20').find(n => n.label === 'Overseas invoices')
+    if (!note) throw new Error('income fx: an irregular source with no dated payment must still be noted')
+    if (Math.abs(note.amount - rm / 3) > 0.005) {
+      throw new Error(`income fx: the note prints ${note.amount} as RM, expected ${rm / 3}`)
+    }
+
+    const pay = historyRows(S).find(r => r.key === `i${ev.id}`)
+    if (pay.currency !== 'MYR') throw new Error('income fx: a PAY row that is not MYR needs its own label')
+    if (Math.abs(pay.amount - rm) > 0.005) {
+      throw new Error(`income fx: History lists ${pay.amount} under an RM label, expected ${rm}`)
+    }
+
+    const after = spendingFor(S, 2026, 0, '2026-02-01')
+    if (Math.abs(after.inflowRM - (before.inflowRM + rm)) > 0.005) {
+      throw new Error(`income fx: inflow moved by ${after.inflowRM - before.inflowRM}, expected ${rm}`)
+    }
+    // The whole conversion error would otherwise land here, on the one figure
+    // nobody can check against a statement.
+    if (Math.abs(after.spentRM - (before.spentRM + rm)) > 0.005) {
+      throw new Error(`income fx: spending moved by ${after.spentRM - before.spentRM}, expected ${rm}`)
+    }
+    console.log(`  income fx  USD ${usd.toFixed(2)} reaches four callers as RM ${rm.toFixed(2)}, not RM ${usd.toFixed(2)}`)
+  }
 
   // The equity curve carries a net-worth line wherever the owned side was
   // recorded, and nothing where it was not.
@@ -1869,6 +2114,31 @@ try {
     const identity = c.inflowRM - c.committedRM - c.savedRM - c.walletDeltaRM
     if (Math.abs(identity - c.spentRM) > 1e-9) throw new Error(`spend: identity ${identity} != ${c.spentRM}`)
 
+    // A HAND-ENTERED EPF CONTRIBUTION MUST NOT COUNT AS SAVING.
+    //
+    // Nothing books EPF from a payslip any more, so the owner records it on
+    // Assets — and net pay already excludes it. Counting that deposit here would
+    // subtract the same ringgit twice and understate what the month was lived on.
+    // Two entries, identical but for `source`, are the only way to show the
+    // exclusion is the source's doing and not the amount's or the account's.
+    const withSource = src => {
+      const s = JSON.parse(JSON.stringify(s2))
+      s.assetEntries.unshift({ id: 993, asset_id: 3, type: 'DEPOSIT', date: iso(10), amount: 400, source: src })
+      return spendingFor(s, Y, M, '2026-02-01')
+    }
+    const paid = withSource('manual')
+    const fromPay = withSource('payroll')
+    if (Math.abs(paid.savedRM - (c.savedRM + 400)) > 0.005) {
+      throw new Error(`spend: a manual deposit must count — ${c.savedRM} + 400 != ${paid.savedRM}`)
+    }
+    if (Math.abs(fromPay.savedRM - c.savedRM) > 0.005) {
+      throw new Error(`spend: a payroll deposit must not count — ${c.savedRM} != ${fromPay.savedRM}`)
+    }
+    // And the identity still has to close, or the 400 has merely moved into spent.
+    if (Math.abs(fromPay.spentRM - c.spentRM) > 0.005) {
+      throw new Error(`spend: a payroll deposit moved spending ${c.spentRM} -> ${fromPay.spentRM}`)
+    }
+
     // A reading resets rather than accumulates — that is the whole point of the
     // type, and a DEPOSIT after one must build on the reading, not on history.
     const s3 = JSON.parse(JSON.stringify(s2))
@@ -1879,6 +2149,7 @@ try {
     }
 
     console.log(`  spending   null without a wallet, ${c.spentRM.toFixed(2)} over ${c.days} days with two readings`)
+    console.log(`  epf entry  a payroll deposit adds 0.00 to savings where a manual one adds 400.00`)
   }
 
   // Private mode, driven through the store exactly as the toggle does.
@@ -1977,6 +2248,64 @@ try {
     await tick(() => ctl.closeModal())
     if (document.body.textContent.includes(title)) throw new Error(`closeModal() left "${title}" mounted`)
   }
+
+  // A HAND-ENTERED EPF CONTRIBUTION IS NOT AUTOMATIC.
+  //
+  // The fixture's payroll deposit was badged AUTO with a tooltip saying the
+  // contribution books itself — true while a payslip wrote the row, and the last
+  // surface still saying it after the write was removed. It is typed on Assets
+  // now, exactly as an opening balance is, and an opening balance has never
+  // carried a badge. Asserted on the rendered pane because the badge is a map
+  // lookup: nothing but a render can show which values reach it.
+  {
+    await tick(() => ctl.setTab('history'))
+    const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+    if (!pane.includes('EPF')) throw new Error('history: the payroll deposit is not on this screen to check')
+    if (pane.includes('AUTO')) {
+      throw new Error('history: a contribution you typed must not be badged as one something else wrote')
+    }
+    // The badge that IS still earned, so the removal did not simply empty the map.
+    if (!pane.includes('SYNCED')) throw new Error('history: a synced row must still say so')
+    console.log('  history    a payroll deposit carries no AUTO badge; SYNCED still does')
+    await tick(() => ctl.setTab('dashboard'))
+  }
+
+  // The third source on an asset deposit, which is the only way an EPF
+  // contribution can be recorded now that no payslip writes one. Radix keeps a
+  // closed Select's items out of the DOM, so the option is proved by opening the
+  // form ON it — the trigger renders the chosen item's own copy, which is the
+  // thing that has to say the money never passed through your wallet.
+  await tick(() => ctl.openAssetEntry({ source: 'payroll' }))
+  if (!document.body.textContent.includes('From your pay — EPF, deducted before you saw it')) {
+    throw new Error('asset entry: no payroll option, so a hand-recorded EPF contribution cannot be marked')
+  }
+  if (!document.body.textContent.includes('never as money you spent this month')) {
+    throw new Error('asset entry: the payroll/opening option carries no explanation of what it excludes')
+  }
+  // Named, not counted. Radix keeps a closed Select's other items out of the DOM,
+  // so "the last two" pointed at nothing the reader could see.
+  if (!document.body.textContent.includes('An opening balance and money from your pay')) {
+    throw new Error('asset entry: the hint counts the non-flow options instead of naming them')
+  }
+  await tick(() => ctl.closeModal())
+
+  // The income form can now make the foreign source that was API-only. Same
+  // Radix problem as above — a closed Select keeps its items out of the DOM — so
+  // the form is opened ON the option and the trigger renders the chosen code.
+  // The hint is asserted too: it is the form's half of the promise the payment
+  // sheet makes, and a field that took a currency without saying what happens to
+  // the figure is how this got shipped write-only the first time.
+  await tick(() => ctl.openIncome({ currency: 'USD' }))
+  {
+    const sheet = document.querySelector('[data-slot="sheet-content"]').textContent
+    if (!sheet.includes('Currency')) throw new Error('income form: no currency field, so a USD source is still API-only')
+    if (!sheet.includes('USD')) throw new Error('income form: the currency field does not carry the chosen code')
+    if (!sheet.includes('converted at the rate on the day it landed, and both figures are kept')) {
+      throw new Error('income form: the currency field promises nothing about conversion')
+    }
+    console.log('  income form currency is askable, and says what happens to the figure')
+  }
+  await tick(() => ctl.closeModal())
 
   const real = errors.filter(e =>
     !/not wrapped in act|useLayoutEffect does nothing on the server|Window's scrollTo/.test(e))

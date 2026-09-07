@@ -17,12 +17,12 @@ work of building it.
 ## 1. The canvas is right about the hard parts
 
 Worth saying first, because the corrections below are all small by comparison. The figures that
-carry an argument were re-derived and they hold:
+carry an argument were re-derived and they hold — one exception, noted under the table:
 
 | Claim | Check |
 |---|---|
 | Net pay RM 9,984.50 | 12,000 − (EPF 11% 1,320 + SOCSO 29.75 + EIS 11.90 + SKBBK 44.65 + PCB 609.20 = 2,015.50) |
-| Employer cost RM 13,594.10 | 12,000 + (1,440 + 104.15 + 49.95) |
+| Employer cost RM 13,556.05 | 12,000 + (1,440 + 104.15 + 11.90) — the canvas says 13,594.10 |
 | EPF deposit RM 2,760.00 | employee 1,320 + employer 1,440 |
 | Myvi instalment RM 1,149.57 | 78,000 × (1 + 0.034 × 7) ÷ 84 |
 | Myvi 3.40% flat = **6.27%** | reproduces `flatToEffective()` (`web/src/lib/calc.js:2527`) exactly |
@@ -31,6 +31,13 @@ carry an argument were re-derived and they hold:
 | Actually available RM 2,638.06 | 15,000 − 5,092.49 billed − 7,269.45 unbilled instalments |
 | Three-month mean RM 1,682.33 | (1,142.00 + 1,302.00 + 2,603.00) ÷ 3 |
 | The residual closes | 5,188.28 − 4,012.60 living − 2,000.00 saved = −824.32, the stated wallet fall |
+
+**The exception is employer cost.** Its RM 49.95 employer EIS is not any rate on any base: EIS
+is symmetric at 0.2% each side, so the employer figure is RM 11.90, the same as the employee's,
+which the canvas prints two rows above. It came off the canvas and was checked once without being
+recomputed — the standing risk §6 names, a drawn figure read as a derived one, landed in the table
+headed by the claim that the arithmetic holds. Every row here is re-derived from its own base, not
+from the canvas.
 
 The 6.27% is the one worth calling out. The tempting `flat × 2n/(n+1)` gives 6.72%, and the
 canvas did not use it — it used the closed form the Hire-Purchase Act actually defines, which is
