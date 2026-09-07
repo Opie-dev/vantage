@@ -20,6 +20,7 @@ const statements = require('../models/cardStatements.model');
 const commitments = require('../models/commitments.model');
 const rulesModel = require('../models/merchantRules.model');
 const expenses = require('../models/expenses.model');
+const cardTransactions = require('../models/cardTransactions.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 const { round2 } = require('../lib/round');
 
@@ -127,11 +128,53 @@ async function ingest(body) {
   const ignored = [];
   const unmatched = new Map();
 
+  // EVERY LINE IS KEPT, whatever becomes of it. Until now the only record that a
+  // row had been read was a count in the response, which the browser rendered
+  // once and nobody could ask again — so a statement could be imported, agree
+  // with itself, book what it should, and leave no way to answer "what was on
+  // it". The parser's second date and its foreign block were discarded outright.
+  //
+  // A `rate` row is the exception, and it is not an exception to the principle:
+  // `RETAIL INTEREST RATE = 15.00%` is a fact about the card rather than a line
+  // on it, with no amount and no merchant to store.
+  const keep = (r, disposition, expenseId = null) => cardTransactions.upsert({
+    commitmentId: cardId,
+    statementId: statement.id,
+    // Both dates, which is half the reason the table exists — `expenses` can
+    // hold only one and the gap between them is the float the Cards screen
+    // explains. Each falls back to the other rather than being nullable: a line
+    // that cannot say when it happened is worse than no line, and the fallback
+    // is the one the expense booking has always used.
+    transactedOn: r.transacted || r.posted,
+    postedOn: r.posted || r.transacted,
+    description: r.description || '',
+    // Kept in its own column rather than appended to the merchant, because a
+    // rule matches on the merchant and one that has to step over a city name
+    // breaks the moment the same shop is visited in a different one.
+    location: r.location || '',
+    amount: r.amount,
+    kind: r.kind,
+    origCurrency: r.foreign ? r.foreign.currency : null,
+    origAmount: r.foreign ? r.foreign.amount : null,
+    fxRate: r.foreign ? r.foreign.rate : null,
+    instalmentNo: r.instalment_no ?? null,
+    instalmentOf: r.instalment_of ?? null,
+    disposition,
+    expenseId,
+    extId: extIdOf(cardId, r),
+  });
+
   for (const r of rows) {
+    if (r.kind === 'rate') continue;
+
     // An instalment line is a plan's billing, not a purchase; a credit is a
     // payment. Neither is ever spending, whatever the rules say.
-    if (r.kind !== 'retail') continue;
-    if (r.spending_candidate === false) { ignored.push(r.description); continue; }
+    if (r.kind !== 'retail') { await keep(r, 'ignored'); continue; }
+    if (r.spending_candidate === false) {
+      ignored.push(r.description);
+      await keep(r, 'ignored');
+      continue;
+    }
 
     const rule = matchRule(rules, r);
     if (!rule) {
@@ -139,21 +182,29 @@ async function ingest(body) {
       m.rows += 1;
       m.total = round2(m.total + r.amount);
       unmatched.set(r.description, m);
+      await keep(r, 'unmatched');
       continue;
     }
-    if (rule.action === 'IGNORE') { ignored.push(r.description); continue; }
+    if (rule.action === 'IGNORE') {
+      ignored.push(r.description);
+      await keep(r, 'ignored');
+      continue;
+    }
     if (rule.action === 'COMMITMENT') {
       // Recorded as seen, booked as nothing. It is already subtracted from income
       // on the Money screen, and booking it again would count it twice.
       asCommitment.push({ description: r.description, amount: r.amount, as: rule.commitment_name });
+      await keep(r, 'commitment');
       continue;
     }
 
     const extId = extIdOf(cardId, r);
     // The same line, booked by the CLI under the key identity used to have, is
     // moved to today's key — not counted as new, not booked twice.
-    if (await expenses.rekey(legacyExtIdOf(cardId, r), extId)) {
+    const moved = await expenses.rekey(legacyExtIdOf(cardId, r), extId);
+    if (moved) {
       alreadyThere.push(r.description);
+      await keep(r, 'booked', moved.id);
       continue;
     }
     const row = await expenses.insertImported({
@@ -164,8 +215,18 @@ async function ingest(body) {
       note: r.description + (r.location ? ` · ${r.location}` : ''),
       extId,
     });
-    if (row) booked.push(row);
-    else alreadyThere.push(r.description);
+    if (row) {
+      booked.push(row);
+      await keep(r, 'booked', row.id);
+    } else {
+      alreadyThere.push(r.description);
+      // insertImported() returns null when the expense is already there, which
+      // says the line was booked without saying by which row. The line still has
+      // to point at it: `card_transactions_booked_check` refuses a booked row
+      // with no expense, and rightly — it would count nothing while claiming to.
+      const existing = await expenses.findByExtId(extId);
+      await keep(r, existing ? 'booked' : 'unmatched', existing ? existing.id : null);
+    }
   }
 
   const sum = a => round2(a.reduce((t, x) => t + (x.amount || 0), 0));
