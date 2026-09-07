@@ -365,16 +365,31 @@ it. Typed charges are a genuinely separate blocker, and not on a table.
       that branch. `npm run db:status` from another branch will show a row it has no file for
       until the branch lands.
 
-- [x] **The transactions panel — done 7 Sep 2026**, on `cards-transactions-panel` (stacked on
-      the ingest branch, which creates the table). The sheet now reads what the import has been
-      storing. **"Reads as" is not one enum** — a booked row reads as its category, an unbooked
-      one reads as the reason it was not booked, which is what the question "what happened to
-      this line" actually has: one column, two kinds of answer.
-      The count says **kept OF carried**, because a panel showing only what it booked would be
-      silently editing the statement it claims to reproduce. Both dates are shown, posted faint
-      and second — the gap between them is the float — and the pre-conversion figure sits under
-      its row, since a ringgit amount alone cannot be checked against what the merchant charged.
-      Covered by a nine-needle smoke assertion over four dispositions.
+- [x] **A transactions panel was built on the card sheet, then removed the same day.** It read
+      the stored rows as a five-column table, built from this audit's PROSE rather than from the
+      canvas — and the canvas turned out to specify no such panel. Confirmed against both the
+      repo's six `.dc.html` artboards and the published *Vantage Credit Cards* artifact: zero
+      occurrences of "Transactions worth keeping", "rows kept", "Reads as", REVERSED or REFUNDED
+      in either. The owner asked for it removed, and it was; the branch is gone.
+      **The lesson is the one this file keeps relearning:** check the drawing before building from
+      a description of it. This was the third item in `cards-canvas-gaps.md` found to describe
+      canvas content that exists nowhere, after rewards and the overseas-conversion charge line —
+      and I had already found the first before building this one.
+
+- [x] **The import preview brought to the canvas — done 7 Sep 2026**, on
+      `import-follows-the-canvas` (off `main`). This is where the canvas actually puts statement
+      rows, and it draws eight sections where the build had four.
+      **One of them changes behaviour, not layout.** The canvas separates *New — never guessed*
+      from *The statement does not say who*: a new merchant wants a category, while a row naming a
+      payment gateway cannot be given one from the statement at all — so offering "choose a
+      category" there was asking the impossible, which the screen did for every undecided row.
+      **The rule is a list of gateway operators, not an `FPX-` prefix.** FPX is Malaysia's
+      transfer rail, so the prefix says how a charge was paid, not that the payee is unknown. On
+      the real August statement a prefix rule would have misfiled three of four rows —
+      `FPX-UNITED CARPARKS`, `FPX-STOREHUB` and `FPX-XOX COM` all name a merchant; only
+      `FPX-IPAY88` names an intermediary. Verified end to end: exactly one row lands as
+      unnameable. A merchant rule still beats the list, because a rule is something the owner
+      wrote.
 
 - [ ] **Typed statement charges — still blocked, but the reason is now known rather than
       guessed.** **(large · migration)**
