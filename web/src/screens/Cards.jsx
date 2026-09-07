@@ -33,7 +33,7 @@ import { useVantage } from '@/lib/store'
 
 import AccountRow from './money/AccountRow'
 import CardSheet from './money/CardSheet'
-import { Meta, MonthStepper } from './money/parts'
+import { Meta, MonthStrip } from './money/parts'
 
 /**
  * The one paragraph this screen exists for, with the accounts named. Two
@@ -101,7 +101,7 @@ export default function Cards() {
   if (!out.rows.length) {
     return (
       <div className="grid gap-4">
-        <MonthStepper />
+        <MonthStrip />
         <Card>
           <CardContent className="grid gap-3 px-4 py-6">
             <span className="eyebrow">No card accounts</span>
@@ -140,7 +140,7 @@ export default function Cards() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="What is due is keyed to each bill's own date; what is committed is today's." />
+      <MonthStrip />
 
       <Card>
         <CardContent className="grid gap-3 px-4">
@@ -180,6 +180,14 @@ export default function Cards() {
               <Meta className="num mt-1 block">{stateCaption(out.counts, out)}</Meta>
             </div>
           </div>
+
+          {/* The stepper's caption, kept because it is about these two figures
+              and never was about the control: they are the same debt read on two
+              clocks, and a reader who takes them for one basis will read the gap
+              between them as money going missing. */}
+          <Meta className="block">
+            What is due is keyed to each bill&rsquo;s own date; what is committed is today&rsquo;s.
+          </Meta>
 
           <div>
             {out.rows.map(r => (

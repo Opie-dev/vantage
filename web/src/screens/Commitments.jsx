@@ -23,12 +23,12 @@ import { PlusIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { commitmentsTotal, expensesFor } from '@/lib/calc'
+import { commitmentsTotal, currentMonth, expensesFor } from '@/lib/calc'
 import { fmt, monthLabel } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 import CommitmentRow from './money/CommitmentRow'
-import { Meta, MonthStepper } from './money/parts'
+import { Meta, MonthStrip } from './money/parts'
 
 const TABS = [
   { id: 'all', label: 'All', kinds: null },
@@ -38,8 +38,11 @@ const TABS = [
 ]
 
 export default function Commitments() {
-  const { state, moneyMonth, setTab, openCommitment, deleteCommitment } = useVantage()
-  const { y, m } = moneyMonth
+  const { state, setTab, openCommitment, deleteCommitment } = useVantage()
+  // The month that is happening, and no other. This screen used to read the
+  // shared month, which meant drilling into July on Expenses silently changed
+  // what "falling in" below was measuring.
+  const { y, m } = currentMonth()
   const [tab, setKindTab] = useState('all')
 
   const out = useMemo(() => commitmentsTotal(state), [state])
@@ -68,7 +71,7 @@ export default function Commitments() {
   if (!out.rows.length) {
     return (
       <div className="grid gap-4">
-        <MonthStepper />
+        <MonthStrip />
         <Card>
           <CardContent className="grid gap-3 px-4 py-6">
             <span className="eyebrow">Nothing committed yet</span>
@@ -91,9 +94,15 @@ export default function Commitments() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="The run rate is a usual month; the second figure is this one." />
+      <MonthStrip />
 
       <div className="grid gap-3 sm:grid-cols-2">
+        {/* The stepper's caption, and it was never about the stepper: two
+            figures on two bases, side by side. It sits over both rather than
+            under either, because the sentence is the pair. */}
+        <Meta className="col-span-full block">
+          The run rate is a usual month; the second figure is this one.
+        </Meta>
         <Card>
           <CardContent className="px-4">
             <span className="eyebrow">Committed run rate · monthly</span>

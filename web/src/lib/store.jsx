@@ -69,8 +69,6 @@ const VantageContext = createContext(null)
  *   state: object, loading: boolean, refreshing: boolean, error: string|null,
  *   fx: number, ready: boolean, reload: () => Promise<void>,
  *   tab: string, setTab: (id: string) => void,
- *   moneyMonth: {y: number, m: number}, setMoneyMonth: (next: {y: number, m: number}) => void,
- *   stepMoneyMonth: (n: number) => void,
  *   modal: {kind: string, prefill: object}|null, closeModal: () => void,
  *   openInstrument: () => void,
  *   openTransaction: (prefill?: object) => void,
@@ -192,33 +190,18 @@ export function VantageProvider({ children }) {
   const [syncPending, setSyncPending] = useState(false)
   const [tab, setTabState] = useState(hashTab)
 
-  /**
-   * The month every Money screen is reading.
+  /*
+   * NO SHARED MONTH LIVES HERE ANY MORE, and its absence is the guarantee.
    *
-   * SHARED, BECAUSE THE MONTH IS ONE FACT. Income, Commitments, Credit cards,
-   * Loans and Expenses are five screens now (money-redesign-plan.md §3), and four
-   * of them print figures scoped to a month. Five independent steppers would let
-   * the statement say August while the log says July — precisely what the single
-   * screen's "Governs both halves" bar existed to prevent. Hoisting it here is
-   * what carries that guarantee across the split, and it is the reason the split
-   * does not cost the month its coherence.
-   *
-   * View state, not data: it sits beside `tab` and `railCollapsed` rather than in
-   * the server preferences, because which month you are looking at is not a
-   * setting anyone wants restored on another device a week later.
+   * `moneyMonth` and `stepMoneyMonth` were hoisted here so six screens could
+   * share one stepper. The stepper is gone: every Money screen shows the month
+   * that is happening, which calc.js's currentMonth() states once for all of
+   * them, and the only screen that can be looking at another one is Expenses —
+   * drilled there by its own twelve-month chart, in its own useState, where no
+   * other screen can observe it. A month in this context value is a month any
+   * screen could read, which is exactly how drilling into July on one screen
+   * used to drag the other five with it.
    */
-  const [moneyMonth, setMoneyMonth] = useState(() => {
-    const now = new Date()
-    return { y: now.getFullYear(), m: now.getMonth() }
-  })
-
-  /** Step n months from wherever the screens are, letting Date roll the year. */
-  const stepMoneyMonth = useCallback(n => {
-    setMoneyMonth(({ y, m }) => {
-      const next = new Date(y, m + n, 1)
-      return { y: next.getFullYear(), m: next.getMonth() }
-    })
-  }, [])
 
   /**
    * Private mode — every figure renders as '••••'.
@@ -302,7 +285,8 @@ export function VantageProvider({ children }) {
    *
    * WHY THE CLIENT WRITES THIS. An asset balance is a running sum the server
    * could manage in SQL, but a liability is an amortisation schedule derived
-   * from five fields, and calc.js is the single source of truth for that math.
+   * from the instalment, the term and the start date, and calc.js is the single
+   * source of truth for that math.
    * A second implementation on the server would be a second answer to "what do
    * you owe", and the two would drift.
    *
@@ -656,10 +640,6 @@ export function VantageProvider({ children }) {
       tab,
       setTab,
 
-      moneyMonth,
-      setMoneyMonth,
-      stepMoneyMonth,
-
       modal,
       closeModal: () => setModal(null),
       openInstrument: () => setModal({ kind: 'instrument', prefill: {} }),
@@ -734,7 +714,7 @@ export function VantageProvider({ children }) {
       syncMoomoo,
       syncPending,
     }
-  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate, railCollapsed, toggleRail, moneyMonth, stepMoneyMonth])
+  }, [state, loading, refreshing, error, locked, unlock, lock, setPreference, reload, tab, setTab, modal, mutate, pricesPending, syncPending, isPrivate, togglePrivate, railCollapsed, toggleRail])
 
   return <VantageContext.Provider value={value}>{children}</VantageContext.Provider>
 }

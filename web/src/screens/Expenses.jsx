@@ -7,8 +7,8 @@
  * Overview column is for: "what was logged" and "what actually left the wallet"
  * are two halves of one sentence, so the coverage bar stayed on Overview beside
  * the measured statement rather than following the list here. This screen is the
- * itemised half; the half that checks it is one tab away and always agrees,
- * because both read one expensesFor() for one shared month.
+ * itemised half; the half that checks it is one tab away — and reads the month
+ * that is happening, while this screen alone can be looking at another.
  *
  * THE RECONCILIATION IS WHY THE LOG IS HONEST. commitments-and-income-plan.md §2
  * argued against an expense log because one gets abandoned and then silently
@@ -71,6 +71,7 @@ import {
   EXPENSE_GROUPS,
   EXPENSE_GROUP_LABEL,
   EXPENSE_LABEL,
+  currentMonth,
   expenseGroupOf,
   expenseHistory,
   expensesFor,
@@ -80,7 +81,7 @@ import {
 import { compact, dfmt, fmt, monthLabel, pct1, pctS } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
-import { MonthStepper } from './money/parts'
+import { MonthStrip } from './money/parts'
 
 /** Months in the history chart. */
 const WINDOW = 12
@@ -227,7 +228,7 @@ function TargetControl({ target, onSave }) {
  * is a claim — it says nothing was spent — and every month before the log existed
  * would otherwise be making it.
  */
-function History({ months, target, ex, onPick, onTarget }) {
+function History({ months, target, ex, onPick, onTarget, drilled, onNow }) {
   const most = Math.max(...months.map(m => m.totalRM), target ? target * 1.1 : 0)
   // Headroom for the figure that sits above each bar, and for the target line
   // when the target is above everything logged.
@@ -239,6 +240,26 @@ function History({ months, target, ex, onPick, onTarget }) {
     <div className="border-hairline border-b px-4 py-4">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <span className="eyebrow">Logged spend · {WINDOW} months</span>
+        {/* Where the exception is stated, beside the control that is the
+            exception. Every other Money screen shows the month that is
+            happening and has no way to be moved off it. */}
+        <span className="text-faint text-[11px]">pick a month to read it — this screen only</span>
+        {/* AND THE WAY BACK, because the chart is a one-way door without it. The
+            window re-anchors on whatever month you pick — expenseHistory() builds
+            `sel-11 … sel`, so the month you drilled to is always the LAST bar and
+            there is never a bar later than it. Drill to August and September is
+            simply not on the chart any more. The stepper carried a "This month"
+            button and a next-month chevron and both went with it; the only route
+            left was leaving the tab and coming back, which nothing on the screen
+            said. Named rather than labelled "This month", because it is the
+            return path for a drill and not a month control: it exists only while
+            the screen is off today, and it is the last thing that happens before
+            it disappears. */}
+        {drilled ? (
+          <Button variant="outline" size="xs" onClick={onNow}>
+            Back to {monthLabel(currentMonth().y, currentMonth().m)}
+          </Button>
+        ) : null}
         {target ? (
           <span className="text-faint flex items-center gap-1.5 text-[11px]">
             <span
@@ -279,6 +300,7 @@ function History({ months, target, ex, onPick, onTarget }) {
                 type="button"
                 key={m.key}
                 onClick={() => onPick(m.year, m.monthIndex)}
+                data-month={m.key}
                 aria-current={m.selected ? 'true' : undefined}
                 title={`${m.short} ${m.year} — ${m.logged ? fmt(m.totalRM, 'MYR') : 'nothing logged'}`}
                 className="relative h-full min-w-0 flex-1 cursor-pointer"
@@ -490,8 +512,9 @@ function FilterSelect({ name, value, onChange, items, disabled, width }) {
  *
  * COVERAGE IS ON OVERVIEW TOO, AND DELIBERATELY. There it sits against the
  * measured statement; here it sits against the itemised list it is checking. The
- * two are the same call — one expensesFor() for one shared month — so they cannot
- * disagree, which is what made splitting them across screens safe at all.
+ * two are the same call, expensesFor(), so on the month they are both showing
+ * they cannot disagree — and when this screen is drilled into a past one they are
+ * answering about two different months, which the strip on each says out loud.
  *
  * A NEGATIVE GAP IS NOT GOOD NEWS. More logged than actually left points at a
  * double entry or an expense filed in the wrong month, not at thrift, and the
@@ -589,21 +612,33 @@ function TwoBases({ ex, onAddReading, readings }) {
 const ALL = '__all__'
 
 export default function Expenses() {
-  const {
-    state,
-    moneyMonth,
-    setMoneyMonth,
-    setTab,
-    openExpense,
-    openAssetEntry,
-    deleteExpense,
-    setPreference,
-  } = useVantage()
-  const { y, m } = moneyMonth
+  const { state, setTab, openExpense, openAssetEntry, deleteExpense, setPreference } = useVantage()
+  // THE ONE MONTH ANYWHERE THAT IS NOT TODAY'S, and it is a useState rather than
+  // a shared value in the store on purpose.
+  //
+  // The twelve-month chart below drills into a past month, which is the one
+  // exception the owner kept when the month stepper came off every Money screen.
+  // Held here, that drill is a fact about this screen and nothing else can
+  // observe it; held in the store — where it was — Overview and Commitments read
+  // it too, and picking July's bar quietly re-scoped the measured statement on
+  // another tab. Seeded from the same currentMonth() the other five screens are
+  // pinned to, so the log opens on the month that is happening — and, because
+  // the tab panel unmounts, so does every return to this screen. That reset is
+  // wanted: a drilled month that outlived a trip to Loans and back would be a
+  // log showing July to a reader who has every reason to believe the Money
+  // screens are all on today.
+  const [month, setMonth] = useState(currentMonth)
+  const { y, m } = month
+  // Whether the chart has been drilled off today, which decides whether the way
+  // back is offered. Recomputed rather than stored: the seed is currentMonth()
+  // and a session left open across midnight on the last of the month would
+  // otherwise still believe it was on the month it opened in.
+  const nowMonth = currentMonth()
+  const drilled = y !== nowMonth.y || m !== nowMonth.m
   // Its own call now, where Money used to pass one down. Pure and month-scoped,
   // so Overview computing it too costs a little work and cannot disagree.
   const ex = useMemo(() => expensesFor(state, y, m), [state, y, m])
-  const onMonth = (year, monthIndex) => setMoneyMonth({ y: year, m: monthIndex })
+  const onMonth = (year, monthIndex) => setMonth({ y: year, m: monthIndex })
 
   // The readings the residual is measured against, newest first. Only WALLET
   // accounts: money into ASB is a destination, not your pocket, so a reading
@@ -710,7 +745,11 @@ export default function Expenses() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="The log and the measured month are the same month, on every Money screen." />
+      {/* THE MONTH THIS SCREEN IS SHOWING, not the month that is happening. The
+          strip is the only thing on the page that names it, so on the one screen
+          that can be drilled into the past it has to follow the drill or it
+          would be labelling July's log with September. */}
+      <MonthStrip month={month} />
       <Card className="min-w-0 gap-0 overflow-hidden py-0">
     <section id="spending" className="flex flex-col">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5">
@@ -740,6 +779,8 @@ export default function Expenses() {
       </div>
 
       <History
+        drilled={drilled}
+        onNow={() => setMonth(nowMonth)}
         months={months}
         target={target}
         ex={ex}

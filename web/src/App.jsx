@@ -3002,8 +3002,8 @@ function CommitmentDialog({ prefill }) {
       <DialogHeader>
         <DialogTitle>{editing ? `Edit ${prefill.name}` : 'Add commitment'}</DialogTitle>
         <DialogDescription>
-          Something known in advance. For a loan, five fields off the agreement give every future
-          instalment &mdash; you will never type a payment.
+          Something known in advance. For a loan, the instalment, the term and how far in you
+          are give every future instalment &mdash; add the rate and they split too.
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-2 gap-3">

@@ -160,7 +160,8 @@ export const deleteAssetEntry = (assetId, entryId) =>
 
 /**
  * What you owe and what leaves each month. The repayment schedule is NOT sent —
- * it is derived from these five fields (see calc.js).
+ * it is derived from the instalment, the term and the start date, with the rate
+ * optional on top (see calc.js).
  * A RECURRING charge may carry `collected_by_id` — the REVOLVING account that
  * collects it. It adds NOTHING to the month: the charge is counted once, and the
  * statement importer books a matched merchant as nothing at all. What it says is

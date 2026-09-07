@@ -608,7 +608,7 @@ try {
     // Six screens where there was one (money-redesign-plan.md §3). Each is
     // asserted on something only it can render, so a screen quietly rendering
     // another's content fails here rather than looking plausible.
-    ['overview', ['Governs every Money screen', 'What happened to the money',
+    ['overview', ['Run-rate figures say a month, never this month', 'What happened to the money',
       'The other question', 'Net income', '= Uncommitted', 'RM 4,668.00', 'waterfall', 'flow']],
     ['income', ['Net, a month', 'Of that, firm', 'Of that, estimated', 'Sources',
       'RM 8,719.50', 'a salary is a floor'.replace('a s', 'A s')]],
@@ -1260,6 +1260,54 @@ try {
     if (wal.rm <= 0) throw new Error('overview: a wallet that fell must add to what the month cost')
     if (!/gave up/.test(wal.label)) throw new Error(`overview: mislabelled — "${wal.label}"`)
     console.log(`  overview   5 rows closing on ${total.rm.toFixed(2)}, wallet ${wal.label.toLowerCase()}`)
+
+    /* The same copy, actually RENDERED — and in Flow, which nothing ever drew.
+     *
+     * overviewMode() reads a stored preference and the fixture carries none, so
+     * every run above drew the Waterfall and called Overview covered. That is the
+     * blind spot 7 already names, one layer up: the column was asserted, the
+     * second view OF the column was not. It cost a heading that said the opposite
+     * of the row printed underneath it, and no assertion over overviewRows()
+     * could have caught that — those rows were right the whole time. */
+    const { fmt } = await server.ssrLoadModule('/src/lib/format.js')
+    const flowState = { ...w, preferences: { overviewMode: 'flow' } }
+    const stub = globalThis.fetch
+    globalThis.fetch = async path => ({
+      ok: true, status: 200, statusText: 'OK',
+      json: async () => (String(path).includes('/api/state') ? { ...flowState } : { ok: true }),
+    })
+    try {
+      await act(async () => { await ctl.reload() })
+      await tick(() => ctl.setTab('overview'))
+      const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+
+      for (const n of ['Arrives', 'Promised, and spent']) {
+        if (!pane.includes(n)) throw new Error(`overview (flow): the "${n}" column did not draw`)
+      }
+      // THE THIRD COLUMN IS THE RESIDUAL — what living took, money already gone.
+      // A heading claiming it is still on hand contradicts the row beneath it,
+      // and that row names itself, so the two are readable against each other.
+      if (pane.includes('Still here')) {
+        throw new Error('overview (flow): the residual is headed as money still held')
+      }
+      if (!pane.includes('What that leaves')) {
+        throw new Error('overview (flow): the residual column lost its heading')
+      }
+      // And it is the TOTAL row under there, both halves of it — so a column
+      // wired to the wrong row fails here rather than looking plausible with a
+      // right-shaped figure.
+      if (!pane.includes(total.label)) {
+        throw new Error(`overview (flow): the residual column does not name "${total.label}"`)
+      }
+      if (!pane.includes(fmt(total.rm, 'MYR'))) {
+        throw new Error(`overview (flow): expected the residual ${fmt(total.rm, 'MYR')}`)
+      }
+      console.log(`  overview   flow draws 3 columns, the third "${total.label}" at ${fmt(total.rm, 'MYR')}`)
+    } finally {
+      globalThis.fetch = stub
+      await act(async () => { await ctl.reload() })
+      await tick(() => ctl.setTab('dashboard'))
+    }
   }
 
   /* ── a payment converted at the rate it landed at ────────────────────────── */
@@ -1901,29 +1949,71 @@ try {
     console.log('  cards      one row per account opens its sheet; the plus inside it does not; CIMB settles, then carries; plans edit from the sheet')
   }
 
-  // The month is shared, and that is the whole reason six screens are allowed to
-  // exist. Stepping it on one must move it on every other, or the statement says
-  // August while the log says July — which is exactly what the single screen's
-  // "Governs both halves" bar existed to prevent.
+  // THE MONTH IS NOT SHARED, and that reversal is the rule now. Every Money
+  // screen shows the month that is happening; Expenses alone can be drilled into
+  // a past one by its own twelve-month chart, and that drill is a fact about
+  // Expenses. The stepper that used to move all six at once is gone outright, so
+  // there is nothing anywhere that can take another screen off today.
   {
+    const { currentMonth } = await server.ssrLoadModule('/src/lib/calc.js')
+    const { monthLabel } = await server.ssrLoadModule('/src/lib/format.js')
+    const MONEY = ['overview', 'income', 'commitments', 'cards', 'loans', 'expenses']
+    const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+    // Off the strip's header, because that is now the ONLY thing on a Money
+    // screen that names the month — which is the reason it has to be asserted
+    // rather than assumed.
+    const shown = () =>
+      pane().querySelector('[data-slot="month-strip"] [data-slot="month-name"]')?.textContent || ''
+    // The oracle is the app's own definition of today's month, never a date typed
+    // here: a literal would go stale on the first of every month.
+    const { y: NY, m: NM } = currentMonth()
+    const thisMonth = monthLabel(NY, NM)
+
+    for (const id of MONEY) {
+      await tick(() => ctl.setTab(id))
+      if (shown() !== thisMonth) throw new Error(`${id}: shows ${shown() || 'no month'}, not ${thisMonth}`)
+      // Nothing that steps a month may render on a Money screen. The Calendar has
+      // its own prev/next and keeps them — it is not a Money screen and never
+      // shared this month.
+      for (const sel of ['[aria-label="Previous month"]', '[aria-label="Next month"]']) {
+        if (pane().querySelector(sel)) throw new Error(`${id}: a month-stepping control survived (${sel})`)
+      }
+      const thisMonthButton = [...pane().querySelectorAll('button')].find(
+        b => b.textContent.trim() === 'This month')
+      if (thisMonthButton) throw new Error(`${id}: the stepper's "This month" button survived`)
+    }
+    console.log(`  month      all ${MONEY.length} Money screens show ${thisMonth}, and none can be stepped`)
+
+    // The drill-down, and the containment that is the point of it. Picking a bar
+    // moves Expenses and NOTHING ELSE — which is only testable because the other
+    // five have no month of their own to be moved.
     await tick(() => ctl.setTab('expenses'))
-    // Off the Previous-month button rather than a class: the label's own classes
-    // carry Tailwind's bracket syntax, which is not a valid CSS selector.
-    const monthText = () => {
-      const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]')
-      const prev = pane?.querySelector('[aria-label="Previous month"]')
-      return prev?.nextElementSibling?.textContent || ''
+    const keyOf = (yy, mm) => `${yy}-${String(mm + 1).padStart(2, '0')}`
+    const back = new Date(Date.UTC(NY, NM - 1, 1))
+    const key = keyOf(back.getUTCFullYear(), back.getUTCMonth())
+    const bar = pane().querySelector(`button[data-month="${key}"]`)
+    if (!bar) throw new Error(`expenses: the ${key} bar is not in the twelve-month chart`)
+    await tick(() => bar.click())
+    const drilled = monthLabel(back.getUTCFullYear(), back.getUTCMonth())
+    if (shown() !== drilled) throw new Error(`expenses: drilled to ${key} and the strip says ${shown()}`)
+
+    for (const id of MONEY.filter(x => x !== 'expenses')) {
+      await tick(() => ctl.setTab(id))
+      if (shown() !== thisMonth) {
+        throw new Error(`${id}: followed the Expenses drill to ${shown()} — the month is not shared any more`)
+      }
     }
-    const before = monthText()
-    await tick(() => ctl.stepMoneyMonth(-1))
-    const after = monthText()
-    if (!before || before === after) throw new Error(`month did not step: ${before} -> ${after}`)
-    await tick(() => ctl.setTab('overview'))
-    if (monthText() !== after) {
-      throw new Error(`month is not shared: expenses says ${after}, overview says ${monthText()}`)
+    // AND THE DRILL DOES NOT SURVIVE LEAVING, deliberately. The tab panel
+    // unmounts, the useState goes with it, and coming back lands on the month
+    // that is happening. A drilled month that outlived a round trip through
+    // Loans would be a log quietly showing July to a reader who believes every
+    // Money screen is on today — which is the failure the stepper's removal is
+    // for.
+    await tick(() => ctl.setTab('expenses'))
+    if (shown() !== thisMonth) {
+      throw new Error(`expenses: came back on ${shown()} rather than ${thisMonth}`)
     }
-    await tick(() => ctl.stepMoneyMonth(1))
-    console.log(`  month      shared across the Money screens (${after} on both)`)
+    console.log(`  month      Expenses drills to ${drilled} alone; the other five stay on ${thisMonth}`)
   }
 
   // Expenses, and the reconciliation that makes a hand-kept log defensible.
@@ -2437,6 +2527,497 @@ try {
       throw new Error('cards: two cards on one limit are not said, so plastic still reads as accounts')
     }
     console.log('  cards      one account, two cards, and the screen says both')
+  }
+
+  /* ── the month strip, on all six Money screens ──────────────────────────── */
+  //
+  // The strip is the sentence the six Money screens are clauses of, and since the
+  // stepper came off it is also the only thing that names the month. So what is
+  // asserted here is the four ways it stops being one: it goes missing on a
+  // screen, it names a month the page beneath it is not showing, it prints a
+  // share its own bar does not draw, or it puts a figure on a month nobody has
+  // measured.
+  {
+    const MONEY = ['overview', 'income', 'commitments', 'cards', 'loans', 'expenses']
+    const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+    const strip = () => pane().querySelector('[data-slot="month-strip"]')
+    const stripText = () => strip().textContent
+    const named = () => strip().querySelector('[data-slot="month-name"]').textContent
+
+    // Every Money screen, on the shared fixture — which has no wallet, so this
+    // is also the refusal rendering on screens whose own data is missing too
+    // (Cards and Loans reach the strip from their empty states as well).
+    for (const id of MONEY) {
+      await tick(() => ctl.setTab(id))
+      if (!strip()) throw new Error(`strip: missing on ${id}`)
+      if (!stripText().includes('The month, end to end · declared')) {
+        throw new Error(`strip: no eyebrow on ${id}`)
+      }
+      if (!stripText().includes('every page shows its own segment of this')) {
+        throw new Error(`strip: no note on ${id}`)
+      }
+      if (!named().trim()) {
+        throw new Error(`strip: names no month on ${id}, and nothing else on the page does`)
+      }
+    }
+    console.log(`  strip      the eyebrow, the month and the note render on all ${MONEY.length} Money screens`)
+
+    // NOT PINNED, and that is a rule rather than a preference. The stepper it
+    // replaced was one 52px row of CONTROLS, which have to stay reachable; this
+    // is five tiles of STATEMENT, read once at the top. Measured in a browser
+    // while it was sticky it froze 218px over a 1366x768 window and 690px over a
+    // 430x932 one — 74% of a phone viewport before the screen's own content got a
+    // pixel. jsdom lays nothing out, so what is asserted is the class that caused
+    // it.
+    for (const id of MONEY) {
+      await tick(() => ctl.setTab(id))
+      if (/(^|\s)sticky(\s|$)/.test(strip().className)) {
+        throw new Error(`strip: pinned on ${id} — five tiles frozen over the screen's own content`)
+      }
+    }
+    console.log('  strip      scrolls with the page on all 6, rather than freezing five tiles over it')
+
+    // ── ONCE PER SCREEN. Overview carries the refusal twice over: the strip
+    // states it with the control that fixes it, and the column below states why
+    // its own figures are absent. Both used to print the whole of
+    // SPEND_WHY[reason], so the same sentence about the same missing reading
+    // appeared forty words apart on one page and only one of the two offered the
+    // form. The strip is the one that keeps it, because the strip has the button.
+    {
+      await tick(() => ctl.setTab('overview'))
+      const why = 'so there is nothing to measure the month against'
+      const seen = pane().textContent.split(why).length - 1
+      if (seen !== 1) throw new Error(`overview: the refusal is stated ${seen} times, and once is the number`)
+      if (!strip().textContent.includes(why)) {
+        throw new Error('overview: the one statement of the refusal is not the one with the button')
+      }
+      console.log('  strip      the refusal is stated once on Overview, by the surface that can fix it')
+    }
+
+    const { currentMonth, overviewRows } = await server.ssrLoadModule('/src/lib/calc.js')
+    const { dfmt, fmt, monthLabel, ordinal } = await server.ssrLoadModule('/src/lib/format.js')
+
+    // A month wholly in the past for the measurable case, so `ceiling` is the
+    // month end and both readings sit inside the window whatever day of the month
+    // this runs on. The same trap the expense block documents: relative dates
+    // straddle a month boundary and the assertion then fails on a few days in
+    // thirty. Expenses is the one screen that can be shown such a month, and it
+    // is shown it the only way there is — by drilling its own chart.
+    const p2 = n => String(n).padStart(2, '0')
+    const { y: NY, m: NM } = currentMonth()
+    const prev = new Date(Date.UTC(NY, NM - 1, 1))
+    const PY = prev.getUTCFullYear()
+    const PM = prev.getUTCMonth()
+    const pd = d => `${PY}-${p2(PM + 1)}-${p2(d)}`
+    const keyOf = (yy, mm) => `${yy}-${p2(mm + 1)}`
+
+    const assets0 = STATE.assets
+    const entries0 = STATE.assetEntries
+    const events0 = STATE.incomeEvents
+    const txns0 = STATE.transactions
+    const wallet = { id: 99, name: 'MAE', slug: 'mae', currency: 'MYR', liquidity: 'WALLET',
+      kind: 'SAVINGS', institution: '', account_ref: '', unit_label: '', unit_cap: null,
+      fiscal_year: '12-31', rate_basis: 'NONE', rate_quote: 'PERCENT', last_rate: null,
+      last_bonus: null, sort_order: 9, archived: false, created_at: pd(1) }
+    const reading = (id, date, amount) => ({ id, asset_id: 99, slug: 'mae', type: 'BALANCE',
+      date, amount, note: '', source: 'manual', ext_id: null })
+
+    // ── one reading: the state the live database is in every day until the owner
+    // records the second one, and the one the strip has to be good at. One
+    // reading anchors a window and never closes it, wherever it is dated, so this
+    // holds on any day of any month.
+    STATE.assets = [...assets0, wallet]
+    STATE.assetEntries = [reading(990, ago(3), 5000), ...entries0]
+    await act(async () => { await ctl.reload() })
+    await tick(() => ctl.setTab('overview'))
+    {
+      const t = stripText()
+      if (strip().querySelectorAll('[data-segment]').length) {
+        throw new Error('strip: an unmeasurable month must draw no segment tiles')
+      }
+      if (/\d%/.test(t)) throw new Error(`strip: a share of an unknown was printed — "${t}"`)
+      if (/RM\s*[\d•]/.test(t)) throw new Error(`strip: a figure was invented — "${t}"`)
+      if (!t.includes('has not been split into its five segments yet')) {
+        throw new Error(`strip: the refusal does not say what is missing — "${t}"`)
+      }
+      // It still says WHICH month it is refusing to split, because nothing else
+      // on the page does.
+      if (named() !== monthLabel(NY, NM)) {
+        throw new Error(`strip: the refusal names ${named()} rather than ${monthLabel(NY, NM)}`)
+      }
+      // What to record, and the control that records it — not just a sentence.
+      if (!t.includes('No balance reading since this month')) {
+        throw new Error('strip: the refusal does not name the reading that is missing')
+      }
+      if (!t.includes('Add a reading')) throw new Error('strip: the refusal offers no way to fix it')
+
+      // AND THE FORM IT OPENS IS THE FORM IT PROMISED. The sheet defaults to the
+      // first account in the list and to today, and here the first account is a
+      // SAVINGS one — a BALANCE against it closes no wallet window, so a reader
+      // who did exactly what the strip asked would come back to the same refusal.
+      // The wallet is deliberately appended AFTER the fixture's own accounts so
+      // the default and the right answer cannot be the same row by accident.
+      if (STATE.assets[0].id === wallet.id) {
+        throw new Error('strip: the wallet is first in the list, so this proves nothing about the default')
+      }
+      const add = [...strip().querySelectorAll('button')].find(b => b.textContent.trim() === 'Add a reading')
+      await tick(() => add.click())
+      {
+        const sheet = document.querySelector('[data-slot="sheet-content"]')
+        const acct = sheet.querySelector('[role="combobox"]')?.textContent || ''
+        if (acct !== wallet.name) {
+          throw new Error(`strip: "Add a reading" opens on ${acct || 'no account'}, not the wallet ${wallet.name}`)
+        }
+        // Dated at the end of the window that is open — today, for a month still
+        // running — because a reading cannot exist for a day that has not
+        // happened and one dated before the opening reading closes nothing.
+        const date = [...sheet.querySelectorAll('input')].find(i => i.type === 'date')?.value
+        if (date !== isoOf(NOW)) {
+          throw new Error(`strip: "Add a reading" is dated ${date}, not ${isoOf(NOW)}`)
+        }
+      }
+      await tick(() => ctl.closeModal())
+      console.log('  strip      one reading: no figure, no percentage, and the form that closes it — on the wallet, dated to close it')
+    }
+
+    // ── THREE readings, plus a payslip and a savings deposit dated inside the
+    // window the first two bracket, so every segment of the previous month has
+    // something real in it. The third sits after this month opened: without it
+    // the five screens pinned to today would all be showing the refusal, and the
+    // "which tile is lit" pass below would have no tiles to read.
+    const pay = { id: 900, source_id: 1, name: 'Day job', kind: 'EMPLOYMENT', cadence: 'MONTHLY',
+      date: pd(10), gross: 8500, epf_employee: 935, socso_employee: 29.75, eis_employee: 11.9,
+      skbbk: 44.65, pcb: 609.2, zakat: 0, other_deducted: 0, epf_employer: 1020,
+      socso_employer: 104.15, eis_employer: 11.9, note: '', source: 'manual', ext_id: null }
+    STATE.assetEntries = [
+      reading(993, ago(1), 4050),
+      reading(991, pd(24), 4200),
+      { id: 992, asset_id: 1, slug: 'asb', type: 'DEPOSIT', date: pd(12), amount: 500, note: '',
+        source: 'manual', ext_id: null },
+      reading(990, pd(2), 5000),
+      ...entries0,
+    ]
+    STATE.incomeEvents = [pay, ...events0]
+    await act(async () => { await ctl.reload() })
+
+    // THE DRILL IS HOW A PAST MONTH GETS ON SCREEN NOW, so the assertions that
+    // follow ride on it — and prove it on the way past.
+    const drillTo = async (yy, mm) => {
+      await tick(() => ctl.setTab('expenses'))
+      // `button[data-month]`, NEVER a bare attribute selector. The strip carries
+      // its own month too, and it precedes the chart in the pane — so
+      // `[data-month="…"]` resolved to the strip's <section>, whose .click() does
+      // nothing, and this helper reported a drill it had not performed.
+      await tick(() => pane().querySelector(`button[data-month="${keyOf(yy, mm)}"]`).click())
+      if (named() !== monthLabel(yy, mm)) {
+        throw new Error(`strip: drilled to ${keyOf(yy, mm)} and the header says ${named()}`)
+      }
+    }
+    await drillTo(PY, PM)
+
+    // The oracle is overviewRows() over the same fixture, never a number typed
+    // here: a copied figure stops testing the derivation the moment either moves.
+    const view = overviewRows({ ...STATE }, PY, PM)
+    if (view.reason) throw new Error(`strip: two readings should measure, got ${view.reason}`)
+    const rowOf = k => view.rows.find(r => r.key === k).rm
+    // "What stayed" is the wallet row with the other sign, and that is asserted
+    // rather than assumed — the tile is labelled by what the wallet KEPT while
+    // the column states what it GAVE UP, and a strip that got this backwards
+    // would still add up.
+    if (Math.abs(view.spend.walletDeltaRM + rowOf('wallet')) > 1e-9) {
+      throw new Error('strip: the wallet row is not the delta negated')
+    }
+    // NEGATED, and that is the point of the row rather than a detail of it.
+    // overviewRows() states `spent` POSITIVE because its column has subtracted
+    // its way down to it; the tile sits in a row between two figures carrying a
+    // minus, so monthSegments() flips it — money that left the month printed like
+    // money that arrived makes the largest outflow read as the second largest
+    // inflow. This line used to hold the un-negated row and passed anyway,
+    // because the check below was `includes()` and "−RM 6,229.53" contains
+    // "RM 6,229.53": the negation the strip depends on was untested.
+    const EXPECT = [
+      ['income', rowOf('inflow')],
+      ['commitments', rowOf('committed')],
+      ['saved', rowOf('saved')],
+      ['expenses', -rowOf('spent')],
+      ['stayed', view.spend.walletDeltaRM],
+    ]
+
+    const tiles = () => [...strip().querySelectorAll('[data-segment]')]
+    if (tiles().length !== 5) throw new Error(`strip: expected 5 tiles, got ${tiles().length}`)
+    if (!view.incomeRM) throw new Error('strip: the fixture must earn something, or no share is testable')
+    let checked = 0
+    for (const [key, rm] of EXPECT) {
+      const el = tiles().find(t => t.dataset.segment === key)
+      if (!el) throw new Error(`strip: no ${key} tile`)
+      // STRICT EQUALITY, on the figure element alone. `includes()` over the whole
+      // tile cannot see a sign — fmt() puts the U+2212 OUTSIDE the symbol, so
+      // "−RM 6,229.53".includes("RM 6,229.53") is true — and the sign is the one
+      // thing about four of these five tiles that a derivation can get wrong
+      // while still adding up.
+      const want = fmt(rm, 'MYR')
+      const got = el.querySelector('.num').textContent
+      if (got !== want) {
+        throw new Error(`strip: ${key} should print ${want}, prints ${got}`)
+      }
+      const bar = el.querySelector('div[style*="width"]')
+      if (!bar) throw new Error(`strip: ${key} has a share and no bar to draw it`)
+      // Signed, so a negative width would be read rather than skipped by the
+      // pattern. Before the denominator was guarded, a window that declared less
+      // than nothing produced `width: -100%` — invalid, dropped by the browser,
+      // and drawn as a FULL rail under a label reading −100.0%.
+      const drawn = Number(/width:\s*(-?[\d.]+)%/.exec(bar.getAttribute('style'))[1])
+      // TWO ORACLES FROM ONE NUMBER, and they are deliberately not the same one.
+      // The share is printed TRUE and drawn CLAMPED: a month whose living cost
+      // ran to 110% of what arrived says 110.0% and fills the rail, because a bar
+      // cannot be drawn past its own track and the overrun is most of the point.
+      // Comparing the printed figure against the clamped oracle would have failed
+      // that month, which is the one this strip exists to show.
+      const trueShare = (Math.abs(rm) / view.incomeRM) * 100
+      if (Math.abs(drawn - Math.min(100, trueShare)) > 0.005) {
+        throw new Error(`strip: ${key} draws ${drawn}% where the clamped share is ${Math.min(100, trueShare)}%`)
+      }
+      // THE ONE THAT MATTERS: the width and the words are one number, or they
+      // are §2.4 all over again. Rounded to the digit the tile prints.
+      // Off the sub-line alone. Read against the whole tile, "RM 5,718.10" and
+      // "18.1%" run together into a percentage neither of them is.
+      const printed = /(\d+\.\d)%/.exec(el.querySelector('[data-slot="segment-share"]').textContent)
+      if (printed) {
+        if (Math.abs(Number(printed[1]) - trueShare) > 0.051) {
+          throw new Error(`strip: ${key} prints ${printed[1]}% where its share is ${trueShare}%`)
+        }
+        checked += 1
+      }
+    }
+    if (checked < 3) throw new Error(`strip: only ${checked} tiles printed a share to check the bar against`)
+    console.log(
+      `  strip      five tiles match overviewRows() and ${checked} bars draw exactly what they print`,
+    )
+
+    // The facts under the figures are bound to the fixture, not to the canvas's
+    // August. Every one of them is derived here from the rows the strip reads.
+    const source = STATE.incomeSources.find(s => s.id === pay.source_id)
+    {
+      const income = tiles().find(t => t.dataset.segment === 'income').textContent
+      if (!income.includes(source.name)) throw new Error(`strip: the income tile does not name ${source.name}`)
+      const saved = tiles().find(t => t.dataset.segment === 'saved').textContent
+      const dest = STATE.assets.find(a => a.id === 1).name
+      if (!saved.includes(dest)) throw new Error(`strip: the savings tile does not name ${dest}`)
+
+      // NO PAY DAY IS CLAIMED HERE, and that is the assertion rather than a gap
+      // in it. This window holds the payslip AND the broker's weekly
+      // distributions — two arrivals on two different days — so "lands on the
+      // 25th" would be dating a figure only part of which lands then. The broker
+      // is named instead: it paid, and it has no income source to put a name in
+      // the list, so without its own clause the employer would stand over its
+      // money.
+      if (!income.includes('distributions from the broker')) {
+        throw new Error(`strip: a month part-paid by the broker does not say so — "${income}"`)
+      }
+      if (/lands on the/.test(income)) {
+        throw new Error(`strip: a pay day was dated over a figure two streams paid — "${income}"`)
+      }
+      console.log('  strip      two streams: the broker is named and no single pay day is claimed')
+    }
+
+    // ── the same window with the distributions taken out, so ONE stream paid it
+    // and the clause is owed. The pay day is a fact about the SOURCE: it must be
+    // the source's own 25th and never the payslip's date, which is deliberately
+    // the 10th here so the two cannot be confused for each other.
+    STATE.transactions = txns0.filter(t => t.side !== 'DIV')
+    await act(async () => { await ctl.reload() })
+    await drillTo(PY, PM)
+    {
+      const income = tiles().find(t => t.dataset.segment === 'income').textContent
+      if (!income.includes(`lands on the ${ordinal(source.pay_day)}`)) {
+        throw new Error(`strip: one stream and the tile still drops its pay day — "${income}"`)
+      }
+      if (income.includes(`lands on the ${ordinal(10)}`)) {
+        throw new Error('strip: the pay day came off the payslip rather than off the source')
+      }
+      if (income.includes('distributions from the broker')) {
+        throw new Error('strip: the broker is named in a month it paid nothing')
+      }
+      console.log(
+        `  strip      one stream: the tile carries ${source.name}'s own pay day, the ${ordinal(source.pay_day)}`,
+      )
+    }
+    STATE.transactions = txns0
+    await act(async () => { await ctl.reload() })
+
+    // Which tile is lit, on which screen — read on the month every screen is
+    // pinned to, which is asserted alongside so that switching tabs can never be
+    // switching months at the same time. `saved` navigates to the overview and
+    // must not light there; `stayed` navigates to Expenses and must not light
+    // anywhere at all.
+    // CARDS AND LOANS LIGHT `commitments`, and that is the fix for a note that
+    // was promising them a segment they did not have. A card's minimum and a
+    // loan's instalment are both inside `committedRM` — one commitmentRows()
+    // call derives all three screens — so those two ARE that segment, itemised
+    // by kind. Overview is the one Money screen with nothing lit, because it is
+    // the screen that shows all five.
+    for (const [id, lit] of [['income', 'income'], ['commitments', 'commitments'],
+      ['expenses', 'expenses'], ['overview', null], ['cards', 'commitments'],
+      ['loans', 'commitments']]) {
+      await tick(() => ctl.setTab(id))
+      if (named() !== monthLabel(NY, NM)) {
+        throw new Error(`strip: ${id} says ${named()} where every screen but a drilled Expenses is on ${monthLabel(NY, NM)}`)
+      }
+      const on = tiles().filter(t => t.dataset.here === 'true').map(t => t.dataset.segment)
+      if (lit ? on.length !== 1 || on[0] !== lit : on.length) {
+        throw new Error(`strip: on ${id} expected ${lit || 'no'} tile lit, got [${on}]`)
+      }
+      if (lit && !strip().querySelector(`[data-segment="${lit}"]`).className.includes('border-primary')) {
+        throw new Error(`strip: the lit tile on ${id} does not carry the primary border`)
+      }
+      const stayed = strip().querySelector('[data-segment="stayed"]')
+      if (stayed.dataset.here === 'true' || stayed.className.includes('border-primary')) {
+        throw new Error(`strip: "What stayed" is lit on ${id}, and it must never be`)
+      }
+    }
+    console.log('  strip      the active screen’s own segment is lit; "What stayed" never is')
+
+    // ── THE WINDOW, ON EVERY SCREEN THE STRIP IS ON. The header names a calendar
+    // month; every figure under it is measured over the span two wallet readings
+    // bracket, and spendingFor() opens that span at the last reading on or BEFORE
+    // the month started — so it routinely begins in the month before and the two
+    // are different spans wearing one label. Overview has always printed the
+    // dates beside its own copy of these figures; since the strip became the only
+    // month statement on Income, Commitments, Credit cards and Loans, it has to
+    // carry them too. Asserted against spendingFor()'s own `from`/`to`, so a
+    // window line that drifted from the window it describes fails here.
+    {
+      const win = () => strip().querySelector('[data-slot="month-window"]')?.textContent || ''
+      const here = overviewRows({ ...STATE }, NY, NM)
+      if (here.reason) throw new Error(`strip: the current month must measure, got ${here.reason}`)
+      const want = `Window ${dfmt(here.spend.from)} to ${dfmt(here.spend.to)} · ${here.spend.days} days`
+      for (const id of MONEY) {
+        await tick(() => ctl.setTab(id))
+        if (win() !== want) {
+          throw new Error(`strip: ${id} states the window as "${win()}", not "${want}"`)
+        }
+        // And the month it is labelled with is NOT that window, on this fixture —
+        // which is what makes the line worth printing rather than a restatement.
+        if (here.spend.from.slice(0, 7) === keyOf(NY, NM)) {
+          throw new Error('strip: the fixture no longer opens its window in the month before, so this proves nothing')
+        }
+      }
+      console.log(`  strip      all ${MONEY.length} Money screens state the window their figures were measured over`)
+    }
+
+    // ── DRILLED, and the two things that are only true then: the note stops
+    // promising the other five pages this month, and the way back exists.
+    // expenseHistory() re-anchors on the month picked — the selected month is
+    // always the LAST bar — so after a drill there is no bar for today and the
+    // chart alone cannot undo itself.
+    {
+      await drillTo(PY, PM)
+      const note = strip().textContent
+      if (note.includes('every page shows its own segment of this')) {
+        throw new Error('strip: a drilled Expenses still claims every page is on its month')
+      }
+      if (!note.includes(`this screen only — the other five are on ${monthLabel(NY, NM)}`)) {
+        throw new Error(`strip: a drilled Expenses does not say where the other five are — "${note}"`)
+      }
+      if ([...pane().querySelectorAll('button[data-month]')].some(b => b.dataset.month === keyOf(NY, NM))) {
+        throw new Error('strip: the chart still holds a bar for this month, so the way back needs no button')
+      }
+      const back = [...pane().querySelectorAll('button')].find(
+        b => b.textContent.trim() === `Back to ${monthLabel(NY, NM)}`)
+      if (!back) throw new Error('expenses: drilled into the past with no way back to the month that is happening')
+      await tick(() => back.click())
+      if (named() !== monthLabel(NY, NM)) {
+        throw new Error(`expenses: the way back landed on ${named()} rather than ${monthLabel(NY, NM)}`)
+      }
+      // And it is gone again, because it is the return path for a drill and not
+      // a month control: nothing on a Money screen showing today can move it.
+      if ([...pane().querySelectorAll('button')].some(b => b.textContent.trim().startsWith('Back to '))) {
+        throw new Error('expenses: the way back is still offered on the month that is happening')
+      }
+      console.log(`  strip      a drilled Expenses says so, and offers the one way back to ${monthLabel(NY, NM)}`)
+    }
+
+    // ── A WALLET THAT ENDED WHERE IT STARTED neither rose nor fell, and two
+    // surfaces on one screen used to say both: the strip called RM 0.00 a rise
+    // (`rm < 0` is false at zero) over a "+0.0%", while overviewRows() called the
+    // same zero "Plus what the wallet gave up · the balances fell" (`>= 0` is
+    // true at zero). One figure, one card apart, opposite directions — and RM
+    // 0.00 gives a reader nothing else to check the words against.
+    {
+      STATE.assetEntries = [
+        reading(993, ago(1), 4050),
+        reading(991, pd(24), 5000),
+        reading(990, pd(2), 5000),
+        ...entries0,
+      ]
+      await act(async () => { await ctl.reload() })
+      const flat = overviewRows({ ...STATE }, PY, PM)
+      if (flat.spend.walletDeltaRM !== 0) {
+        throw new Error(`strip: the flat fixture moved by ${flat.spend.walletDeltaRM}, so this proves nothing`)
+      }
+      await drillTo(PY, PM)
+      const sub = tiles().find(t => t.dataset.segment === 'stayed')
+        .querySelector('[data-slot="segment-share"]').textContent
+      if (/rose|fell/.test(sub)) {
+        throw new Error(`strip: a wallet that did not move is described as moving — "${sub}"`)
+      }
+      const wallet0 = flat.rows.find(r => r.key === 'wallet')
+      if (/fell|rose|gave up|kept/.test(`${wallet0.label} ${wallet0.note}`)) {
+        throw new Error(`overview: a wallet that did not move is described as moving — "${wallet0.label}"`)
+      }
+      console.log(`  strip      a flat wallet is neither a rise nor a fall — "${sub}"`)
+    }
+
+    // ── A WINDOW THAT DECLARED LESS THAN NOTHING: deductions over gross on a
+    // corrected payslip, or a reversed distribution larger than the payslips
+    // beside it. `incomeRM ? …` treated that as a usable denominator, so every
+    // share came back NEGATIVE and the tile emitted `width: -100%` — a
+    // declaration the browser drops, leaving a FULL rail under a −100.0% label,
+    // which is the exact print-versus-draw divergence the one shared expression
+    // exists to prevent. Nothing arrived that anything can be a share OF, so it
+    // is the same null the zero case already returns: no percentage, no bar, on
+    // every tile at once. Calc-level, because no fixture the app renders can
+    // reach it and the guard is in the derivation.
+    {
+      const { monthSegments } = await server.ssrLoadModule('/src/lib/calc.js')
+      const neg = JSON.parse(JSON.stringify({ ...STATE }))
+      neg.assetEntries = [reading(991, pd(24), 4000), reading(990, pd(2), 5000)]
+      neg.incomeEvents = [{ ...pay, gross: 0, other_deducted: 500 }]
+      neg.transactions = txns0.filter(t => t.side !== 'DIV')
+      const seg = monthSegments(neg, PY, PM)
+      if (!(seg.incomeRM < 0)) {
+        throw new Error(`strip: the negative fixture declared ${seg.incomeRM}, so this proves nothing`)
+      }
+      const drawn = seg.segments.filter(x => x.share != null)
+      if (drawn.length) {
+        throw new Error(`strip: shares taken of a negative denominator — ${drawn.map(x => `${x.key}=${x.share}`)}`)
+      }
+      console.log('  strip      a window that declared less than nothing prints no share and draws no bar')
+    }
+
+    STATE.assetEntries = [
+      reading(993, ago(1), 4050),
+      reading(991, pd(24), 4200),
+      { id: 992, asset_id: 1, slug: 'asb', type: 'DEPOSIT', date: pd(12), amount: 500, note: '',
+        source: 'manual', ext_id: null },
+      reading(990, pd(2), 5000),
+      ...entries0,
+    ]
+    await act(async () => { await ctl.reload() })
+
+    // A tile is a way in, not a decoration.
+    await tick(() => ctl.setTab('overview'))
+    await tick(() => strip().querySelector('[data-segment="commitments"]').click())
+    if (ctl.tab !== 'commitments') {
+      throw new Error(`strip: clicking the committed tile left us on ${ctl.tab}`)
+    }
+    console.log('  strip      a tile navigates to the screen its segment belongs to')
+
+    STATE.assets = assets0
+    STATE.assetEntries = entries0
+    STATE.incomeEvents = events0
+    STATE.transactions = txns0
+    await act(async () => { await ctl.reload() })
     await tick(() => ctl.setTab('dashboard'))
   }
 
