@@ -274,16 +274,26 @@ each is cheap to decide and expensive to get wrong.
 
 Depends on Phase 1's payslips. The internal order is the audit's own, not applied on top.
 
-- [ ] **`employerCostOf()` has zero callers** — show it or delete it. It is written, correct, and
-      referenced nowhere in the repo. The canvas puts employer cost third of three on the Day job
-      card; the function's own comment argues it is *"a fact about the employer, not about your
-      money"*, which is a defensible reason not to lead with it. Either way it should not sit dead.
-      `income-canvas-gaps.md` §3.
+- [x] **`employerCostOf()` has a caller — done 7 Sep 2026**, on
+      `income-employer-cost-and-next-date` (off `main`). **Shown, not deleted.** It sits last in
+      the meta line and never beside net, because what it cost to employ you is a fact about the
+      employer and the money never passed through your hands — the function's own comment is
+      right, and the answer was placement rather than omission. Rendered only where there IS a
+      top-up, so a freelance or rental source carries no "cost" that merely repeats the gross
+      printed next to it.
 
-- [ ] **"Next date" on the income row.** Specified in `commitments-and-income-plan.md` §7.1 as
-      *"name, cadence, next date, last amount"*, never built — the row prints `Monthly · day 25`
-      rather than a resolved date. `dueDayIn` already exists and is the same clamp the calendar
-      uses. Small.
+- [x] **"Next date" on the income row — done 7 Sep 2026**, same branch.
+      `nextPayDate()` walks `dueDayIn`'s clamp forward rather than re-deriving it, so day 31 lands
+      on the 30th in September and `-1` resolves to whatever the last day is. **Today counts as
+      next** — a row that rolled forward the moment the date matched would say the salary was four
+      weeks away on the morning it landed. An IRREGULAR source resolves to nothing rather than
+      promising a date its cadence cannot keep.
+      The rule and the resolved date both stay on the row: they are different facts in a short
+      month, and "last working day" is a rule with no date in it at all, which is the case that
+      wanted this most.
+      Six clamp cases are asserted directly rather than through a row, because the ones that
+      matter are the ones a fixture will never happen to hold — a 31st in a 30-day month, the pay
+      day falling on today, and a December that must roll the year rather than only the month.
 
 - [ ] **Per-deduction rule notes.** Every deduction carrying the rule that produced it.
       **Build these from the verified text, never from the canvas** — two of the canvas's four
