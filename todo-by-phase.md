@@ -233,11 +233,23 @@ here rather than in a later phase because the branch it lived on would rot as `A
 No code. Each of these has downstream work that should not be written until it is decided, and
 each is cheap to decide and expensive to get wrong.
 
-- [ ] **Where a daily FX rate comes from.** **(decision)**
-      Phase 6b shipped the storage half — `income_events.fx_rate` / `fx_date` exist and `eventToRM`
-      converts. Sourcing is the open half, and the deferral is deliberate: *"a wrong rate kept
-      forever is worse than one global rate that is visibly approximate."*
-      `money-redesign-plan.md` §4(c), §6.
+**A recommendation for each is now written up in [`open-decisions.md`](open-decisions.md)** — what
+is at stake, what the code actually does, and a position with its reasoning. **Two of the four
+turned out not to be open at all.** Nothing below needs a migration, and only the second needs
+code.
+
+- [x] **Where a daily FX rate comes from — NOT OPEN. Answered and shipped.**
+      The source is **Bank Negara** (`api.bnm.gov.my/public/exchange-rate`), free and
+      unauthenticated, and the same source a Malaysian tax filing uses — so the app's figure and
+      the owner's return agree by construction. Middle rate, not buying or selling. Weekends walk
+      back up to four days with `fx_date` recording which day the rate actually came from. It
+      **never guesses**: unreachable or unpublished returns null and the screen falls back to the
+      global rate labelled approximate, which is precisely the failure mode §6 feared.
+      **Wired, not merely written** — `income.service.js:180` calls it and the live `fx_rates`
+      table holds cached rows. That check matters here, because this repo has already produced one
+      function that was correct and had no callers.
+      **Action: delete the paragraph from `money-redesign-plan.md` §6**, which otherwise sends the
+      next reader hunting for a rate source that is already answering.
 
 - [ ] **Which basis is the headline** — run-rate, or falling-this-month. **(decision)**
       The canvas needs both somewhere and has room for one in the sidebar. Commitments already
