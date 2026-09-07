@@ -285,7 +285,8 @@ export function VantageProvider({ children }) {
    *
    * WHY THE CLIENT WRITES THIS. An asset balance is a running sum the server
    * could manage in SQL, but a liability is an amortisation schedule derived
-   * from five fields, and calc.js is the single source of truth for that math.
+   * from the instalment, the term and the start date, and calc.js is the single
+   * source of truth for that math.
    * A second implementation on the server would be a second answer to "what do
    * you owe", and the two would drift.
    *

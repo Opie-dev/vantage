@@ -1260,6 +1260,54 @@ try {
     if (wal.rm <= 0) throw new Error('overview: a wallet that fell must add to what the month cost')
     if (!/gave up/.test(wal.label)) throw new Error(`overview: mislabelled — "${wal.label}"`)
     console.log(`  overview   5 rows closing on ${total.rm.toFixed(2)}, wallet ${wal.label.toLowerCase()}`)
+
+    /* The same copy, actually RENDERED — and in Flow, which nothing ever drew.
+     *
+     * overviewMode() reads a stored preference and the fixture carries none, so
+     * every run above drew the Waterfall and called Overview covered. That is the
+     * blind spot 7 already names, one layer up: the column was asserted, the
+     * second view OF the column was not. It cost a heading that said the opposite
+     * of the row printed underneath it, and no assertion over overviewRows()
+     * could have caught that — those rows were right the whole time. */
+    const { fmt } = await server.ssrLoadModule('/src/lib/format.js')
+    const flowState = { ...w, preferences: { overviewMode: 'flow' } }
+    const stub = globalThis.fetch
+    globalThis.fetch = async path => ({
+      ok: true, status: 200, statusText: 'OK',
+      json: async () => (String(path).includes('/api/state') ? { ...flowState } : { ok: true }),
+    })
+    try {
+      await act(async () => { await ctl.reload() })
+      await tick(() => ctl.setTab('overview'))
+      const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+
+      for (const n of ['Arrives', 'Promised, and spent']) {
+        if (!pane.includes(n)) throw new Error(`overview (flow): the "${n}" column did not draw`)
+      }
+      // THE THIRD COLUMN IS THE RESIDUAL — what living took, money already gone.
+      // A heading claiming it is still on hand contradicts the row beneath it,
+      // and that row names itself, so the two are readable against each other.
+      if (pane.includes('Still here')) {
+        throw new Error('overview (flow): the residual is headed as money still held')
+      }
+      if (!pane.includes('What that leaves')) {
+        throw new Error('overview (flow): the residual column lost its heading')
+      }
+      // And it is the TOTAL row under there, both halves of it — so a column
+      // wired to the wrong row fails here rather than looking plausible with a
+      // right-shaped figure.
+      if (!pane.includes(total.label)) {
+        throw new Error(`overview (flow): the residual column does not name "${total.label}"`)
+      }
+      if (!pane.includes(fmt(total.rm, 'MYR'))) {
+        throw new Error(`overview (flow): expected the residual ${fmt(total.rm, 'MYR')}`)
+      }
+      console.log(`  overview   flow draws 3 columns, the third "${total.label}" at ${fmt(total.rm, 'MYR')}`)
+    } finally {
+      globalThis.fetch = stub
+      await act(async () => { await ctl.reload() })
+      await tick(() => ctl.setTab('dashboard'))
+    }
   }
 
   /* ── a payment converted at the rate it landed at ────────────────────────── */

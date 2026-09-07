@@ -2607,8 +2607,10 @@ export function totalOwned(S) {
  * NOTHING HERE READS THE BROKER TABLES either. A car instalment is not a cash
  * movement and never reaches cashBal(); a rent payment is not a WITHDRAW.
  *
- * A loan's whole future follows from five fields — principal, rate, rate type,
- * term and start — so the schedule is DERIVED on every render and never stored.
+ * A loan's whole future follows from three fields — instalment, term and start
+ * — so the schedule is DERIVED on every render and never stored. A rate and its
+ * type are optional and buy the two answers those three cannot give: how each
+ * instalment splits, and what a flat quote really costs.
  * `commitmentPayments` carries only what a schedule cannot know: an overpayment,
  * a missed month, a settlement. An empty list means everything went to plan.
  */

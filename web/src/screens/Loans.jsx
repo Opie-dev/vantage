@@ -1,11 +1,19 @@
 /**
- * Loans — four fields and today's date give the whole schedule.
+ * Loans — three fields and today's date give the whole schedule.
  *
- * NOTHING HERE IS STORED. The instalment, what has been paid, what is left and
- * how this month's payment splits are all derived from principal, rate, rate
- * type, term and start date. Only deviations are recorded — an overpayment, a
- * missed month — because a stored schedule is a second copy of arithmetic that
- * can drift from the first.
+ * NOTHING HERE IS STORED. What has been paid, what is left and what is still
+ * owed are derived from the instalment, the term and the date it started, read
+ * against today. Only deviations are recorded — an overpayment, a missed month
+ * — because a stored schedule is a second copy of arithmetic that can drift
+ * from the first.
+ *
+ * THE RATE IS OPTIONAL, AND IT BUYS THE SPLIT. Given a rate and what it is
+ * charged on, those same fields also yield this month's interest/principal
+ * split and the effective rate a flat quote hides; left out, loanSchedule()
+ * takes its unrated path and what is owed is simply the instalments still to
+ * run. The form asks in that order deliberately — most people know what they
+ * pay and how long is left, far fewer know the rate, and fewer still whether
+ * it is charged flat or reducing.
  *
  * A LOAN PAYMENT IS NOT AN EXPENSE, and this screen is where that is easiest to
  * get wrong. Most of an instalment moves cash into equity; only the interest is
@@ -53,9 +61,11 @@ export default function Loans() {
           <CardContent className="grid gap-3 px-4 py-6">
             <span className="eyebrow">No loans</span>
             <p className="text-muted-foreground m-0 max-w-[62ch] text-[12.5px] leading-relaxed text-pretty">
-              A mortgage or a hire purchase. Five fields and no schedule: the amount financed,
-              the rate as the agreement quotes it, what that rate is computed on, the term, and
-              the first payment. Everything else on this screen is worked out from those.
+              A mortgage or a hire purchase. Three fields and no schedule: what leaves your
+              account each month, the term, and how many months are left. Everything on this
+              screen is worked out from those and today&rsquo;s date. Add the rate &mdash; and
+              what it is charged on &mdash; and each instalment splits into interest and
+              principal too.
             </p>
             <div>
               <Button size="sm" onClick={() => openCommitment({ kind: 'LOAN' })}>

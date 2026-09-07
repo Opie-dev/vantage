@@ -185,8 +185,12 @@ function Flow({ view }) {
             </div>
           ))}
         </div>
+        {/* NOT A BALANCE, which is the trap this column fell into. The residual
+            the other two columns leave is what living TOOK — money already gone,
+            not money still to hand — so "Still here" stated the opposite of the
+            row printed directly underneath it. */}
         <div className="grid content-start gap-1.5">
-          <span className="eyebrow">Still here</span>
+          <span className="eyebrow">What that leaves</span>
           {left ? (
             <div>
               <div className="num text-[14px] font-semibold">{fmt(left.rm, 'MYR')}</div>
