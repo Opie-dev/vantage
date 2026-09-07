@@ -365,6 +365,17 @@ it. Typed charges are a genuinely separate blocker, and not on a table.
       that branch. `npm run db:status` from another branch will show a row it has no file for
       until the branch lands.
 
+- [x] **The transactions panel — done 7 Sep 2026**, on `cards-transactions-panel` (stacked on
+      the ingest branch, which creates the table). The sheet now reads what the import has been
+      storing. **"Reads as" is not one enum** — a booked row reads as its category, an unbooked
+      one reads as the reason it was not booked, which is what the question "what happened to
+      this line" actually has: one column, two kinds of answer.
+      The count says **kept OF carried**, because a panel showing only what it booked would be
+      silently editing the statement it claims to reproduce. Both dates are shown, posted faint
+      and second — the gap between them is the float — and the pre-conversion figure sits under
+      its row, since a ringgit amount alone cannot be checked against what the merchant charged.
+      Covered by a nine-needle smoke assertion over four dispositions.
+
 - [ ] **Typed statement charges — still blocked, but the reason is now known rather than
       guessed.** **(large · migration)**
       A real statement was read on 7 Sep 2026 (an August cycle), and it changes the shape of this
