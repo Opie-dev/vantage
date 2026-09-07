@@ -2338,6 +2338,25 @@ try {
     console.log('  rail       Ctrl-B folds and unfolds it, and is ignored while typing')
   }
 
+  // The rail reads as three runs, in order.
+  //
+  // Asserted on the headings rather than on TABS, and on their ORDER rather than
+  // their presence, because the failure here is silent: a heading is what starts
+  // a run, so an entry that loses its group does not disappear — it joins the run
+  // above and reads as something it is not. "Portfolio" also names a screen
+  // inside its own run, so a substring check over the rail would pass with every
+  // heading gone.
+  {
+    const runs = [...document.querySelectorAll('aside .eyebrow')]
+      .map(e => e.textContent.trim())
+      .filter(t => t !== 'personal finance')
+    const want = ['Portfolio', 'Planning', 'Money']
+    if (runs.join('|') !== want.join('|')) {
+      throw new Error(`rail: runs are [${runs.join(', ') || 'unlabelled'}], expected [${want.join(', ')}]`)
+    }
+    console.log('  rail       three runs, in order: ' + runs.join(', '))
+  }
+
   // Settings hangs at the foot rather than trailing the run of screens, because
   // it is the drawer under them and not the last place you go to read something.
   {

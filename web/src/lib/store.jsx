@@ -16,7 +16,18 @@ import { setPrivate as setFormatPrivate } from './format'
 /**
  * The rail.
  *
- * `group` puts an entry under a heading. Money is six entries rather than one
+ * `group` puts an entry under a heading, and every entry now carries one, so the
+ * rail reads as three runs: what you own, what you are planning, what moves each
+ * month. Leaving a run unlabelled is not the cheap option it looks like — the
+ * heading is what starts a run, so an unlabelled entry after a labelled one
+ * joins the run above rather than beginning its own, and Calendar would have
+ * read as part of Portfolio.
+ *
+ * The heading over the first run repeats the name of a screen inside it. That is
+ * the honest description of both, and renaming either to avoid the echo would
+ * cost more than the echo does.
+ *
+ * Money is six entries rather than one
  * because the four sections it used to hold each carry a screen's worth of
  * depth — a card's cycle, float, plans and statements; a loan's split
  * instalment and projected balance — and 654ad24's consolidation was reversed
@@ -36,12 +47,12 @@ import { setPrivate as setFormatPrivate } from './format'
  * would not.
  */
 export const TABS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'portfolio', label: 'Portfolio' },
-  { id: 'history', label: 'History' },
-  { id: 'calendar', label: 'Calendar' },
-  { id: 'goals', label: 'Goals' },
-  { id: 'assets', label: 'Assets' },
+  { id: 'dashboard', label: 'Dashboard', group: 'Portfolio' },
+  { id: 'portfolio', label: 'Portfolio', group: 'Portfolio' },
+  { id: 'history', label: 'History', group: 'Portfolio' },
+  { id: 'calendar', label: 'Calendar', group: 'Planning' },
+  { id: 'goals', label: 'Goals', group: 'Planning' },
+  { id: 'assets', label: 'Assets', group: 'Planning' },
   { id: 'overview', label: 'Overview', group: 'Money' },
   { id: 'income', label: 'Income', group: 'Money' },
   { id: 'commitments', label: 'Commitments', group: 'Money' },
