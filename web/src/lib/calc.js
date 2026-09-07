@@ -3561,6 +3561,12 @@ export function incomeRows(S, { includeEnded = false, nowISO = isoOf(Date.now())
         kind: s.kind,
         cur: s.currency,
         variable,
+        // The pay day resolved to a date, which is the thing a reader can act
+        // on — "day 31" and "30 Sep" are different facts in a short month, and
+        // the short month is exactly when they look. An IRREGULAR source has no
+        // day to resolve, and inventing one would promise a date its own cadence
+        // says it cannot keep.
+        nextDate: variable ? null : nextPayDate(s.pay_day, nowISO),
         monthly,
         // Dated where the events carry a rate. An irregular source averages
         // several events, each converted at its own day, so the mean is of what
@@ -3950,6 +3956,34 @@ function dueDayIn(year, monthIndex, day) {
   // modelled, so it lands on the last calendar day.
   if (day === -1) return last
   return Math.min(day, last)
+}
+
+/**
+ * The next occurrence of a monthly pay day, on or after `nowISO`.
+ *
+ * `dueDayIn` answers "which day of THIS month" and this walks it forward, so the
+ * clamp is honoured rather than re-derived: day 31 lands on the 30th in
+ * September and on the 28th in February, and -1 resolves to whatever the last
+ * day happens to be.
+ *
+ * TODAY COUNTS AS NEXT. Money arriving this afternoon has not arrived late, and
+ * a row that skipped to next month the moment the date matched would tell you
+ * your salary was four weeks away on the morning it landed.
+ */
+export function nextPayDate(payDay, nowISO = isoOf(Date.now())) {
+  if (payDay == null) return null
+  const y = Number(nowISO.slice(0, 4))
+  const m = Number(nowISO.slice(5, 7)) - 1
+  // This month, then next. The second pass cannot fail: a pay day in the
+  // following month is always after today, whatever the clamp did to it.
+  for (const off of [0, 1]) {
+    const yy = y + Math.floor((m + off) / 12)
+    const mm = (m + off) % 12
+    const day = dueDayIn(yy, mm, payDay)
+    const iso = `${yy}-${String(mm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    if (iso >= nowISO) return iso
+  }
+  return null
 }
 
 /**
