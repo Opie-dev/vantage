@@ -3106,6 +3106,48 @@ try {
     console.log('  cycle gap  wraps the month end, and refuses without a statement day')
   }
 
+  // PAYING A CARD, ALL THE WAY THROUGH THE SAVE.
+  //
+  // Every side-panel form above is opened and closed; none of them was ever
+  // submitted, and that is exactly the gap this covers. CardPaymentDialog
+  // destructures addCommitmentPayment from useVantage(), the store never
+  // returned it, and the handler was therefore undefined — so "Pay this card"
+  // threw on the click for every amount and every option, and opening the sheet
+  // proved nothing about whether it worked.
+  {
+    await tick(() => ctl.openCardPayment({ commitment_id: 3 }))
+    // A side panel, not a centred dialog — the forms test above asserts that
+    // shape for every one of them.
+    const dialog = () => document.querySelector('[data-slot="sheet-content"]')
+    if (!dialog()) throw new Error('pay card: the sheet did not open')
+
+    // "Some other amount", then a figure that is none of the offered ones.
+    const other = [...dialog().querySelectorAll('button')]
+      .find(b => b.textContent.includes('Some other amount'))
+    if (!other) throw new Error('pay card: no custom-amount choice')
+    await tick(() => other.click())
+
+    const box = dialog().querySelector('input[type="number"]')
+    if (!box) throw new Error('pay card: choosing a custom amount offered no field')
+    const setValue = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
+    await tick(() => {
+      setValue.call(box, '1928')
+      box.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    const submit = [...dialog().querySelectorAll('button')]
+      .find(b => /record the payment/i.test(b.textContent))
+    if (!submit) throw new Error('pay card: no submit button')
+    if (submit.disabled) throw new Error('pay card: the submit stayed disabled with an amount typed')
+    await tick(() => submit.click())
+    await tick(() => {})
+
+    if (document.querySelector('[data-slot="sheet-content"]')) {
+      throw new Error('pay card: the sheet stayed open after recording — the save threw')
+    }
+    console.log('  pay card   a custom amount records and the sheet closes')
+  }
+
   const real = errors.filter(e =>
     !/not wrapped in act|useLayoutEffect does nothing on the server|Window's scrollTo/.test(e))
   if (real.length) throw new Error(`console.error during render:\n${real.join('\n')}`)
