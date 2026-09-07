@@ -2307,6 +2307,68 @@ try {
   }
   await tick(() => ctl.closeModal())
 
+  // Ctrl-B folds the rail, folds it back, and is ignored while you are typing.
+  //
+  // Asserted on the aside's own width class rather than on the store, because
+  // the failure this guards against is the shortcut firing and nothing moving:
+  // a handler still bound to a toggle that no longer reaches the element passes
+  // every assertion written against state.
+  {
+    const railWide = () => document.querySelector('aside').className.includes('w-[212px]')
+    const press = el =>
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true }))
+
+    const open = railWide()
+    if (!open) throw new Error('rail: the fixture starts folded, so folding proves nothing')
+    await tick(() => press(window))
+    if (railWide()) throw new Error('rail: Ctrl-B did not fold the rail')
+
+    // The same pair means bold in a text field, so a shortcut that fires there
+    // folds the navigation out from under a half-typed sentence. Dispatched ON
+    // an input, because the guard reads the event's target and nothing else —
+    // firing at the window would pass while the guard did no work at all.
+    const probe = document.createElement('input')
+    document.body.appendChild(probe)
+    await tick(() => press(probe))
+    if (railWide()) throw new Error('rail: Ctrl-B inside a text field folded the rail')
+    probe.remove()
+
+    await tick(() => press(window))
+    if (!railWide()) throw new Error('rail: Ctrl-B folds but does not unfold')
+    console.log('  rail       Ctrl-B folds and unfolds it, and is ignored while typing')
+  }
+
+  // The rail reads as three runs, in order.
+  //
+  // Asserted on the headings rather than on TABS, and on their ORDER rather than
+  // their presence, because the failure here is silent: a heading is what starts
+  // a run, so an entry that loses its group does not disappear — it joins the run
+  // above and reads as something it is not. "Portfolio" also names a screen
+  // inside its own run, so a substring check over the rail would pass with every
+  // heading gone.
+  {
+    const runs = [...document.querySelectorAll('aside .eyebrow')]
+      .map(e => e.textContent.trim())
+      .filter(t => t !== 'personal finance')
+    const want = ['Portfolio', 'Planning', 'Money']
+    if (runs.join('|') !== want.join('|')) {
+      throw new Error(`rail: runs are [${runs.join(', ') || 'unlabelled'}], expected [${want.join(', ')}]`)
+    }
+    console.log('  rail       three runs, in order: ' + runs.join(', '))
+  }
+
+  // Settings hangs at the foot rather than trailing the run of screens, because
+  // it is the drawer under them and not the last place you go to read something.
+  {
+    const settings = [...document.querySelectorAll('aside button')]
+      .find(b => b.textContent.includes('Settings'))
+    if (!settings) throw new Error('rail: no Settings entry to check')
+    if (!settings.className.includes('mt-auto')) {
+      throw new Error('rail: Settings is not pinned to the foot, so it reads as the last screen')
+    }
+    console.log('  rail       Settings is pinned to the foot')
+  }
+
   const real = errors.filter(e =>
     !/not wrapped in act|useLayoutEffect does nothing on the server|Window's scrollTo/.test(e))
   if (real.length) throw new Error(`console.error during render:\n${real.join('\n')}`)

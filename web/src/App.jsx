@@ -170,6 +170,11 @@ const NAV_ICON = {
   settings: SettingsIcon,
 }
 
+/** The shortcut's name, not its behaviour — the handler below takes either
+ *  modifier regardless, so a wrong guess here costs a wrong hint and nothing
+ *  more. */
+const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘' : 'Ctrl'
+
 /**
  * Light / dark, one click.
  *
@@ -307,6 +312,10 @@ function SideNav() {
               className={cn(
                 'h-9 flex-none gap-2.5 rounded-md text-[13px] font-semibold data-[state=active]:bg-muted data-[state=active]:after:bg-primary',
                 wide ? 'justify-start px-3' : 'justify-center px-0',
+                // Pushed to the bottom of the column, but only when there is
+                // room to push into: the rail scrolls, and in a scrolled list
+                // `mt-auto` collapses to nothing rather than stranding the row.
+                t.foot && 'mt-auto',
               )}
             >
               <Icon aria-hidden="true" />
@@ -346,6 +355,27 @@ function TopBar() {
   const current = TABS.find(t => t.id === tab)
   const wide = !railCollapsed
 
+  // ⌘B / Ctrl-B, the shortcut every editor with a sidebar has already trained
+  // into the hands reaching for this one. It lives beside the button rather
+  // than in the rail, for the same reason the button does: this is the control
+  // that trades the labels away, so it belongs where that trade is read.
+  //
+  // SKIPPED WHILE TYPING. A field owns its own keystrokes, and this pair means
+  // bold in more than a few of them — folding the navigation instead of
+  // emboldening a word is the kind of surprise that gets a shortcut disabled.
+  useEffect(() => {
+    const onKey = e => {
+      if (e.key !== 'b' && e.key !== 'B') return
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return
+      const el = e.target
+      if (el?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el?.tagName || '')) return
+      e.preventDefault()
+      toggleRail()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [toggleRail])
+
   return (
     <header className="bg-background/85 sticky top-0 z-20 border-b backdrop-blur-md">
       <div className="flex h-[60px] w-full flex-wrap items-center gap-x-3 gap-y-2 px-[clamp(14px,2.4vw,28px)]">
@@ -367,6 +397,9 @@ function TopBar() {
           </TooltipTrigger>
           <TooltipContent side="bottom">
             {wide ? 'Collapse the sidebar' : 'Expand the sidebar'}
+            {/* The shortcut is discoverable only if it is written somewhere, and
+                the tooltip for the button it duplicates is that somewhere. */}
+            <span className="text-faint ml-1.5">{MOD_KEY}B</span>
           </TooltipContent>
         </Tooltip>
         <h1 className="text-[16px] font-semibold tracking-[-0.01em]">{current ? current.label : 'Vantage'}</h1>
