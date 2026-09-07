@@ -236,7 +236,8 @@ const STATE = {
       credit_limit: null, balance: null, balance_as_of: null, apr: null,
       min_payment_pct: 5, min_payment_floor: 50, amount: null, every_months: 1,
       active: true, ended_on: null, sort_order: 2 },
-    { id: 3, kind: 'REVOLVING', name: 'CIMB Visa', lender: '', currency: 'MYR', due_day: 18, note: '',
+    { id: 3, kind: 'REVOLVING', name: 'CIMB Visa', lender: '', currency: 'MYR', due_day: 18,
+      note: 'myimpact Visa Signature · PETRONAS Gold',
       principal: null, rate: null, rate_type: null, term_months: null, started_on: null, instalment: null,
       credit_limit: 15000, balance: 2340, balance_as_of: ago(4), apr: 18,
       card_count: 2,
@@ -2523,6 +2524,20 @@ try {
     await tick(() => ctl.setTab('cards'))
     const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
     if (!pane.includes('1 account')) throw new Error('cards: the account count is not on the screen')
+    // The account row, against the canvas: plastic and limits named apart, the
+    // bar read from both ends, and the individual cards where the owner named
+    // them. The card names ride the `note` column rather than a table, because
+    // a card carries no fact of its own beyond a name.
+    if (!pane.includes('2 cards, 1 limit')) {
+      throw new Error('cards: the row does not say two cards share one limit')
+    }
+    if (!/[0-9.]+% used/.test(pane)) throw new Error('cards: the bar has no utilisation reading')
+    // And the note stays OUT of the terms line. `note` is a free-text paragraph
+    // on the live account, not a card-name list, so folding it in turns a spec
+    // line into a sentence.
+    if (/myimpact Visa Signature.*closes/.test(pane)) {
+      throw new Error('cards: the free-text note was folded into the terms line')
+    }
     if (!pane.includes('and 2 cards')) {
       throw new Error('cards: two cards on one limit are not said, so plastic still reads as accounts')
     }
