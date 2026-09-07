@@ -1,7 +1,7 @@
 /**
  * One card account, opened in full.
  *
- * A SHEET AND NOT A SCREEN, EVEN NOW. Credit cards is a rail entry, but that
+ * A PANEL BEHIND A TAB, NOT A SHEET. Credit cards is a rail entry, and that
  * entry lists the accounts; this is one of them opened over the list, so the
  * list stays behind it and a second account is one dismissal away rather than a
  * navigation. What the rail entry bought was room for the list and its totals —
@@ -18,13 +18,6 @@ import { PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
 import { addMonthsISO, billFor, cardFloat, commitmentRows, daysBetween } from '@/lib/calc'
 import {
   availabilityTone,
@@ -490,7 +483,7 @@ function Float({ row }) {
  * because the unbilled principal keeps blocking it until each month's share is
  * repaid.
  */
-export default function CardSheet({ row, open, onClose }) {
+export default function AccountPanel({ row }) {
   const {
     state,
     deleteCardStatement,
@@ -539,10 +532,10 @@ export default function CardSheet({ row, open, onClose }) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={v => (v ? null : onClose())}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-[560px]">
-        <SheetHeader>
-          <SheetTitle className="flex flex-wrap items-baseline gap-2">
+    <div className="grid gap-4">
+      <div className="grid gap-4">
+        <div className="grid gap-1">
+          <div className="flex flex-wrap items-baseline gap-2 text-[17px] font-semibold">
             {row.name}
             <StateBadge row={row} />
             {/* Neutral on purpose. How many cards share a limit is a fact about
@@ -555,15 +548,15 @@ export default function CardSheet({ row, open, onClose }) {
                 {c.card_count === 1 ? '1 card' : `${c.card_count} cards, 1 limit`}
               </Badge>
             ) : null}
-          </SheetTitle>
-          <SheetDescription>
+          </div>
+          <div className="text-muted-foreground text-[12.5px]">
             {/* The limit as a bank prints it, without sen — the row's terms line
                 and the canvas both read 'RM 15,000'. */}
             {limit ? `Limit ${symbol(row.cur)}${fq(limit)} · ` : ''}
             {c.apr}% if carried
             {row.cycle ? ` · statement ${ordinal(c.statement_day)}, due ${ordinal(c.due_day)}` : ''}
-          </SheetDescription>
-        </SheetHeader>
+          </div>
+        </div>
 
         <div className="grid gap-5 px-4 pb-6">
           <div>
@@ -856,7 +849,7 @@ export default function CardSheet({ row, open, onClose }) {
             ) : null}
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
   )
 }

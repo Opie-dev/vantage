@@ -1776,6 +1776,11 @@ try {
     await tick(() => ctl.setTab('cards'))
     const pane = () => document.querySelector('[data-slot="tabs-content"][data-state="active"]')
     const sheets = () => [...document.querySelectorAll('[data-slot="sheet-content"]')]
+    // The account's own page, rendered inline under the tab strip.
+    const panel = () => {
+      const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]')
+      return pane && pane.textContent.includes('Committed on this account') ? pane : null
+    }
     const rowsOf = () => [...pane().querySelectorAll('[role="button"][aria-label^="Open "]')]
     const revolving = STATE.commitments.filter(c => c.kind === 'REVOLVING' && c.active).length
     if (rowsOf().length !== revolving) {
@@ -1786,20 +1791,31 @@ try {
     if (!document.body.textContent.includes('Add an instalment plan')) {
       throw new Error('cards: the plus inside a row did not open the plan form')
     }
-    if (sheets().some(s => s.textContent.includes('Committed on this account'))) {
-      throw new Error('cards: the plus inside a row opened the account sheet as well')
+    if (panel()) {
+      throw new Error('cards: the plus inside a row switched to the account panel as well')
     }
     await tick(() => ctl.closeModal())
 
+    // AN ACCOUNT IS A TAB NOW, not a sheet over the list. Opening one replaces
+    // the all-cards summary in place rather than covering it, so the assertions
+    // read the screen itself — and a sheet appearing at all is the regression.
     const openSheet = async row => {
       await tick(() => row.click())
-      const sheet = sheets().find(s => s.textContent.includes('Committed on this account'))
-      if (!sheet) throw new Error(`cards: clicking ${row.getAttribute('aria-label')} opened no account sheet`)
-      return sheet
+      const p = panel()
+      if (!p) throw new Error(`cards: clicking ${row.getAttribute('aria-label')} opened no account panel`)
+      if (sheets().length) throw new Error('cards: an account still opens a sheet over the list')
+      return p
     }
     const closeSheet = async () => {
-      await tick(() => document.querySelector('[data-slot="sheet-content"] button[type="button"]')?.click())
-      if (sheets().length) throw new Error('cards: the account sheet did not close')
+      const all = [...document.querySelectorAll('[data-slot="tabs-trigger"]')]
+        .find(t => t.textContent.trim() === 'All cards')
+      if (!all) throw new Error('cards: no All cards tab to go back to')
+      // Radix switches a tab on MOUSEDOWN with button 0, not on click, so a bare
+      // .click() leaves the trigger inactive in jsdom and the panel stays open.
+      await tick(() =>
+        all.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })),
+      )
+      if (panel()) throw new Error('cards: the account panel did not close')
     }
     const expectSheet = (sheet, who, needles) => {
       for (const n of needles) {
@@ -1947,7 +1963,7 @@ try {
         throw new Error('cards: nothing due in 30 days is painted as a loss')
       }
     }
-    console.log('  cards      one row per account opens its sheet; the plus inside it does not; CIMB settles, then carries; plans edit from the sheet')
+    console.log('  cards      one row per account opens its panel; the plus inside it does not; CIMB settles, then carries; plans edit from the sheet')
   }
 
   // THE MONTH IS NOT SHARED, and that reversal is the rule now. Every Money
@@ -2528,6 +2544,15 @@ try {
     // bar read from both ends, and the individual cards where the owner named
     // them. The card names ride the `note` column rather than a table, because
     // a card carries no fact of its own beyond a name.
+    // The strip the canvas puts above everything: All cards, then one trigger
+    // per account under its SHORT label — "CIMB Visa", not the full account
+    // name — because the strip is a switcher and not a second list.
+    {
+      const labels = [...document.querySelectorAll('[data-slot="tabs-trigger"]')]
+        .map(t => t.textContent.trim())
+      if (!labels.includes('All cards')) throw new Error('cards: no All cards tab')
+      if (!labels.includes('CIMB Visa')) throw new Error('cards: no per-account tab')
+    }
     if (!pane.includes('2 cards, 1 limit')) {
       throw new Error('cards: the row does not say two cards share one limit')
     }
