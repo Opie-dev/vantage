@@ -251,26 +251,33 @@ code.
       **Action: delete the paragraph from `money-redesign-plan.md` §6**, which otherwise sends the
       next reader hunting for a rate source that is already answering.
 
-- [ ] **Which basis is the headline** — run-rate, or falling-this-month. **(decision)**
-      The canvas needs both somewhere and has room for one in the sidebar. Commitments already
-      shows the pair side by side with the RM 40.00 gap named and broken down; promoting that
-      treatment may be the entire answer. `money-redesign-plan.md` §6.
+- [ ] **Which basis is the headline — the question is answered, the placement is not.**
+      "Pick one" was already rejected in code, correctly: `Commitments.jsx` shows both under
+      **"TWO TOTALS, TWO QUESTIONS"**, and `overviewRows()` keeps the run rate *out* of the
+      measured column because mixing them once made it stop adding up by exactly the road tax.
+      **What is left is only the sidebar, which has room for one figure.**
+      Recommendation on the table (`open-decisions.md` §2): **the measured basis**, because it
+      closes against two wallet readings and can therefore be checked against a statement, while a
+      run rate can be checked against nothing and an average in a sidebar reads as a fact.
+      Deferred by the owner on 7 Sep — it is a visible change to the most-looked-at screen and
+      reversible by taste rather than right or wrong. Small when picked up: a placement change and
+      copy; both derivations exist.
 
-- [ ] **Rewards: build or refuse.** **(decision)**
-      A genuine contradiction between two documents in this repo. The canvas specifies a cashback
-      and points footer strip; `cards-plan.md:868` lists rewards under *"deliberately not built —
-      a screen that would quietly argue for spending. A different product."* The parser
-      **implements** the refusal, using `TreatsPoints` and `Mata Ganjaran` as stop markers to
-      discard the rewards page. Resolve the conflict before any column is written.
-      `cards-canvas-gaps.md` §3.
+- [x] **Rewards — decided 7 Sep 2026: the refusal stands.** Recorded in `cards-canvas-gaps.md` §3
+      so it is not raised as a gap again. Decided on the ground that **the refusal is argued and
+      the canvas is not** — `cards-plan.md:868` does not say rewards are hard, it says a rewards
+      panel changes what the app is for, and this app is consistent about that elsewhere.
+      Two notes: `card_transactions` has since removed the *technical* objection while leaving the
+      product one untouched, so any reopening is on the merits; and the strip is not in
+      `design/cards/*.dc.html` at all, so there was nothing to remove from the design.
 
-- [ ] **Statutory rate tables: ship the table or ship nothing.** **(decision)**
-      Only relevant if the app is ever to *compute* a deduction rather than record one. Today it
-      stores per-payslip amounts and sums them, which the primary-source reader concluded is the
-      right shape carrying no exposure — *all* the risk is in the copy, not the arithmetic.
-      If tables are ever added they must be versioned and keyed by effective-from date, and
-      PERKESO's amounts must not be derived by formula because the tie-breaking is not a standard
-      rounding mode. `income-canvas-gaps.md` §7.
+- [x] **Statutory rate tables — decided 7 Sep 2026: ship nothing.** Recorded in
+      `income-canvas-gaps.md` §7 with the one condition that reopens it — the app needing to
+      *project* a future payslip rather than record a past one. The specification stays beneath it
+      for whoever does. The deciding argument was not difficulty: LHDN's own spec carries a stale
+      `≤ RM 6,000.00` label above arithmetic using RM 4,000 in four places, and the statute ships
+      ringgit amounts band by band with no percentage in it — so the failure mode is reading the
+      rates carefully and still getting them wrong.
 
 - [ ] **Close two stale document items.** No code, no decision left — only the doc is behind.
       - The FLAT loan "outstanding principal" question (`money-redesign-plan.md` §2.7 / §6) is
