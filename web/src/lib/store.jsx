@@ -27,6 +27,13 @@ import { setPrivate as setFormatPrivate } from './format'
  * stepper and the segment strip are shared across all six precisely so the month
  * still reads as one sentence, rather than as six screens that happen to be
  * adjacent.
+ *
+ * `foot` pins an entry to the bottom of the rail instead of letting it follow
+ * the screen above it. Settings is the only thing here that is not a place you
+ * go to read something, and a list that ends on it invites the eye to treat it
+ * as the last screen rather than as the drawer under them all. The gap is the
+ * grouping — it needs no heading and survives the icon rail, where a heading
+ * would not.
  */
 export const TABS = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -41,7 +48,7 @@ export const TABS = [
   { id: 'cards', label: 'Credit cards', group: 'Money' },
   { id: 'loans', label: 'Loans', group: 'Money' },
   { id: 'expenses', label: 'Expenses', group: 'Money' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'settings', label: 'Settings', foot: true },
 ]
 
 const VantageContext = createContext(null)
