@@ -8,21 +8,21 @@ const findById = id => one(`SELECT * FROM commitments WHERE id=$1`, id);
 const insert = ({
   kind, name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
-  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor, cardCount,
   statementDay, limitRelease, assetId,
   amount, everyMonths, collectedById, sortOrder,
 }) => one(
   `INSERT INTO commitments
      (kind,name,lender,currency,due_day,note,
       principal,rate,rate_type,term_months,started_on,instalment,
-      credit_limit,balance,balance_as_of,apr,min_payment_pct,min_payment_floor,
+      credit_limit,balance,balance_as_of,apr,min_payment_pct,min_payment_floor,card_count,
       statement_day,limit_release,asset_id,
       amount,every_months,collected_by_id,sort_order)
-   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
    RETURNING *`,
   kind, name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
-  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor, cardCount,
   statementDay, limitRelease, assetId,
   amount, everyMonths, collectedById, sortOrder);
 
@@ -31,7 +31,7 @@ const insert = ({
 const update = (id, {
   name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
-  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor, cardCount,
   statementDay, limitRelease, assetId,
   amount, everyMonths, collectedById, active, endedOn, sortOrder,
 }) => run(
@@ -39,13 +39,13 @@ const update = (id, {
      name=$1, lender=$2, currency=$3, due_day=$4, note=$5,
      principal=$6, rate=$7, rate_type=$8, term_months=$9, started_on=$10, instalment=$11,
      credit_limit=$12, balance=$13, balance_as_of=$14, apr=$15,
-     min_payment_pct=$16, min_payment_floor=$17,
-     statement_day=$18, limit_release=$19, asset_id=$20,
-     amount=$21, every_months=$22, collected_by_id=$23, active=$24, ended_on=$25, sort_order=$26
-   WHERE id=$27`,
+     min_payment_pct=$16, min_payment_floor=$17, card_count=$18,
+     statement_day=$19, limit_release=$20, asset_id=$21,
+     amount=$22, every_months=$23, collected_by_id=$24, active=$25, ended_on=$26, sort_order=$27
+   WHERE id=$28`,
   name, lender, currency, dueDay, note,
   principal, rate, rateType, termMonths, startedOn, instalment,
-  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor,
+  creditLimit, balance, balanceAsOf, apr, minPaymentPct, minPaymentFloor, cardCount,
   statementDay, limitRelease, assetId,
   amount, everyMonths, collectedById, active, endedOn, sortOrder, id);
 

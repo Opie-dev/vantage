@@ -239,6 +239,7 @@ const STATE = {
     { id: 3, kind: 'REVOLVING', name: 'CIMB Visa', lender: '', currency: 'MYR', due_day: 18, note: '',
       principal: null, rate: null, rate_type: null, term_months: null, started_on: null, instalment: null,
       credit_limit: 15000, balance: 2340, balance_as_of: ago(4), apr: 18,
+      card_count: 2,
       min_payment_pct: 5, min_payment_floor: 50, amount: null, every_months: 1,
       active: true, ended_on: null, sort_order: 3 },
     { id: 4, kind: 'RECURRING', name: 'Rent', lender: '', currency: 'MYR', due_day: 1, note: '',
@@ -2408,6 +2409,20 @@ try {
       throw new Error('income: employerCostOf() still has no caller, so the employer total is unsaid')
     }
     console.log('  income     rows carry the next pay date and what the source cost to pay')
+  }
+
+  // Plastic and limits are different quantities, and until card_count existed
+  // nothing in the app could tell them apart — Cards.jsx counted ACCOUNTS and
+  // called them cards. The fixture has one account carrying two, so a screen that
+  // still conflates the two prints "1 account" with no card clause and fails here.
+  {
+    await tick(() => ctl.setTab('cards'))
+    const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+    if (!pane.includes('1 account')) throw new Error('cards: the account count is not on the screen')
+    if (!pane.includes('and 2 cards')) {
+      throw new Error('cards: two cards on one limit are not said, so plastic still reads as accounts')
+    }
+    console.log('  cards      one account, two cards, and the screen says both')
     await tick(() => ctl.setTab('dashboard'))
   }
 

@@ -122,7 +122,17 @@ export default function Cards() {
     )
   }
 
-  const cards = out.rows.length
+  // ACCOUNTS, not cards. This counted rows and called them cards, which is the
+  // exact conflation `card_count` exists to end: a limit belongs to an account,
+  // and two pieces of plastic can share one.
+  const accounts = out.rows.length
+  // Plastic — but only where every account has answered. A partial sum would read
+  // as a total and undercount by exactly the accounts that never said, which is
+  // the same mistake facing the other way. Printed only when it differs from the
+  // account count: "2 accounts and 2 cards" says nothing the first half did not,
+  // and the whole point of the figure is that the two can disagree.
+  const counted = out.rows.map(r => r.commitment.card_count)
+  const plastic = counted.every(n => n > 0) ? counted.reduce((t, n) => t + n, 0) : null
   // Recurring charges these accounts collect. They are counted on Commitments and
   // NOT here — this panel says where the money goes out through, never what it
   // costs, which is why it prints no total of its own alongside the ones above.
@@ -153,7 +163,8 @@ export default function Cards() {
               </div>
               <div className="num text-muted-foreground mt-1 text-[11.5px]">
                 {fmtBare(out.billedRM)} billed · {fmtBare(out.unbilledRM)} still to be · across{' '}
-                {cards} account{cards === 1 ? '' : 's'}
+                {accounts} account{accounts === 1 ? '' : 's'}
+                {plastic != null && plastic !== accounts ? ` and ${plastic} cards` : ''}
               </div>
             </div>
             <div className="text-right">
