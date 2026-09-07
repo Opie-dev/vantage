@@ -52,10 +52,23 @@ const rekey = (from, to) => one(
    RETURNING *`,
   from, to);
 
+/**
+ * The row an earlier import of the same statement already booked.
+ *
+ * `insertImported` returns null on conflict, which says "already there" without
+ * saying WHICH row is there — enough while the answer was only a count, not
+ * enough now that a card_transactions line has to point at the expense it
+ * produced. A re-import must reach the same row rather than record that it
+ * booked nothing.
+ */
+const findByExtId = extId => one(`SELECT * FROM expenses WHERE ext_id=$1`, extId);
+
 const remove = id => run(`DELETE FROM expenses WHERE id=$1`, id);
 
 /** Guards the asset delete the same way asset entries do. */
 const countForAsset = async assetId =>
   Number((await one(`SELECT count(*)::int AS n FROM expenses WHERE asset_id=$1`, assetId)).n);
 
-module.exports = { listAll, findById, insert, insertImported, rekey, update, remove, countForAsset };
+module.exports = {
+  listAll, findById, findByExtId, insert, insertImported, rekey, update, remove, countForAsset,
+};
