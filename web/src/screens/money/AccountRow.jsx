@@ -22,7 +22,7 @@ import { ChevronRightIcon, FileTextIcon, PencilIcon, PlusIcon, TrashIcon } from 
 
 import { Badge } from '@/components/ui/badge'
 import { addMonthsISO } from '@/lib/calc'
-import { availabilityTone, dfmt, fmt, fq, ordinal, symbol } from '@/lib/format'
+import { availabilityTone, dfmt, fmt, fq, ordinal, pct1, symbol } from '@/lib/format'
 
 import { BandBar, RowAction, StateBadge } from './parts'
 
@@ -83,7 +83,31 @@ export function rowCaption(r) {
 export function termsLine(r) {
   const c = r.commitment
   const limit = c.credit_limit ? `${symbol(r.cur)}${fq(c.credit_limit)} · ` : ''
+  // NO CARD NAMES HERE, though the canvas shows them. cards-canvas-gaps.md says
+  // they can ride the "existing dead `note` column" — and `note` is not dead: on
+  // the live account it holds a paragraph explaining that two cards share the
+  // limit and that the balance excludes plans. Concatenating that into a terms
+  // line gives a sentence where a spec line should be. Naming the cards needs a
+  // field of its own, or nothing.
   return `${limit}${c.apr}% · closes ${ordinal(c.statement_day)}, due ${ordinal(c.due_day)}`
+}
+
+const ROW_PILL = 'px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase'
+
+/**
+ * When the next payment leaves, as a chip on the account's name.
+ *
+ * Nothing at all where nothing is owed: a countdown is a deadline, and drawing
+ * one over an account that settles every cycle invents an urgency the card does
+ * not have. `countdown()` already refuses to print a negative as a number, so a
+ * bill that has gone past is named by its date instead.
+ */
+function dueBadge(r) {
+  const d = r.dueNext
+  if (!d || d.met || d.rm == null || d.rm <= 0) return null
+  const text = countdown(d.days, d.iso)
+  if (!text) return null
+  return { text, tone: 'loss' }
 }
 
 /** The Due next stat: what leaves, and when. */
@@ -149,6 +173,25 @@ export default function AccountRow({ r, onOpenSheet, onEdit, onRemove, onAddPlan
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13.5px] font-semibold">{r.name}</span>
         <StateBadge row={r} />
+        {/* Plastic and limits are different quantities, and the canvas says so
+            here rather than only in the sheet — this is the row you compare one
+            account against another on. Absent when the count was never given:
+            "1 CARD" asserted by default is the invention the nullable column
+            exists to avoid. */}
+        {c.card_count > 0 ? (
+          <Badge variant="neutral" className={ROW_PILL}>
+            {c.card_count === 1 ? '1 card' : `${c.card_count} cards, 1 limit`}
+          </Badge>
+        ) : null}
+        {/* When it leaves, beside the name. The Due next stat says how much and
+            when; this says only when, because that is the half you scan a list
+            of accounts for. Toned loss only where something is actually owed —
+            a countdown on a settled account is a deadline for nothing. */}
+        {dueBadge(r) ? (
+          <Badge variant={dueBadge(r).tone} className={ROW_PILL}>
+            {dueBadge(r).text}
+          </Badge>
+        ) : null}
         {r.staleDays != null && r.staleDays > 7 ? (
           <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
             {r.staleDays}d old
@@ -179,6 +222,17 @@ export default function AccountRow({ r, onOpenSheet, onEdit, onRemove, onAddPlan
       </div>
 
       {c.credit_limit ? <BandBar pct={r.bandPct} className="h-[7px]" /> : null}
+
+      {/* The two readings of the same bar, at its two ends: how much of the
+          limit is spoken for, and what is actually left. Both are needed
+          because neither implies the other on a card carrying unbilled
+          instalments — which is the whole argument of this screen. */}
+      {c.credit_limit && r.utilisationPct != null ? (
+        <div className="num text-faint flex justify-between text-[10.5px]">
+          <span>{pct1(r.utilisationPct)} used</span>
+          <span>{r.availableRM == null ? '' : `${fmt(r.availableRM, r.cur)} free`}</span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-x-3.5 gap-y-2.5">
         {stats.map(([label, value, tone]) => (
