@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "test": "node --test \"src/**/*.test.js\"",
     "build": "npm --prefix web run build",
     "web:install": "npm --prefix web install",
     "web:dev": "npm --prefix web run dev",
@@ -16,6 +17,7 @@
   },
   "dependencies": {
     "express": "^4.21.0",
+    "pdfjs-dist": "6.3.289",
     "pg": "^8.23.0"
   },
   "devDependencies": {

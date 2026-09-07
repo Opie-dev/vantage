@@ -41,10 +41,21 @@ const insertImported = ({ date, amount, currency, category, note, extId }) => on
    RETURNING *`,
   date, amount, currency, category, note, extId);
 
+/**
+ * Move a row from the key an earlier import gave it to the key it has now.
+ * Null when there is no such row — or when the new key is already taken, in
+ * which case the insert that follows sees the conflict and books nothing.
+ */
+const rekey = (from, to) => one(
+  `UPDATE expenses SET ext_id=$2
+   WHERE ext_id=$1 AND NOT EXISTS (SELECT 1 FROM expenses WHERE ext_id=$2)
+   RETURNING *`,
+  from, to);
+
 const remove = id => run(`DELETE FROM expenses WHERE id=$1`, id);
 
 /** Guards the asset delete the same way asset entries do. */
 const countForAsset = async assetId =>
   Number((await one(`SELECT count(*)::int AS n FROM expenses WHERE asset_id=$1`, assetId)).n);
 
-module.exports = { listAll, findById, insert, insertImported, update, remove, countForAsset };
+module.exports = { listAll, findById, insert, insertImported, rekey, update, remove, countForAsset };

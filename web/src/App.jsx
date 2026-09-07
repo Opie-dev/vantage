@@ -112,6 +112,7 @@ import {
 import LockScreen from '@/components/LockScreen'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
+import { parseStatementPdf } from '@/lib/api'
 import { TABS, useVantage } from '@/lib/store'
 import { dtfmt, fmt, pct1, today } from '@/lib/format'
 
@@ -2090,22 +2091,21 @@ function UndecidedMerchant({ row, rows, targets }) {
 }
 
 /**
- * Import a statement the parser has already read.
+ * Import a statement — the PDF Maybank sent, dropped straight in.
  *
- * WHY THIS TAKES JSON AND NOT A PDF. `sync/parse_maybank_statement.py` owns the
- * extraction, and it is the only thing that does: it needs `pdftotext -table`,
- * which a browser does not have, and a second extractor written in JS could
- * disagree with the first about a column — which is the exact failure the gates
- * at the bottom of that file exist to catch. So the flow is: run the parser,
- * bring its JSON here, and decide what it found.
+ * The first version of this screen asked the owner to open a terminal and run a
+ * Python parser, then paste its JSON here. That was the browser's limitation
+ * mistaken for the product's: the parser needed Xpdf's `pdftotext -table`, and
+ * the fix was never a queue or a host agent but an extractor that runs where the
+ * app runs. src/lib/maybankStatement.js is that, verified identical to the Python
+ * on a real statement. The JSON path stays as a fallback for a statement parsed
+ * elsewhere; it is no longer the way in.
  *
- *     python sync/parse_maybank_statement.py statement.pdf > statement.json
- *
- * NOTHING IS WRITTEN UNTIL THE LAST BUTTON. The gates are the parser's own
- * arithmetic against figures the bank printed on the same page; a failed one
- * stops the import here, and the server re-runs the minimum gate before writing
- * regardless, because a claim that arrives over HTTP is not a claim that has been
- * checked.
+ * NOTHING IS WRITTEN UNTIL THE LAST BUTTON. The PDF is parsed and shown — gates,
+ * what would land without asking, what a rule already explains, what still needs
+ * deciding — and confirming sends the parsed payload through the ordinary import,
+ * which re-runs the minimum gate before writing. A parse that happened on the
+ * server is still a claim.
  */
 function StatementImportDialog({ prefill }) {
   const { state, closeModal, importStatement } = useVantage()
@@ -2118,6 +2118,8 @@ function StatementImportDialog({ prefill }) {
   const [raw, setRaw] = useState('')
   const [payload, setPayload] = useState(null)
   const [readError, setReadError] = useState(null)
+  const [password, setPassword] = useState('')
+  const [parsing, setParsing] = useState(false)
   const [report, setReport] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -2148,7 +2150,25 @@ function StatementImportDialog({ prefill }) {
   const onFile = async e => {
     const file = e.target.files?.[0]
     if (!file) return
-    read(await file.text())
+    setReadError(null)
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+    if (!isPdf) {
+      read(await file.text())
+      return
+    }
+    // The server reads it; nothing is written. What comes back is the same
+    // shape a pasted payload has, so the review below does not care which.
+    setParsing(true)
+    try {
+      const out = await parseStatementPdf(file, { password })
+      setRaw('')
+      setPayload({ statement: out.statement, rows: out.rows, gates: out.gates })
+    } catch (err) {
+      setPayload(null)
+      setReadError(err.message)
+    } finally {
+      setParsing(false)
+    }
   }
 
   const gates = payload?.gates || []
@@ -2237,15 +2257,10 @@ function StatementImportDialog({ prefill }) {
       <DialogHeader>
         <DialogTitle>Import a statement</DialogTitle>
         <DialogDescription>
-          Nothing is written until you confirm. Run the parser over the PDF first — it needs
-          pdftotext, which this browser does not have, and one extractor is safer than two that
-          can disagree.
+          Drop the PDF Maybank sent. It is read on the server and shown here first, and nothing
+          is written until you confirm.
         </DialogDescription>
       </DialogHeader>
-
-      <pre className="bg-muted text-faint overflow-x-auto rounded-md p-2.5 text-[11px]">
-        python sync/parse_maybank_statement.py statement.pdf &gt; statement.json
-      </pre>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Which card" htmlFor="si-card">
@@ -2262,12 +2277,36 @@ function StatementImportDialog({ prefill }) {
             </SelectContent>
           </Select>
         </Field>
-        <Field label="The parser's JSON" htmlFor="si-file" hint="Or paste it below.">
-          <Input id="si-file" type="file" accept=".json,application/json" onChange={onFile} />
+        <Field
+          label="The statement"
+          htmlFor="si-file"
+          hint={parsing ? 'Reading it…' : 'The PDF from Maybank, or the parser’s JSON.'}
+        >
+          <Input
+            id="si-file"
+            type="file"
+            accept=".pdf,application/pdf,.json,application/json"
+            onChange={onFile}
+            disabled={parsing}
+          />
+        </Field>
+        <Field
+          label="Password, if it is locked"
+          htmlFor="si-password"
+          className="col-span-2"
+          hint="Maybank locks the statements it emails. Leave blank for one downloaded from M2U."
+        >
+          <Input
+            id="si-password"
+            type="password"
+            autoComplete="off"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+          />
         </Field>
       </div>
 
-      <Field label="Pasted" htmlFor="si-raw">
+      <Field label="Or paste the parser’s JSON" htmlFor="si-raw">
         <textarea
           id="si-raw"
           className="border-input bg-transparent num h-24 w-full rounded-md border p-2 text-[11px]"

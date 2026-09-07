@@ -21,17 +21,42 @@ const commitments = require('../models/commitments.model');
 const rulesModel = require('../models/merchantRules.model');
 const expenses = require('../models/expenses.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
+const { round2 } = require('../lib/round');
 
-/** A statement line is the same line whichever run sees it. */
-const extIdOf = (cardId, r) =>
-  'stmt:' + crypto.createHash('sha1')
-    .update([cardId, r.posted, r.transacted, r.description, r.amount].join('|'))
-    .digest('hex').slice(0, 24);
+const sha = parts => crypto.createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 24);
 
-/** Longest pattern wins, so a specific rule beats a general one. */
-function matchRule(rules, description) {
-  const d = (description || '').toUpperCase();
-  return rules.find(r => d.startsWith(r.pattern.toUpperCase())) || null;
+/**
+ * The merchant and where it happened, as one string with one space between
+ * words. Where a line breaks into those two fields is the ONE thing the two
+ * extractors do not agree on: Xpdf's -table pads words onto a character grid,
+ * and on a page whose glyphs run narrow it prints two spaces inside a name that
+ * was set with one, so the Python reads "SETEL FUEL" + "PASSTHROUGH-EC KUALA
+ * LUMPUR MY" where the PDF's positions say "SETEL FUEL PASSTHROUGH-EC" + "KUALA
+ * LUMPUR MY". Joined and collapsed they are the same string, and everything
+ * that must not care which extractor ran works on this.
+ */
+const placeText = r => `${r.description || ''} ${r.location || ''}`.replace(/\s+/g, ' ').trim();
+
+/** A statement line is the same line whichever extractor saw it. */
+const extIdOf = (cardId, r) => 'stmt:' + sha([cardId, r.posted, r.transacted, r.amount, placeText(r)]);
+
+/**
+ * The key an earlier import gave the same line, when identity still hashed the
+ * description alone. Rows booked by the CLI before the app read PDFs itself
+ * carry this; on the next import of that statement they are moved to today's
+ * key rather than booked again. Drop once no row in the table starts with a
+ * legacy key.
+ */
+const legacyExtIdOf = (cardId, r) => 'stmt:' + sha([cardId, r.posted, r.transacted, r.description, r.amount]);
+
+/**
+ * Longest pattern wins, so a specific rule beats a general one. Matched against
+ * the merchant AND the place, joined, so a rule written from either extractor's
+ * reading of a line matches the other's.
+ */
+function matchRule(rules, r) {
+  const d = placeText(r).toUpperCase();
+  return rules.find(x => d.startsWith(x.pattern.toUpperCase())) || null;
 }
 
 async function ingest(body) {
@@ -57,12 +82,28 @@ async function ingest(body) {
   const instalments = rows
     .filter(r => r.kind === 'instalment')
     .reduce((t, r) => t + (r.amount || 0), 0);
-  const revolving = Math.round((summary.balance - instalments) * 100) / 100;
-  const derived = Math.round((revolving * 0.05 + instalments) * 100) / 100;
+  const revolving = round2(summary.balance - instalments);
+  const derived = round2(revolving * 0.05 + instalments);
   if (summary.minimum != null && Math.abs(derived - summary.minimum) > 0.02) {
     throw badRequest(
       `refused: the minimum does not add up. 5% x ${revolving.toFixed(2)} + ${instalments.toFixed(2)} ` +
       `= ${derived.toFixed(2)}, but the statement says ${summary.minimum.toFixed(2)}. ` +
+      'Nothing was written.');
+  }
+
+  // THE ROWS GATE, HERE TOO. The minimum above proves the header agrees with
+  // itself; it would pass happily while a page had been silently dropped. This
+  // is the only check that touches every row, and until now it ran only in the
+  // browser — which a curl, or a bug in the screen, could walk straight past.
+  // Skipped when no rows were sent at all: importing the header alone is a
+  // legitimate use, and there is nothing to sum.
+  const rowsTotal = round2(rows
+    .filter(r => r.kind === 'retail' || r.kind === 'instalment')
+    .reduce((t, r) => t + (r.amount || 0), 0));
+  if (rows.length && Math.abs(rowsTotal - summary.balance) > 0.02) {
+    throw badRequest(
+      `refused: the rows do not reach the balance. They sum to ${rowsTotal.toFixed(2)}, but the ` +
+      `statement says ${summary.balance.toFixed(2)} \u2014 a page is missing, or a row was dropped. ` +
       'Nothing was written.');
   }
 
@@ -92,11 +133,11 @@ async function ingest(body) {
     if (r.kind !== 'retail') continue;
     if (r.spending_candidate === false) { ignored.push(r.description); continue; }
 
-    const rule = matchRule(rules, r.description);
+    const rule = matchRule(rules, r);
     if (!rule) {
       const m = unmatched.get(r.description) || { description: r.description, rows: 0, total: 0 };
       m.rows += 1;
-      m.total = Math.round((m.total + r.amount) * 100) / 100;
+      m.total = round2(m.total + r.amount);
       unmatched.set(r.description, m);
       continue;
     }
@@ -108,19 +149,26 @@ async function ingest(body) {
       continue;
     }
 
+    const extId = extIdOf(cardId, r);
+    // The same line, booked by the CLI under the key identity used to have, is
+    // moved to today's key — not counted as new, not booked twice.
+    if (await expenses.rekey(legacyExtIdOf(cardId, r), extId)) {
+      alreadyThere.push(r.description);
+      continue;
+    }
     const row = await expenses.insertImported({
       date: r.transacted || r.posted,
       amount: r.amount,
       currency: card.currency || 'MYR',
       category: rule.category,
       note: r.description + (r.location ? ` · ${r.location}` : ''),
-      extId: extIdOf(cardId, r),
+      extId,
     });
     if (row) booked.push(row);
     else alreadyThere.push(r.description);
   }
 
-  const sum = a => Math.round(a.reduce((t, x) => t + (x.amount || 0), 0) * 100) / 100;
+  const sum = a => round2(a.reduce((t, x) => t + (x.amount || 0), 0));
   return {
     statement,
     booked: { rows: booked.length, rm: sum(booked) },

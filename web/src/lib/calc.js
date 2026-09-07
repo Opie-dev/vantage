@@ -2918,9 +2918,13 @@ export function owedOn(S, cardId, dateISO) {
   return s ? s.closing_balance : null
 }
 
-/** Mirrors matchRule in statementIngest.service.js — prefix match, case-blind. */
-function matchStatementRule(sortedRules, description) {
-  const d = (description || '').toUpperCase()
+/**
+ * Mirrors matchRule in statementIngest.service.js — prefix match, case-blind,
+ * against the merchant and the place joined, because where a statement line
+ * breaks into those two fields depends on which extractor read it.
+ */
+function matchStatementRule(sortedRules, row) {
+  const d = `${row.description || ''} ${row.location || ''}`.replace(/\s+/g, ' ').trim().toUpperCase()
   return sortedRules.find(r => d.startsWith(String(r.pattern || '').toUpperCase())) || null
 }
 
@@ -2968,7 +2972,7 @@ export function previewStatementImport(rows, rules) {
       notSpending.push(r)
       continue
     }
-    const rule = matchStatementRule(sorted, r.description)
+    const rule = matchStatementRule(sorted, r)
     if (!rule) {
       const u = undecided.get(r.description) || { description: r.description, rows: 0, total: 0 }
       u.rows += 1
