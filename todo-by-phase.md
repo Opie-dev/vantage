@@ -312,22 +312,47 @@ The ordering here is stated outright by the audit rather than inferred. The impo
 upstream blocker, and *"a new table inherits the same empty pipe unless the ingest emits typed
 charge lines."* Building the migrations first produces empty tables.
 
-- [ ] **Fix the ingest first.** Two distinct losses on every import:
-      the parser already emits `posted`, `transacted` **and** a `foreign` block, all of which are
-      discarded; and the importer hardcodes `interestCharged: 0, feesCharged: 0`, so even the two
-      existing untyped aggregates only carry data when a statement is keyed in by hand.
+**The phase's own ordering turned out to be half right.** The ingest fix and `card_transactions`
+are not two steps but one — there is no way to stop discarding a field without somewhere to put
+it. Typed charges are a genuinely separate blocker, and not on a table.
 
-- [ ] **`card_transactions`.** **(migration, large)**
-      commitment_id, statement_id, transacted_on, posted_on, description, amount,
-      orig_currency / orig_amount / fx_rate, kind, disposition, expense_id, and a unique ext_id for
-      idempotent re-import. Note the canvas's "Reads as" badge is not one enum: category when
-      booked, disposition when not, plus derived FOREIGN and a reversal link.
+- [x] **The ingest keeps every line — done 7 Sep 2026**, on `cards-ingest-keeps-what-it-parses`
+      (off `main`), together with the table below.
+      Both dates now survive, the location keeps its own column instead of being appended to the
+      merchant where a rule would have to step over it, and the foreign block is stored rather
+      than referenced nowhere. A `rate` row is the one kind not kept: it is a fact about the card,
+      with no amount and no merchant.
 
-- [ ] **Typed statement charges.** **(migration, large)**
-      `card_statement_charges (statement_id, kind, amount)` or typed columns, so an annual fee can
-      be told from a late fee and a charge that was *not* incurred can still be printed at zero —
-      which is the point of the panel. Drop PLAN_INTEREST from the enum and derive it from
-      `card_plans`.
+- [x] **`card_transactions` — done, migration applied.** **(large · migration)**
+      Not a widening of `expenses`, because most of these lines must never become spending — an
+      instalment billing is counted through `card_plans`, a credit is a payment, and a
+      rule-matched line is already subtracted as a commitment. Widening `expenses` would need a
+      column meaning *"do not treat this as spending"*, which is the column that gets forgotten in
+      a SUM. The link is `expense_id`, null far more often than not.
+      `disposition` is the point rather than a status, and `card_transactions_booked_check` ties
+      it to `expense_id` in both directions so a booked row that counts nothing cannot exist —
+      which is why `expenses.findByExtId` is new: `insertImported` returns null on a re-import,
+      saying a line was booked without saying by which row.
+      Constraints exercised against the live schema in a rolled-back transaction: a booked row
+      with no expense and a half-filled foreign block are both refused; an unmatched retail line,
+      a complete foreign line and an instalment billing are accepted. `db/schema.sql` was
+      regenerated from `pg_dump` **with the file's CRLF preserved**, so the diff is 99 lines of
+      new table and zero deletions — the trick that makes regeneration safe here.
+      **Note:** the migration is applied to the dev database, but the migration FILE lives only on
+      that branch. `npm run db:status` from another branch will show a row it has no file for
+      until the branch lands.
+
+- [ ] **Typed statement charges — BLOCKED, and not on a table.** **(large · migration)**
+      `card_statements.interest_charged` and `fees_charged` are still hardcoded to 0 on every
+      import, and a new table would inherit the same empty pipe. The blocker is upstream of both:
+      **the parser has no rule that recognises a charge line.** The only thing it matches near
+      interest is `RETAIL INTEREST RATE = 15.00%`, which is a rate and not an amount, and
+      `src/lib/maybankStatement.test.js` carries no charge line either — so neither the code nor
+      the fixture can tell you how Maybank words an interest or late-payment row.
+      **What unblocks it: the statement PDF.** Writing patterns for a bank's charge wording from
+      guesswork is precisely how a wrong figure enters a finance app, and this repo's own rule —
+      *before writing a rate into code, open the primary document* — applies to a charge line as
+      much as to a rate.
 
 - [ ] **Account-level fee terms.** **(migration, large)**
       `late_fee_pct/floor/ceiling`, `cash_advance_pct/floor/apr`, `annual_fee`, `fx_markup_pct` on
