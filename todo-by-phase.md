@@ -413,30 +413,62 @@ it. Typed charges are a genuinely separate blocker, and not on a table.
 
 ## Phase 5 — Standing correctness items
 
-No blockers. Each is a place the app can currently be confidently wrong, which is worse than a
-place it is visibly incomplete.
+**Investigated 7 Sep 2026, and four of the six were not what the audit described.** Three had
+already been done or cannot occur; the one live case of the app being confidently wrong was not on
+this list at all. Recorded in full so the next reader does not re-investigate four dead ends.
 
-- [ ] **Realised gain on a partial commodity sale.** `assetContributed()` is cash in minus cash
-      out, which stops matching cost basis the moment part of a holding sells above cost.
-      `positions()` already solves exactly this for the broker; the asset version should borrow it
-      and carry a separate realised figure. `commitments-and-income-plan.md` §9.
+### The live one, which was not on the list
 
-- [ ] **Flexi and offset loans break the derivation.** Interest accrues on the balance *net of* a
-      linked current account, so a derived schedule is simply wrong, and offset caps exist. Better
-      to mark such a loan **"not derivable"** than to show a confident wrong number.
+- [x] **A loan was recorded with the wrong rate type, and every derived figure for it was wrong.
+      Corrected 7 Sep 2026.**
+      `GX FlexiCredit Loan` (id 6) was stored `rate_type = REDUCING` at 13.94% over 60 months with
+      an instalment of RM 616.58. That instalment is the **flat** figure, exact to the sen:
+      `21,800 × (1 + 0.1394 × 5) ÷ 60 = 616.58`, where a REDUCING loan at 13.94% would instalment
+      at 506.57. A match to the sen is not coincidence.
+      **What it cost while it stood:** paying 616.58 against a falling balance at 13.94% clears the
+      loan in **45.8 months rather than 60** — the app showed it finishing fourteen months early —
+      and reported RM 6,433 of interest against the RM 15,195 a flat 13.94% actually charges.
+      **Understated by RM 8,761.77.** It also displayed the cost of borrowing as 13.94% when the
+      effective rate is **23.19%** by the Hire-Purchase Act's Seventh Schedule — which
+      `flatToEffective()` already implements, and which agrees to 0.03pp with the rate obtained
+      independently by solving the annuity for 616.58.
+      This is precisely the trap `commitments-and-income-plan.md` §5.2 is named after, occurring on
+      a real loan while the document describing it sat in the same repo.
+      `rate_type` is now `FLAT`, so the loan reports instalments still to run rather than
+      amortising a balance, and says so.
 
-- [ ] **Early-settlement figures are not derived balances.** A settlement estimate cannot be
-      computed from a single `penalty_pct` field — three incompatible mechanisms are in use across
-      banks, and most Malaysian residential mortgages have no lock-in at all. Store the term as
-      **free text from the letter of offer**; show a settlement figure only as an estimate, or not
-      at all.
+- [ ] **`Ativa` (id 9) has no principal.** **(owner)** Recorded 2.79% FLAT over 108 months with
+      `principal` null, so nothing derives for it at all — no schedule, no outstanding figure, and
+      no effective rate (it would be 5.14%). Needs the financed amount from the agreement. Sits
+      with the wallet reading and the payslips as data only the owner has.
 
-- [ ] **`ITEM` valuations go stale silently**, and the distortion flatters. A house value nobody
-      updates inflates net worth. Same staleness treatment as a gold price, plus a prompt after
-      some months.
+### The six as audited
 
-- [ ] **The waterfall has to keep restating its own limit.** "Unclaimed RM 2,675" reads as
-      "RM 2,675 spare" unless the screen keeps saying it is *before* living costs.
+- [x] **The waterfall restating its own limit — already done, in both places.** Overview closes
+      the column with *"A ceiling, not a surplus. Everything you actually live on is still ahead of
+      this figure — the column on the left is where it lands."* Goals says *"RM X is spare, before
+      anything you actually live on."* Nothing to build.
+
+- [x] **Realised gain on a partial commodity sale — cannot occur.** `assets_kind_check` permits
+      only `SAVINGS` and `ITEM`; there is no `COMMODITY` kind, so there is no holding to sell part
+      of and `assetContributed()` cannot drift from cost basis. Reopens only if commodities are
+      ever permitted, and `positions()` is the thing to borrow when they are.
+
+- [x] **Early-settlement figures — nothing to make honest.** The app shows no settlement figure
+      anywhere in `web/src`; the only matches for "settlement" are trade settlement and dividend
+      lag. The audit's guidance stands as a rule for whoever builds one — store the term as free
+      text from the letter of offer, never derive it from a single `penalty_pct` — but there is no
+      current defect.
+
+- [ ] **`ITEM` valuations go stale silently.** Still open, and **cheaper than the audit implies**:
+      an ITEM's value comes from `asset_entries` BALANCE readings, so its age is derivable with no
+      migration. But **there are zero `ITEM` assets**, so there is nothing to go stale yet. Build
+      it with the house, not before.
+
+- [ ] **Flexi and offset loans break the derivation.** Genuinely open, and the only Phase 5 item
+      needing a schema change: nothing in `commitments` or `db/schema.sql` can mark a loan
+      not-derivable. Note the near miss — the loan corrected above is named *FlexiCredit*, but its
+      arithmetic is plain flat-rate hire purchase, not an offset facility. The name is marketing.
 
 - [ ] **The rate-comparison table** — debt against investment as arithmetic
       (`commitments-and-income-plan.md` §6.5). Specified, no implementation found.
