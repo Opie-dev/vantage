@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   OVERVIEW_MODE,
-  SPEND_UNKNOWN,
+  currentMonth,
   expensesFor,
   overviewMode,
   overviewRows,
@@ -31,7 +31,7 @@ import {
 import { dfmt, fmt, fmtS, monthLabel, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
-import { Line, Meta, MonthStepper, STICKY_TOP } from './money/parts'
+import { Line, Meta, MonthStrip, STICKY_TOP } from './money/parts'
 
 /**
  * How much of the measured living cost got itemised.
@@ -203,20 +203,13 @@ function Flow({ view }) {
   )
 }
 
-const WHY = {
-  [SPEND_UNKNOWN.NO_WALLET]:
-    'No account is marked as a wallet, so there is nothing to measure the month against. Mark the account your pay lands in as a wallet on Assets.',
-  [SPEND_UNKNOWN.NO_OPENING_READING]:
-    'No balance reading before this month, so the window has no start. Record one on Assets and the month closes.',
-  [SPEND_UNKNOWN.NO_CLOSING_READING]:
-    'No balance reading since this month, so the window has no end. Record one on Assets and the month closes.',
-  [SPEND_UNKNOWN.NO_CARD_READING]:
-    'A card has no statement bracketing this window, so what it took on is unknown — and an unread card is not a card with no spending.',
-}
-
 export default function Overview() {
-  const { state, moneyMonth, setTab, setPreference } = useVantage()
-  const { y, m } = moneyMonth
+  const { state, setTab, setPreference } = useVantage()
+  // THE MONTH THAT IS HAPPENING, always. This screen has no control that moves
+  // it and no way to be shown another one — Expenses drilling into July is a
+  // fact about Expenses, and the whole point of taking the month out of the
+  // store is that it can no longer drag this statement along with it.
+  const { y, m } = currentMonth()
 
   const w = useMemo(() => waterfall(state), [state])
   const ex = useMemo(() => expensesFor(state, y, m), [state, y, m])
@@ -229,7 +222,7 @@ export default function Overview() {
   if (!w.rows.length && !w.commitments.rows.length && !ex.count) {
     return (
       <div className="grid gap-4">
-        <MonthStepper />
+        <MonthStrip />
         <Card>
           <CardContent className="grid gap-3 px-4 py-6">
             <span className="eyebrow">Nothing to show yet</span>
@@ -254,7 +247,7 @@ export default function Overview() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="Governs every Money screen. Run-rate figures say a month, never this month." />
+      <MonthStrip />
 
       <div className="grid gap-4 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:items-start">
         <div className={`grid content-start gap-3 lg:sticky ${STICKY_TOP}`}>
@@ -280,11 +273,18 @@ export default function Overview() {
               </div>
 
               {view.reason ? (
+                // SAID ONCE ON THIS SCREEN, and the strip is where. Both surfaces
+                // used to print SPEND_WHY[reason] in full, forty words apart, so
+                // the same sentence about the same missing reading appeared twice
+                // on one page and only one of the two offered the form that fixes
+                // it. This column still has to say why its own figures are absent
+                // — leaving the space blank reads as a month that cost nothing —
+                // so it says that, and points at the one statement of the reason.
                 <p className="text-muted-foreground m-0 text-[12px] leading-relaxed text-pretty">
                   <b className="text-foreground font-semibold">
                     What living cost cannot be worked out for {monthShort}.
                   </b>{' '}
-                  {WHY[view.reason] || 'The window cannot be closed.'}
+                  The strip above names the reading that is missing, and opens the form for it.
                 </p>
               ) : mode === OVERVIEW_MODE.FLOW ? (
                 <Flow view={view} />
@@ -322,6 +322,11 @@ export default function Overview() {
                 </Badge>
               ) : null}
             </div>
+            {/* The stepper's caption, kept because it was never about the
+                stepper: these rows are a run rate, and the column on the left is
+                the measured month. Two bases on one screen, and this is the line
+                that says which one you are reading. */}
+            <Meta className="block">Run-rate figures say a month, never this month.</Meta>
             <Line label="Net income" value={fmt(w.incomeRM, 'MYR')} tone="text-gain" />
             {w.variableRM > 0 ? (
               <Line label="of which estimated" value={fmt(w.variableRM, 'MYR')} tone="text-faint" />

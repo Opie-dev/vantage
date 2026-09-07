@@ -29,7 +29,7 @@ import { deductionsOf, employerCostOf, netOf, waterfall } from '@/lib/calc'
 import { dfmt, dfmtLong, fmt } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
-import { Line, Meta, MonthStepper, RowAction } from './money/parts'
+import { Line, Meta, MonthStrip, RowAction } from './money/parts'
 
 function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
   const s = r.source
@@ -257,7 +257,7 @@ export default function Income() {
   if (!w.rows.length) {
     return (
       <div className="grid gap-4">
-        <MonthStepper />
+        <MonthStrip />
         <Card>
           <CardContent className="grid gap-3 px-4 py-6">
             <span className="eyebrow">No income sources</span>
@@ -280,9 +280,23 @@ export default function Income() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="Income is a run rate, not a month — it says a month, never this month." />
+      <MonthStrip />
 
       <div className="grid gap-3 sm:grid-cols-3">
+        {/* TWO INCOME FIGURES ON ONE SCREEN, and this is the line that says
+            which is which. income-canvas-gaps.md §1 names the trap exactly: the
+            strip's "Declared in" is a MEASURED month — spendingFor().inflowRM,
+            what actually landed in the window two wallet readings bracket — while
+            these three are a RUN RATE from waterfall(), which projects a source
+            with no event yet from its gross_default. They differ by more than
+            twofold on a real database, and a caption that describes only the
+            lower three leaves the reader to assume the strip is the same figure
+            in bigger type. So it names both, and sits over them the way
+            Commitments' does, because the sentence is the pair. */}
+        <Meta className="col-span-full block">
+          Declared in, above, is what actually arrived in the window it names. These three are a
+          run rate — what a usual month pays, never this month.
+        </Meta>
         <Card>
           <CardContent className="px-4">
             <span className="eyebrow">Net, a month</span>

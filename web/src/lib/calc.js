@@ -535,6 +535,32 @@ export function overviewMode(S) {
  * it to a position's P&L is a view of that position's performance, NOT something
  * that can be summed into portfolio value — the cash is counted there already.
  */
+/**
+ * How many shares were held on a given date.
+ *
+ * A DISTRIBUTION IS PAID ON WHAT YOU HELD THEN. pendingHistoryRows() used to
+ * value every declared distribution at today's quantity, so buying a share of
+ * something with a long dividend record invented a payment for every quarter
+ * since the record began — fourteen years of Apple dividends against a holding
+ * two days old. The rows were small enough to round to zero on screen and were
+ * marked pending, so no income figure was ever wrong; History simply described
+ * a past that did not happen.
+ *
+ * Same accumulation as positions(), and deliberately so: one of them being
+ * wrong about what a SELL does to a holding would be worse than the bug this
+ * fixes. Cost basis is not tracked here because nothing that asks this question
+ * needs it.
+ */
+export function qtyOn(S, ticker, dateISO) {
+  let qty = 0
+  for (const x of S.transactions.slice().reverse()) {
+    if (x.ticker !== ticker || x.side === 'DIV') continue
+    if (!x.trade_date || x.trade_date > dateISO) continue
+    qty += x.side === 'BUY' ? x.qty : -x.qty
+  }
+  return qty > 1e-9 ? qty : 0
+}
+
 export function positionsWithIncome(S, basis = pnlBasis(S)) {
   const divs = dividendsByTicker(S)
   const tax = withholdingByTicker(S)
@@ -1467,7 +1493,14 @@ export function pendingHistoryRows(S) {
       const pay = payDateFor(d.ex_date, lag)
       if (pay > today) continue // declared, but not due yet — that is the outlook's job
       if (pay <= lastPaid) break // newest-first, so everything below this has settled
-      const gross = d.per_share * p.qty
+      // What was held AT THE EX-DATE, never what is held now. A distribution
+      // declared before the first purchase belongs to whoever owned the shares
+      // then, and it was not you.
+      const held = qtyOn(S, p.t, d.ex_date)
+      if (held <= 0) continue
+      const gross = d.per_share * held
+      // Guarding the quantity rather than the product: a holding small enough to
+      // make gross round to zero is still a real holding, and a real payment.
       if (gross <= 0) continue
       rows.push({
         key: `p:${p.t}:${d.ex_date}`, id: null, kind: 'DIV', date: pay, ticker: p.t,
@@ -2313,6 +2346,27 @@ const signOf = e => (ASSET_OUT.has(e.type) ? -e.amount : e.amount)
 
 const monthKey = (y, m) => `${y}-${String(m + 1).padStart(2, '0')}`
 const MONTH_LABEL = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * The month the Money screens show. ONE definition, for all of them.
+ *
+ * Overview, Income, Commitments, Credit cards and Loans are pinned to the month
+ * that is happening; only Expenses can be looking at another one, and only
+ * because its twelve-month chart drills into the past. Five copies of
+ * `new Date()` across five files would be five chances to disagree about the
+ * first and last minutes of a month — and the strip that sits above all of them
+ * would then be printing a sixth answer.
+ *
+ * DERIVED FROM THE SAME ISO DAY every other derivation here is, rather than from
+ * a local `new Date()`. `spendingFor`, `expensesFor` and `expenseHistory` all
+ * decide what "now" is by this string; a screen that picked its month from the
+ * local calendar would, for the eight hours either side of a month boundary in
+ * this timezone, ask those functions for a month they consider the wrong side of
+ * today — and then render the refusal for a month that has plainly started.
+ */
+export function currentMonth(nowISO = isoOf(Date.now())) {
+  return { y: Number(nowISO.slice(0, 4)), m: Number(nowISO.slice(5, 7)) - 1 }
+}
 
 /**
  * The rate as a plain fraction.
@@ -3880,11 +3934,20 @@ export function overviewRows(S, year, monthIndex) {
       note: 'what actually fell in the window, not what a usual month costs' },
     { key: 'saved', label: 'Moved into savings', rm: -spend.savedRM, tone: 'loss', tab: 'assets',
       note: 'out of pocket, but not spent' },
-    { key: 'wallet', label: gaveUp >= 0 ? 'Plus what the wallet gave up' : 'Less what the wallet kept',
+    // THREE CASES, NOT TWO. A wallet that ended exactly where it started neither
+    // fell nor rose, and `>= 0` used to fold that into "gave up · the balances
+    // fell" — a sentence stating a direction over a figure that has none, and one
+    // the strip's own tile contradicted by calling the same zero a rise. Zero is
+    // rare and it is the one reading where a wrong direction is unmissable,
+    // because RM 0.00 gives the reader nothing else to check the words against.
+    { key: 'wallet',
+      label: gaveUp > 0 ? 'Plus what the wallet gave up'
+        : gaveUp < 0 ? 'Less what the wallet kept'
+        : 'The wallet ended where it started',
       rm: gaveUp, tone: 'cash', tab: 'assets',
-      note: gaveUp >= 0
-        ? 'the balances fell, so this much came out of the buffer'
-        : 'the balances rose, so this much never left' },
+      note: gaveUp > 0 ? 'the balances fell, so this much came out of the buffer'
+        : gaveUp < 0 ? 'the balances rose, so this much never left'
+        : 'the balances did not move, so the month took nothing out of the buffer and left nothing in it' },
     { key: 'spent', label: 'What you lived on', rm: spend.spentRM, tone: 'foreground', tab: 'expenses',
       total: true, note: 'the remainder, and the first figure here nobody typed in' },
   ]
@@ -3895,6 +3958,128 @@ export function overviewRows(S, year, monthIndex) {
   const closes = Math.abs(check - spend.spentRM) < 0.005
 
   return { reason: null, spend, rows, closes, incomeRM: spend.inflowRM }
+}
+
+/**
+ * The month as five segments, one per Money screen — the strip that sits at the
+ * top of all six.
+ *
+ * IT DERIVES NOTHING. Every figure is a row of overviewRows() read straight
+ * through, which is the whole reason this exists as a function rather than as
+ * five expressions in the strip's JSX: money-redesign-plan.md §2.4 is a list of
+ * five places where a label and the bar beside it disagreed, and a strip that
+ * prints a percentage AND draws it to that width is where a sixth would be most
+ * visible. `share` is computed once and is both the number printed and the width
+ * drawn — there is no second expression for the two to drift apart in.
+ *
+ * SHARES ARE OF WHAT ARRIVED, always, exactly as the Flow view says in prose.
+ * With nothing arrived there is no denominator, so `share` is null and the strip
+ * prints no percentage and draws no bar rather than dividing by a stand-in.
+ *
+ * THE FOUR SIGNED SEGMENTS SUM TO THE FIFTH, which is the identity overviewRows()
+ * asserts, restated in the direction the strip reads:
+ *
+ *   declared + committed + saved + living = what stayed
+ *
+ * Every sign here exists to keep that true on screen. `living` is the one row
+ * overviewRows() states positive — it is a remainder its column has already
+ * subtracted its way down to — and it is negated below, because on the strip it
+ * is one outflow tile beside three others.
+ *
+ * Returns `segments: []` with the reason when the window cannot be closed, for
+ * the reason overviewRows() does: four of the five segments are then unmeasurable,
+ * and four tiles of nothing beside one real figure would read as a month that
+ * mostly did not happen.
+ *
+ * TWO SCREEN FIELDS, NOT ONE, and the canvas had them too. `tab` is where the
+ * tile navigates; `pages` is every Money screen the tile IS a segment of, and
+ * only those light the tile up. They differ on the two tiles no screen owns, and
+ * collapsing them into one field would light a tile that is merely a way out.
+ *
+ * `pages` IS A LIST BECAUSE ONE SEGMENT HAS THREE SCREENS. Committed is the sum
+ * of every obligation that fell in the window, and Credit cards and Loans are
+ * that sum itemised by kind — commitmentRows() is the one derivation all three
+ * read. With a single page they lit nothing, under a strip whose own note
+ * promises every page its segment, so two of the six Money screens stood under a
+ * claim they visibly did not keep.
+ *
+ * @returns {{reason: string|null, spend: object, incomeRM: number|null,
+ *   segments: Array<{key, eyebrow, tab, pages: string[], rm, share: number|null,
+ *   facts: object}>}}
+ */
+export function monthSegments(S, year, monthIndex) {
+  const view = overviewRows(S, year, monthIndex)
+  if (view.reason) return { reason: view.reason, spend: view.spend, incomeRM: null, segments: [] }
+
+  const by = Object.fromEntries(view.rows.map(r => [r.key, r]))
+  const incomeRM = view.incomeRM
+  // ONE expression, used for the figure printed and the width drawn, and it is
+  // the TRUE share — never capped. The canvas capped the WIDTH and printed the
+  // figure uncapped, and it was right to: a bar cannot be drawn past the track
+  // it sits in, but a month whose living cost ran to 103% of what arrived is a
+  // month funded by the wallet falling, and saying that is most of the point of
+  // the strip. Capping here printed "100.0%" over it — a figure nobody could
+  // reach from the two it sits between. The clamp belongs at the width, where it
+  // is a fact about the track rather than about the money; see MonthStrip.
+  // `> 0`, NOT MERELY TRUTHY. A window can declare a negative total — deductions
+  // exceeding gross on a corrected payslip, or a reversed distribution larger
+  // than the payslips beside it — and a negative denominator turned every share
+  // negative, which the strip drew as `width: -100%`: a declaration the browser
+  // drops, leaving a FULL rail under a label reading −100.0%. That is exactly the
+  // print-versus-draw divergence this one expression exists to make impossible.
+  // Nothing arrived that anything can be a share OF, so it is the same null the
+  // zero case already returns and the strip already knows how to draw: no
+  // percentage, no bar, on every tile at once.
+  const share = rm => (incomeRM > 0 ? (Math.abs(rm) / incomeRM) * 100 : null)
+
+  const { spend } = view
+  // Which way the savings moved. It decides the label AND which of the two name
+  // lists describes it, because neither is fixed: overviewRows() flips the
+  // wallet row's label on the same test and for the same reason — a fixed word
+  // over a figure whose direction is not fixed states the opposite of what
+  // happened for half the months there are.
+  const savedIn = spend.savedRM >= 0
+  const segments = [
+    { key: 'income', eyebrow: 'Declared in', tab: 'income', pages: ['income'], rm: by.inflow.rm,
+      facts: { sources: spend.inflowSources, payDay: spend.inflowPayDay,
+        distributions: spend.inflowDistRM > 0 } },
+    // THREE PAGES. Credit cards and Loans are this figure itemised by kind, not
+    // screens without a segment: a card's minimum and a loan's instalment are
+    // both inside `committedRM`, derived from the same commitmentRows() call.
+    { key: 'commitments', eyebrow: 'Committed', tab: 'commitments',
+      pages: ['commitments', 'cards', 'loans'], rm: by.committed.rm, facts: {} },
+    // NO PAGE AT ALL, so it never lights. Saving is recorded on Assets, which is not a
+    // Money screen and has no segment of this strip; the canvas sent this tile
+    // to the overview instead and it goes there too — the one screen that shows
+    // all five, and so the only honest answer to "where do I see more of this".
+    { key: 'saved', eyebrow: savedIn ? 'Moved to savings' : 'Taken from savings',
+      tab: 'overview', pages: [], rm: by.saved.rm,
+      facts: { accounts: savedIn ? spend.savedInto : spend.savedFrom } },
+    // NEGATED — see the identity above. overviewRows() states this row positive
+    // because it is the remainder its column subtracts its way down to; here it
+    // sits in a row of tiles between two figures that carry a minus, and money
+    // that left the month printed like money that arrived makes the largest
+    // outflow of the month read as the second largest inflow.
+    { key: 'expenses', eyebrow: 'Living costs', tab: 'expenses', pages: ['expenses'],
+      rm: -by.spent.rm, facts: {} },
+    // The wallet row, read the other way round. overviewRows() states it as what
+    // the wallet GAVE UP because its column subtracts downward; the tile is
+    // labelled by what the wallet KEPT. One figure, one sign, no second sum.
+    //
+    // NO PAGES EITHER, though it does send you to Expenses. What stayed is the
+    // OUTCOME of the month rather than any screen's subject — lighting it on
+    // Expenses would say the expense log is the thing that decided it, when what
+    // decided it is every other tile on this strip.
+    { key: 'stayed', eyebrow: 'What stayed', tab: 'expenses', pages: [],
+      rm: -by.wallet.rm, facts: {} },
+  ]
+
+  return {
+    reason: null,
+    spend,
+    incomeRM,
+    segments: segments.map(x => ({ ...x, share: share(x.rm) })),
+  }
 }
 
 /* ── goals against real money ─────────────────────────────────────────────── */
@@ -4392,7 +4577,9 @@ export function floatFor(S, from, to) {
  *
  * @returns {{spentRM: number|null, reason: string|null, from: string|null,
  *   to: string|null, days: number, inflowRM: number, committedRM: number,
- *   savedRM: number, walletDeltaRM: number}}
+ *   savedRM: number, walletDeltaRM: number, inflowSources: string[],
+ *   inflowPayDay: number|null, inflowDistRM: number, savedInto: string[],
+ *   savedFrom: string[]}}
  */
 export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   const monthStart = `${monthKey(year, monthIndex)}-01`
@@ -4410,6 +4597,18 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     // float over: it is measured across the SAME two wallet readings, and without
     // those the question has no boundaries rather than a zero answer.
     floatRM: null, floatReason: null, floatUnreadableCards: [], livingCostRM: null,
+    // WHO, not how much. The month strip prints a figure and, beside it, the
+    // fact that makes the figure legible: which source paid, which accounts the
+    // saving moved between. Collected in the SAME pass that sums the figure, so
+    // a name can never describe rows the total did not count.
+    //
+    // AND THE CONVERSE, because the strip reads these as a description of the
+    // WHOLE figure beside them. `inflowDistRM` is carried for that reason: a
+    // distribution has no income source and so no name in `inflowSources`, and
+    // a month that was part payslip and part dividend has to be able to say
+    // both rather than let the employer's name stand over the broker's money.
+    inflowSources: [], inflowPayDay: null, inflowDistRM: 0,
+    savedInto: [], savedFrom: [],
   }
 
   const hasWallet = (S.assets || []).some(a => !a.archived && a.liquidity === 'WALLET')
@@ -4437,20 +4636,40 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   // merely mislabel itself — the shortfall lands in `spentRM`, which is the one
   // figure on the page nobody can check against a statement.
   const eventCur = new Map((S.incomeSources || []).map(s => [s.id, s.currency]))
+  const sourceName = new Map((S.incomeSources || []).map(s => [s.id, s.name]))
+  const paidIds = new Set()
   for (const e of S.incomeEvents || []) {
     if (e.date > from && e.date <= to) {
       inflowRM += eventToRM(S, netOf(e), eventCur.get(e.source_id) || 'MYR', e).rm
+      paidIds.add(e.source_id)
     }
   }
+  const inflowSources = [...paidIds].map(id => sourceName.get(id)).filter(Boolean)
 
   // Distributions the broker paid in cash over the window, which arrive in a
   // wallet and are therefore inflow like any other.
+  //
+  // KEPT AS ITS OWN FIGURE, not just folded into the total. These rows have no
+  // income source, so they add to `inflowRM` while adding no name to
+  // `inflowSources` — and a strip that prints the total over the payslip's name
+  // alone credits an employer for the broker's money.
+  let inflowDistRM = 0
   for (const t of S.transactions || []) {
     if (t.side !== 'DIV') continue
     if (t.trade_date > from && t.trade_date <= to) {
-      inflowRM += toRM(S, t.amount || 0, (instr(S, t.ticker) || {}).currency || 'MYR')
+      inflowDistRM += toRM(S, t.amount || 0, (instr(S, t.ticker) || {}).currency || 'MYR')
     }
   }
+  inflowRM += inflowDistRM
+
+  // The pay day only when exactly ONE stream paid and that stream has one. Two
+  // salaried sources land on two days and naming either would be picking a fact
+  // at random; a freelance source has no pay day at all and must not borrow the
+  // other's; and a payslip beside a distribution is two arrivals on two days, so
+  // the clause would be dating a figure only part of which lands then.
+  const streams = paidIds.size + (inflowDistRM ? 1 : 0)
+  const withPayDay = (S.incomeSources || []).filter(x => paidIds.has(x.id) && x.pay_day != null)
+  const inflowPayDay = streams === 1 && withPayDay.length === 1 ? withPayDay[0].pay_day : null
 
   // Obligations. Derived from the schedule and NOT filtered to recorded rows:
   // this app stores only deviations, so an instalment with a due date behind us
@@ -4485,18 +4704,38 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
   // of your own pockets is not saving.
   const liquidityOf = new Map((S.assets || []).map(a => [a.id, a.liquidity || 'SAVINGS']))
   const curOf = new Map((S.assets || []).map(a => [a.id, a.currency]))
+  const assetName = new Map((S.assets || []).map(a => [a.id, a.name]))
+  // TWO LISTS, ONE PER DIRECTION. These name WHERE, and an account money came
+  // OUT of is not somewhere it went — so a deposit names a destination and a
+  // withdrawal names an origin, and the caller takes the list that matches the
+  // sign of the month's net movement. One list would have to describe an
+  // account the money left as a place it arrived, which is `savedRM` read
+  // backwards: the figure would be right and the sentence beside it the exact
+  // opposite of what happened.
+  const savedInto = new Set()
+  const savedFrom = new Set()
   for (const e of S.assetEntries || []) {
     if (e.date <= from || e.date > to) continue
     if (NON_FLOW_SOURCES.has(e.source)) continue
     if (liquidityOf.get(e.asset_id) === 'WALLET') continue
     const cur = curOf.get(e.asset_id) || 'MYR'
-    if (e.type === 'DEPOSIT') savedRM += toRM(S, e.amount, cur)
-    else if (e.type === 'WITHDRAW') savedRM -= toRM(S, e.amount, cur)
+    if (e.type === 'DEPOSIT') {
+      savedRM += toRM(S, e.amount, cur)
+      if (assetName.get(e.asset_id)) savedInto.add(assetName.get(e.asset_id))
+    } else if (e.type === 'WITHDRAW') {
+      savedRM -= toRM(S, e.amount, cur)
+      if (assetName.get(e.asset_id)) savedFrom.add(assetName.get(e.asset_id))
+    }
   }
   for (const c of S.cash || []) {
     if (c.date <= from || c.date > to) continue
-    if (c.type === 'DEPOSIT') savedRM += toRM(S, c.amount, c.currency)
-    else if (c.type === 'WITHDRAW') savedRM -= toRM(S, c.amount, c.currency)
+    if (c.type === 'DEPOSIT') {
+      savedRM += toRM(S, c.amount, c.currency)
+      savedInto.add('the broker')
+    } else if (c.type === 'WITHDRAW') {
+      savedRM -= toRM(S, c.amount, c.currency)
+      savedFrom.add('the broker')
+    }
   }
 
   const walletDeltaRM = walletBalanceOn(S, to) - walletBalanceOn(S, from)
@@ -4516,6 +4755,11 @@ export function spendingFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
     committedRM,
     savedRM,
     walletDeltaRM,
+    inflowSources,
+    inflowPayDay,
+    inflowDistRM,
+    savedInto: [...savedInto],
+    savedFrom: [...savedFrom],
     // `spentRM` below is untouched and still means what it always meant: what left
     // your pockets. These are BESIDE it, not a correction to it.
     floatRM: float.rm,

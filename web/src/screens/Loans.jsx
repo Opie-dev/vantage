@@ -30,7 +30,7 @@ import { dfmt, fmt } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
 import CommitmentRow from './money/CommitmentRow'
-import { Meta, MonthStepper } from './money/parts'
+import { Meta, MonthStrip } from './money/parts'
 
 export default function Loans() {
   const { state, openCommitment, deleteCommitment, openItem } = useVantage()
@@ -48,7 +48,7 @@ export default function Loans() {
   if (!out.rows.length) {
     return (
       <div className="grid gap-4">
-        <MonthStepper />
+        <MonthStrip />
         <Card>
           <CardContent className="grid gap-3 px-4 py-6">
             <span className="eyebrow">No loans</span>
@@ -71,9 +71,18 @@ export default function Loans() {
 
   return (
     <div className="grid gap-4">
-      <MonthStepper note="Instalments are the same every month; the split between them is not." />
+      <MonthStrip />
 
       <div className="grid gap-3 sm:grid-cols-3">
+        {/* The stepper's caption, MADE TRUE. It used to promise that the split
+            varies over a control that could not show it — this screen ignored
+            the shared month entirely, so stepping to March left all three
+            figures on today's. The claim is now bounded by the figures that are
+            actually here: one month's split, and it is this month's. */}
+        <Meta className="col-span-full block">
+          Instalments are the same every month; the split between them is not — these three are
+          this month&rsquo;s.
+        </Meta>
         <Card>
           <CardContent className="px-4">
             <span className="eyebrow">Instalments, a month</span>
