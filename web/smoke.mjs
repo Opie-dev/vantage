@@ -2369,6 +2369,48 @@ try {
     console.log('  rail       Settings is pinned to the foot')
   }
 
+  // The pay day resolved to a date, and the clamp it inherits from dueDayIn.
+  // Asserted directly rather than through a row, because the interesting cases
+  // are the ones a fixture will never happen to contain: a 31st in a 30-day
+  // month, the pay day landing on today, and a December that rolls the year.
+  {
+    const { nextPayDate } = await server.ssrLoadModule('/src/lib/calc.js')
+    const cases = [
+      [25, '2026-09-07', '2026-09-25', 'a day still ahead stays in this month'],
+      [25, '2026-09-25', '2026-09-25', 'today counts as next, not four weeks away'],
+      [25, '2026-09-26', '2026-10-25', 'a day just passed rolls to next month'],
+      [31, '2026-09-07', '2026-09-30', 'the 31st clamps to a 30-day September'],
+      [-1, '2026-09-07', '2026-09-30', 'last working day resolves to the last day'],
+      [5, '2026-12-06', '2027-01-05', 'December rolls the year, not only the month'],
+    ]
+    for (const [day, now, want, why] of cases) {
+      const got = nextPayDate(day, now)
+      if (got !== want) {
+        throw new Error(`nextPayDate(${day}, ${now}) = ${got}, expected ${want} — ${why}`)
+      }
+    }
+    if (nextPayDate(null, '2026-09-07') !== null) {
+      throw new Error('nextPayDate: an irregular source has no pay day and must resolve to nothing')
+    }
+    console.log('  next pay   clamps short months, counts today, and rolls the year')
+  }
+
+  // Both figures were derivable and neither was ever said: the pay day was
+  // printed as a rule with no date in it, and employerCostOf() had no caller
+  // anywhere in the repo.
+  {
+    await tick(() => ctl.setTab('income'))
+    const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+    if (!pane.includes('· next ')) {
+      throw new Error('income: no row resolves its pay day to a date')
+    }
+    if (!pane.includes('cost your employer')) {
+      throw new Error('income: employerCostOf() still has no caller, so the employer total is unsaid')
+    }
+    console.log('  income     rows carry the next pay date and what the source cost to pay')
+    await tick(() => ctl.setTab('dashboard'))
+  }
+
   const real = errors.filter(e =>
     !/not wrapped in act|useLayoutEffect does nothing on the server|Window's scrollTo/.test(e))
   if (real.length) throw new Error(`console.error during render:\n${real.join('\n')}`)

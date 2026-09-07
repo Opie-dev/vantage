@@ -25,7 +25,7 @@ import { PencilIcon, PlusIcon, TrashIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { deductionsOf, netOf, waterfall } from '@/lib/calc'
+import { deductionsOf, employerCostOf, netOf, waterfall } from '@/lib/calc'
 import { dfmt, dfmtLong, fmt } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
@@ -71,10 +71,32 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
             {r.variable
               ? 'Irregular · 3-month average'
               : `Monthly · ${s.pay_day === -1 ? 'last working day' : `day ${s.pay_day}`}`}
+            {/* The rule above says when it pays; this says where that next
+                falls. Both earn a place: "day 31" and "next 30 Sep" are
+                different facts in a short month, and the last working day is
+                a rule with no date in it at all. */}
+            {r.nextDate ? (
+              <>
+                {' '}· next <span className="num">{dfmt(r.nextDate)}</span>
+              </>
+            ) : null}
             {r.last ? (
               <>
                 {' '}· last <span className="num">{fmt(r.last.gross, r.cur)}</span> gross on{' '}
                 <span className="num">{dfmtLong(r.last.date)}</span>
+                {/* What it cost to pay you, which is not the same as what you
+                    were paid — the employer's statutory share never passes
+                    through your hands. Shown only where there IS one: freelance
+                    and rental sources carry no top-up, and a "cost" repeating
+                    the gross beside it states nothing. It goes last and stays in
+                    the meta line because it is a fact about the employer rather
+                    than about your money, and must not compete with net. */}
+                {d && d.onTop > 0 ? (
+                  <>
+                    {' '}· cost your employer{' '}
+                    <span className="num">{fmt(employerCostOf(r.last), r.cur)}</span>
+                  </>
+                ) : null}
               </>
             ) : (
               ' · nothing recorded yet'
