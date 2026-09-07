@@ -93,6 +93,8 @@ const VantageContext = createContext(null)
  *   addItem: (body: object) => Promise<boolean>,
  *   openItem: (prefill?: object) => void,
  *   openCardPayment: (prefill?: object) => void,
+ *   addCommitmentPayment: (id: number, body: object) => Promise<boolean>,
+ *   deleteCommitmentPayment: (id: number, paymentId: number) => Promise<boolean>,
  *   openStatementImport: (prefill?: object) => void,
  *   importStatement: (body: object) => Promise<object|null>,
  *   addCardPlan: (cardId: number, body: object) => Promise<boolean>,
@@ -678,6 +680,14 @@ export function VantageProvider({ children }) {
       addIncomeEvent: (sourceId, body) => mutate(() => api.addIncomeEvent(sourceId, body), 'Payment recorded'),
       deleteIncomeEvent: (sourceId, eventId) =>
         mutate(() => api.deleteIncomeEvent(sourceId, eventId), 'Payment removed'),
+      // WITHOUT THESE THE PAY SHEET THROWS. CardPaymentDialog destructures
+      // addCommitmentPayment from useVantage(), and the store never returned
+      // it — so the handler was undefined and every attempt to record a card
+      // payment died on the click, whichever amount was chosen.
+      addCommitmentPayment: (id, body) =>
+        mutate(() => api.addCommitmentPayment(id, body), 'Payment recorded'),
+      deleteCommitmentPayment: (id, paymentId) =>
+        mutate(() => api.deleteCommitmentPayment(id, paymentId), 'Payment removed'),
       updateCommitment: (id, body) =>
         mutate(() => api.updateCommitment(id, body), `${body.name} updated`),
       deleteCommitment: id => mutate(() => api.deleteCommitment(id), 'Commitment removed'),
