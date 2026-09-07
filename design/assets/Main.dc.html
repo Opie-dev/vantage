@@ -516,11 +516,12 @@
         </div>
 
         <p class="faint" style="margin: 4px 0 0; font-size: 11.5px; line-height: 1.6">
-          Three savings accounts, three distribution dates, two different computation rules &mdash; and one of
-          them books itself. The EPF row on 25 August was written by the payslip, not typed: an employment
-          income event with <span class="num">epf_employee</span> and <span class="num">epf_employer</span>
-          set writes the matching entry in the same transaction, so the two can never drift apart. Nothing
-          here touches the moomoo wallet.
+          Three savings accounts, three distribution dates, two different computation rules &mdash; and every
+          row here was typed. The EPF row on 25 August came off a statement, not off the payslip: EPF splits
+          a contribution 75/15/10 across Akaun Persaraan, Akaun Sejahtera and Akaun Fleksibel, and nothing in
+          the app models that split, so a payslip records <span class="num">epf_employee</span> and
+          <span class="num">epf_employer</span> and writes them nowhere else. Nothing here touches the moomoo
+          wallet.
         </p>
 
       </div>

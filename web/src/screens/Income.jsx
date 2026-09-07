@@ -29,7 +29,7 @@ import { deductionsOf, netOf, waterfall } from '@/lib/calc'
 import { dfmt, dfmtLong, fmt } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
-import { Meta, MonthStepper, RowAction } from './money/parts'
+import { Line, Meta, MonthStepper, RowAction } from './money/parts'
 
 function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
   const s = r.source
@@ -40,6 +40,11 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
   // mistyped freelance invoice became permanent.
   const [open, setOpen] = useState(false)
   const events = r.events || []
+  // A source paid in something else keeps two figures, and the row has to carry
+  // both: the page totals in ringgit, the invoice was written in dollars, and
+  // showing one without the other makes the row either untotalable or
+  // impossible to check against the payment it came from.
+  const foreign = r.cur !== 'MYR'
 
   return (
     <div className="border-hairline border-b px-4 py-3 last:border-b-0">
@@ -58,6 +63,11 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
             ) : null}
           </div>
           <Meta>
+            {/* Who pays it, first. The form has captured this since the source
+                table existed and no screen has ever said it, which left two
+                clients with similar names indistinguishable on the one page
+                that lists them. */}
+            {s.payer ? `${s.payer} · ` : ''}
             {r.variable
               ? 'Irregular · 3-month average'
               : `Monthly · ${s.pay_day === -1 ? 'last working day' : `day ${s.pay_day}`}`}
@@ -72,11 +82,35 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
           </Meta>
         </div>
         <div className="text-right">
+          {/* Ringgit leads, because the three tiles above and every commitment
+              this is weighed against are ringgit. The '≈' covers both ways the
+              figure can be soft — an averaged source, and a conversion at
+              today's rate rather than at the one the payment landed on. */}
           <div className="num text-[13.5px] font-semibold">
-            {r.isEstimate ? '≈ ' : ''}
-            {fmt(r.monthly, r.cur)}
+            {r.isEstimate || !r.fxDated ? '≈ ' : ''}
+            {fmt(r.monthlyRM, 'MYR')}
           </div>
-          <Meta>{r.variable ? 'estimate' : 'net'}</Meta>
+          <Meta className="block">{r.variable ? 'estimate' : 'net'}</Meta>
+          {/* Only when there is something to twin. A source with no payment in
+              the window averages to zero, and "$0.00 at some rate" is a sentence
+              about a payment that does not exist — the meta line already says
+              nothing was recorded. */}
+          {foreign && r.monthly ? (
+            <Meta className="block">
+              <span className="num">{fmt(r.monthly, r.cur)}</span>
+              {/* An average has no single day behind it: the ringgit figure is
+                  the mean of several payments, each converted on its own day, so
+                  naming one day would be a claim that divides out to no rate at
+                  all. The last payment's day is not the mean's day. */}
+              {r.variable
+                ? r.fxDated
+                  ? ' · each payment at the rate on its own day'
+                  : ' · at today’s rate where a payment carried none, so it moves'
+                : r.fxDated
+                  ? ' · at the rate on the day it landed'
+                  : ' · at today’s rate, so it moves'}
+            </Meta>
+          ) : null}
         </div>
         <Button size="sm" variant="outline" onClick={() => onRecord(r.id)}>
           <PlusIcon />
@@ -124,7 +158,7 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
       ) : null}
 
       {d && d.deducted > 0 ? (
-        <div className="mt-2.5 ml-[21px]">
+        <div className="mt-2.5 ml-[21px] max-w-[520px]">
           <p className="eyebrow text-[9.5px]">Deducted from your pay</p>
           <div className="text-muted-foreground mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
             {[
@@ -143,6 +177,20 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
                 </span>
               ))}
           </div>
+          {/* THE SUM IS THE LOAD-BEARING FIGURE, not the six lines above it. It
+              is the whole of what turned gross into net, and leaving it off made
+              the reader add six numbers to find the one that decides how much
+              money there was. Signed, because it is a subtraction from gross —
+              the group below it is not. */}
+          <div className="mt-1.5">
+            <Line
+              label="Total deducted"
+              value={`−${fmt(d.deducted, r.cur)}`}
+              tone="text-loss"
+              strong
+              rule
+            />
+          </div>
           {d.onTop > 0 ? (
             <>
               <p className="eyebrow mt-2.5 text-[9.5px]">Paid on top by your employer</p>
@@ -159,10 +207,17 @@ function SourceRow({ r, onRecord, onEdit, onRemove, onRemoveEvent }) {
                     </span>
                   ))}
               </div>
-              <p className="text-faint mt-2 max-w-[520px] text-[11.5px] leading-relaxed">
+              {/* Unsigned and untoned. This total is what the employer paid, not
+                  what you lost, and drawing it in --loss beside the one above
+                  would say the two groups do the same thing to your money. */}
+              <div className="mt-1.5">
+                <Line label="Total on top" value={fmt(d.onTop, r.cur)} strong rule />
+              </div>
+              <p className="text-faint mt-2 text-[11.5px] leading-relaxed">
                 That second group never passes through your pay, so it is not subtracted from net —
                 but <span className="num">{fmt(d.epfTotal, r.cur)}</span> of EPF lands in your
-                account either way, and Vantage books it there in the same write.
+                account either way. Vantage does not put it there: EPF splits a contribution across
+                three accounts, so it is recorded on Assets from the statement that shows the split.
               </p>
             </>
           ) : null}
@@ -265,9 +320,10 @@ export default function Income() {
 
       <p className="text-faint m-0 max-w-[78ch] text-[11.5px] leading-relaxed text-pretty">
         A salary is a floor; an irregular source is the mean of the last three months and is drawn
-        faded wherever it appears. Employment pay with EPF on it also books the full contribution
-        — both halves — into the linked EPF account in the same save, so one record has two effects
-        and the two cannot drift.
+        faded wherever it appears. A payslip records both halves of EPF — yours and your employer's
+        — and only yours comes out of net; neither is booked into an account here, because EPF
+        splits every contribution across three and this page knows about none of them. Record the
+        contribution on Assets, from the statement.
       </p>
     </div>
   )

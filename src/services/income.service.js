@@ -6,15 +6,17 @@
  * reaches income(), which means dividends — a month with a bonus in it would
  * otherwise read as a spectacular month for the ETFs.
  *
- * ONE THING HERE DOES REACH ANOTHER TABLE, deliberately: an employment event with
- * EPF on it writes the matching entry into the linked EPF asset, in the same
- * database transaction. One record, two effects, no chance of the two drifting —
- * see addEvent().
+ * NOTHING HERE WRITES TO ANOTHER TABLE EITHER. A payslip's EPF used to be booked
+ * into a linked EPF asset in the same transaction. That link is gone: EPF splits
+ * every contribution across three accounts — Akaun Persaraan, Akaun Sejahtera,
+ * Akaun Fleksibel — on a statutory 75/15/10, and one foreign key could only ever
+ * put the whole of it in one of them. The payslip's EPF columns stay, because net
+ * pay is computed from them; the contribution itself is recorded on Assets, from
+ * a statement, by hand.
  */
-const { transaction, pool } = require('../db');
+const { pool } = require('../db');
 const income = require('../models/income.model');
 const fx = require('./fx.service');
-const assets = require('../models/assets.model');
 const { badRequest, notFound } = require('../middleware/errorHandler');
 
 /** Mirrors income_sources_kind_check. */
@@ -52,8 +54,7 @@ function checkPayDay(v) {
 async function createSource(body) {
   const {
     kind, name, payer = '', currency = 'MYR', cadence = 'MONTHLY',
-    pay_day = null, gross_default = null, epf_asset_id = null,
-    started_on = null, sort_order = 0,
+    pay_day = null, gross_default = null, started_on = null, sort_order = 0,
   } = body;
 
   if (!KINDS.includes(kind)) throw badRequest(`kind must be one of: ${KINDS.join(', ')}`);
@@ -73,16 +74,10 @@ async function createSource(body) {
   if (!optionalNumber(gross_default)) throw badRequest('gross_default must be a number');
   if (started_on != null) checkDate(started_on, 'started_on');
 
-  if (epf_asset_id != null) {
-    const a = await assets.findById(epf_asset_id);
-    if (!a) throw badRequest(`no asset with id ${epf_asset_id} to route EPF into`);
-  }
-
   return income.insertSource({
     kind, name: String(name).trim(), payer, currency, cadence,
     payDay: cadence === 'MONTHLY' ? pay_day : null,
-    grossDefault: gross_default, epfAssetId: epf_asset_id,
-    startedOn: started_on, sortOrder: sort_order,
+    grossDefault: gross_default, startedOn: started_on, sortOrder: sort_order,
   });
 }
 
@@ -101,7 +96,6 @@ async function updateSource(id, body) {
     currency: body.currency ?? s.currency,
     pay_day: body.pay_day === undefined ? s.pay_day : body.pay_day,
     gross_default: body.gross_default === undefined ? s.gross_default : body.gross_default,
-    epf_asset_id: body.epf_asset_id === undefined ? s.epf_asset_id : body.epf_asset_id,
     active: body.active === undefined ? s.active : body.active,
     started_on: body.started_on ?? s.started_on,
     ended_on: body.ended_on === undefined ? s.ended_on : body.ended_on,
@@ -115,14 +109,11 @@ async function updateSource(id, body) {
   if (!optionalNumber(f.gross_default)) throw badRequest('gross_default must be a number');
   if (f.started_on != null) checkDate(f.started_on, 'started_on');
   if (f.ended_on != null) checkDate(f.ended_on, 'ended_on');
-  if (f.epf_asset_id != null && !(await assets.findById(f.epf_asset_id))) {
-    throw badRequest(`no asset with id ${f.epf_asset_id} to route EPF into`);
-  }
 
   await income.updateSource(id, {
     name: String(f.name).trim(), payer: f.payer, currency: f.currency,
-    payDay: f.pay_day, grossDefault: f.gross_default, epfAssetId: f.epf_asset_id,
-    active: f.active, startedOn: f.started_on, endedOn: f.ended_on, sortOrder: f.sort_order,
+    payDay: f.pay_day, grossDefault: f.gross_default, active: f.active,
+    startedOn: f.started_on, endedOn: f.ended_on, sortOrder: f.sort_order,
   });
 }
 
@@ -141,16 +132,12 @@ async function removeSource(id) {
 }
 
 /**
- * Record one payment, and book its EPF where EPF actually lands.
+ * Record one payment.
  *
- * The whole contribution — the employee's 11% AND the employer's 12 or 13% — goes
- * into the linked asset, because both halves are yours the moment they land. Only
- * the employee's half is subtracted from net pay, which is exactly why the two
- * column groups exist.
- *
- * Both writes share one transaction. A half-applied pair would leave the EPF
- * balance disagreeing with the payslip that produced it, and nothing would ever
- * reconcile them again.
+ * The two column groups are why this reads a payslip rather than a figure: only
+ * the employee's half is subtracted from net, while the employer's is paid on top
+ * and never touches it. Both are stored on the event and neither is written
+ * anywhere else — see the note at the top of this file for why the EPF link went.
  */
 async function addEvent(sourceId, body) {
   if (sourceId === null) throw badRequest('bad id');
@@ -176,9 +163,6 @@ async function addEvent(sourceId, body) {
       'fields, which are paid on top and never come out of your pay');
   }
 
-  const epfTotal = f.epf_employee + f.epf_employer;
-  const bookEpf = epfTotal > 0 && s.epf_asset_id != null;
-
   /* The rate on the day it landed, fixed to the payment.
    *
    * WITHOUT THIS THE PAST MOVES. One global rate converts a March invoice at
@@ -200,33 +184,22 @@ async function addEvent(sourceId, body) {
     }
   }
 
-  return transaction(async client => {
-    const row = (await income.insertEvent(client, {
-      sourceId, date, gross,
-      epfEmployee: f.epf_employee, socsoEmployee: f.socso_employee, eisEmployee: f.eis_employee,
-      skbbk: f.skbbk, pcb: f.pcb, zakat: f.zakat, otherDeducted: f.other_deducted,
-      epfEmployer: f.epf_employer, socsoEmployer: f.socso_employer, eisEmployer: f.eis_employer,
-      note, source, fxRate, fxDate,
-    })).rows[0];
-
-    if (bookEpf) {
-      await client.query(
-        `INSERT INTO asset_entries (asset_id,type,date,amount,note,source)
-         VALUES ($1,'DEPOSIT',$2,$3,$4,'payroll')`,
-        [s.epf_asset_id, date, epfTotal,
-          `${s.name} — ${f.epf_employee.toFixed(2)} yours + ${f.epf_employer.toFixed(2)} employer`]);
-    }
-    return { ...row, epfBooked: bookEpf ? epfTotal : 0 };
+  return income.insertEvent({
+    sourceId, date, gross,
+    epfEmployee: f.epf_employee, socsoEmployee: f.socso_employee, eisEmployee: f.eis_employee,
+    skbbk: f.skbbk, pcb: f.pcb, zakat: f.zakat, otherDeducted: f.other_deducted,
+    epfEmployer: f.epf_employer, socsoEmployer: f.socso_employer, eisEmployer: f.eis_employer,
+    note, source, fxRate, fxDate,
   });
 }
 
 /**
  * Remove an event.
  *
- * The EPF entry it generated is NOT removed with it — there is no link between
- * the two rows to follow, and guessing at one by date and amount could delete a
- * contribution the owner recorded by hand. The response says so, and the entry is
- * deleted from the Assets screen if that is what was meant.
+ * The payslip is the only row this ever wrote, so it is the only row to unwind.
+ * Any EPF entry on Assets for the same month is the owner's own record of a
+ * statement and has no link to this one; deleting it here would be a guess by
+ * date and amount against a row nothing here created.
  */
 async function removeEvent(sourceId, eventId) {
   if (sourceId === null || eventId === null) throw badRequest('bad id');
@@ -234,10 +207,7 @@ async function removeEvent(sourceId, eventId) {
   if (!e) throw notFound('no such payment');
   if (e.source_id !== sourceId) throw notFound('no such payment on this source');
   await income.removeEvent(eventId);
-  const booked = e.epf_employee + e.epf_employer;
-  return booked > 0
-    ? { ok: true, note: `Any EPF entry this created (${booked.toFixed(2)}) is left in place — remove it from Assets if it was wrong.` }
-    : { ok: true };
+  return { ok: true };
 }
 
 module.exports = {

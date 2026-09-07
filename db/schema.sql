@@ -590,7 +590,6 @@ CREATE TABLE public.income_sources (
     cadence text DEFAULT 'MONTHLY'::text NOT NULL,
     pay_day integer,
     gross_default double precision,
-    epf_asset_id integer,
     active boolean DEFAULT true NOT NULL,
     started_on text,
     ended_on text,
@@ -1216,14 +1215,6 @@ ALTER TABLE ONLY public.goals
 
 ALTER TABLE ONLY public.income_events
     ADD CONSTRAINT income_events_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.income_sources(id);
-
-
---
--- Name: income_sources income_sources_epf_asset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.income_sources
-    ADD CONSTRAINT income_sources_epf_asset_id_fkey FOREIGN KEY (epf_asset_id) REFERENCES public.assets(id);
 
 
 --

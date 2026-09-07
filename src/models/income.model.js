@@ -7,23 +7,23 @@ const listSources = () => get(`SELECT * FROM income_sources ORDER BY sort_order,
 const findSource = id => one(`SELECT * FROM income_sources WHERE id=$1`, id);
 
 const insertSource = ({
-  kind, name, payer, currency, cadence, payDay, grossDefault, epfAssetId, startedOn, sortOrder,
+  kind, name, payer, currency, cadence, payDay, grossDefault, startedOn, sortOrder,
 }) => one(
   `INSERT INTO income_sources
-     (kind,name,payer,currency,cadence,pay_day,gross_default,epf_asset_id,started_on,sort_order)
-   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-  kind, name, payer, currency, cadence, payDay, grossDefault, epfAssetId, startedOn, sortOrder);
+     (kind,name,payer,currency,cadence,pay_day,gross_default,started_on,sort_order)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+  kind, name, payer, currency, cadence, payDay, grossDefault, startedOn, sortOrder);
 
 /** `kind` and `cadence` are not updatable: cadence decides whether pay_day may
  *  exist at all, and kind decides whether the statutory block means anything. */
 const updateSource = (id, {
-  name, payer, currency, payDay, grossDefault, epfAssetId, active, startedOn, endedOn, sortOrder,
+  name, payer, currency, payDay, grossDefault, active, startedOn, endedOn, sortOrder,
 }) => run(
   `UPDATE income_sources SET
-     name=$1, payer=$2, currency=$3, pay_day=$4, gross_default=$5, epf_asset_id=$6,
-     active=$7, started_on=$8, ended_on=$9, sort_order=$10
-   WHERE id=$11`,
-  name, payer, currency, payDay, grossDefault, epfAssetId, active, startedOn, endedOn, sortOrder, id);
+     name=$1, payer=$2, currency=$3, pay_day=$4, gross_default=$5,
+     active=$6, started_on=$7, ended_on=$8, sort_order=$9
+   WHERE id=$10`,
+  name, payer, currency, payDay, grossDefault, active, startedOn, endedOn, sortOrder, id);
 
 const removeSource = id => run(`DELETE FROM income_sources WHERE id=$1`, id);
 
@@ -42,23 +42,23 @@ const listEvents = () => get(
 const findEvent = id => one(`SELECT * FROM income_events WHERE id=$1`, id);
 
 /**
- * Takes `q` — the pool, or a client checked out for a transaction. An employment
- * event and the EPF asset entry it generates are written together or not at all;
- * see incomeService.addEvent().
+ * One write, on its own. This took a transaction and a client while a payslip also
+ * booked an EPF asset entry; nothing else is written now, so a transaction around
+ * a single INSERT would only claim an atomicity requirement that no longer exists.
  */
-const insertEvent = (q, {
+const insertEvent = ({
   sourceId, date, gross,
   epfEmployee, socsoEmployee, eisEmployee, skbbk, pcb, zakat, otherDeducted,
   epfEmployer, socsoEmployer, eisEmployer, note, source, fxRate = null, fxDate = null,
-}) => q.query(
+}) => one(
   `INSERT INTO income_events
      (source_id,date,gross,
       epf_employee,socso_employee,eis_employee,skbbk,pcb,zakat,other_deducted,
       epf_employer,socso_employer,eis_employer,note,source,fx_rate,fx_date)
    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
-  [sourceId, date, gross,
-    epfEmployee, socsoEmployee, eisEmployee, skbbk, pcb, zakat, otherDeducted,
-    epfEmployer, socsoEmployer, eisEmployer, note, source, fxRate, fxDate]);
+  sourceId, date, gross,
+  epfEmployee, socsoEmployee, eisEmployee, skbbk, pcb, zakat, otherDeducted,
+  epfEmployer, socsoEmployer, eisEmployer, note, source, fxRate, fxDate);
 
 const removeEvent = id => run(`DELETE FROM income_events WHERE id=$1`, id);
 
