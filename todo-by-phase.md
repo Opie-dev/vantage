@@ -194,27 +194,37 @@ No decisions and no design. Each item makes a later phase verifiable instead of 
 
 ---
 
-## Phase 1a — Port the rail grouping and the keyboard shortcut
+## Phase 1a — Port the rail grouping and the keyboard shortcut — **done**
 
-Unblocked, independent of every other phase, and the only unmerged work left in the repo. It sits
-here rather than in a later phase because the branch it lives on will rot as `App.jsx` moves on.
+Unblocked, independent of every other phase, and the only unmerged work left in the repo. It sat
+here rather than in a later phase because the branch it lived on would rot as `App.jsx` moved on.
 
-- [ ] **Port `NAV_GROUPS` and ⌘B/Ctrl-B onto main's fold.**
-      `rail-groups-and-fold` (`be6852c`) rewrites `App.jsx` (+340/−57) and does two things, of
-      which **main has since reimplemented one independently** — `6d017f2` "Let the sidebar be
-      collapsed on purpose" and `720ddd2` "Put the sidebar toggle beside the title", with the same
-      212px ⇄ 58px widths, the same per-device localStorage reasoning and the same sr-only labels,
-      but different code (main's state variable is `wide`, the branch's is `collapsed`).
-      **So this will not fast-forward and will not merge cleanly — it is a port, not a merge.**
+- [x] **Done 7 Sep 2026, on `rail-fold-shortcut` (two commits, off `main`).** Lint, `vite build`
+      and the smoke suite all pass, with three assertions added.
+      `rail-groups-and-fold` could not be merged: main reimplemented the fold itself after that
+      branch diverged (`6d017f2`, `720ddd2`), reaching the same 212px ⇄ 58px widths and the same
+      per-device reasoning by different code (main's state is `wide`, the branch's `collapsed`).
+      So only the parts main never grew were taken.
+      - **⌘B / Ctrl-B**, bound in `TopBar` beside the button it duplicates, with the tooltip
+        naming it. Skipped while typing, since the pair means bold in a text field. The smoke
+        test dispatches the key **on an input** rather than at the window, because the guard reads
+        only the event's target — fired at the window it would pass while the guard did nothing.
+      - **`foot: true` on Settings**, hanging it at the bottom of the column via `mt-auto`.
+      - **Three runs — Portfolio / Planning / Money**, every entry carrying a group.
 
-      What is genuinely absent from main, verified directly rather than taken on report:
-      - **`NAV_GROUPS`** and the three-run rail — Portfolio / Money / Settings-at-foot, with
-        membership listed explicitly so an unlisted new screen joins the last group rather than
-        vanishing. Present twice on the branch, nowhere in main.
-      - **The ⌘B / Ctrl-B shortcut** — three references on the branch, while main's `App.jsx`
-        contains no `keydown`, `metaKey` or `ctrlKey` at all.
+- [x] **`NAV_GROUPS` was deliberately NOT ported, and the audit finding that asked for it was
+      wrong.** Recorded because it is the clearest example in this file of why a search result is
+      not a verdict. The constant is genuinely absent from main, which is what the audit reported
+      — but the **feature** is not: main already groups the rail per entry via `TABS[].group`,
+      rendering a heading when wide and a rule when folded. And the branch's constant names
+      `positions`, `instruments`, `wallet` and `money`, four screens that stopped existing when
+      Money split into six (#31). Porting it would have replaced a working mechanism with a stale
+      one and dropped the six Money screens into an unnamed leftover group.
+      The lesson worth keeping: **an audit that greps for a symbol finds the symbol, not the
+      capability.** Two of this file's findings have now inverted on reading the code — this one,
+      and the wallet that already existed.
 
-      Lift those two onto main's existing fold implementation and delete the branch afterwards.
+- [ ] **Delete `rail-groups-and-fold` once the port lands.** It holds nothing else.
 
 ---
 
