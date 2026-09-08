@@ -70,7 +70,7 @@ async function getState() {
     // [{currency, cash}] — the broker's real per-wallet pockets. NOT summable with
     // each other in different currencies without the fx rate above.
     funds: await settings.getJSON('funds', []),
-    preferences: await preferences.get(),   // { pnlBasis, dashboardTheme, expenseTargetRM }
+    preferences: await preferences.get(),   // { pnlBasis, dashboardTheme, overviewMode }
     lastSync: (await settings.get('last_sync')) || null,
   };
 }

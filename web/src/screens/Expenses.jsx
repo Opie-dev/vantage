@@ -10,16 +10,27 @@
  * itemised half; the half that checks it is one tab away — and reads the month
  * that is happening, while this screen alone can be looking at another.
  *
- * THE RECONCILIATION IS WHY THE LOG IS HONEST. commitments-and-income-plan.md §2
- * argued against an expense log because one gets abandoned and then silently
- * under-reports. spendingFor() already infers what left the wallets from balance
- * readings, without anything being entered, so the log is measured against it and
- * told to say when it has gone stale.
+ * THE RECONCILIATION IS WHY THE LOG IS HONEST, AND IT LIVES ON OVERVIEW.
+ * commitments-and-income-plan.md §2 argued against an expense log because one
+ * gets abandoned and then silently under-reports. spendingFor() already infers
+ * what left the wallets from balance readings, without anything being entered,
+ * so the log is measured against it — on Overview, beside the measured statement
+ * the coverage bar is checking.
  *
- * EVERY COMPARISON HERE IS AGAINST A FACT. The month runs against the three
- * months before it, the day strip shows which days were typed into, and the pace
- * divides by the days that have happened. The one intention is the target, and it
- * is the one figure the app will not invent.
+ * IT WAS ON THIS SCREEN TOO, AND WAS TAKEN OFF. The residual needs two readings
+ * bracketing the month, so with the readings this app usually holds it rendered
+ * on the month that is happening and on no other. That made it the one section
+ * here that appeared and vanished as the reader clicked between months, on a
+ * screen whose whole point is that a month is a month. expensesFor() still
+ * computes it — nothing was removed from the derivation, only from this page.
+ *
+ * EVERY COMPARISON HERE IS AGAINST A FACT, AND NOW THERE IS NOTHING ELSE. The
+ * month runs against the three months before it, the day strip shows which days
+ * were typed into, and the pace divides by the days that have happened. A
+ * monthly target used to sit among them — the one intention on the screen, and
+ * the one figure the app would not invent — and it is gone: every line drawn
+ * here is something that happened, so none of them needs telling apart from a
+ * number somebody chose.
  */
 import { useMemo, useState } from 'react'
 import {
@@ -48,7 +59,6 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
 import {
   Select,
@@ -75,7 +85,6 @@ import {
   expenseGroupOf,
   expenseHistory,
   expensesFor,
-  expenseTarget,
   toRM,
 } from '@/lib/calc'
 import { compact, dfmt, fmt, monthLabel, pct1, pctS } from '@/lib/format'
@@ -152,89 +161,24 @@ function usualPhrase(monthsLogged) {
 }
 
 /**
- * The target, and the only place on this screen where an intention is stored.
+ * Twelve months of logged spend, ending at the month that is happening.
  *
- * Unset by default, and unset is a state rather than a gap to be filled with a
- * plausible number: everything else here is measured, and grading a month
- * against a figure the app made up would put the two on the same footing.
- */
-function TargetControl({ target, onSave }) {
-  const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState(target == null ? '' : String(target))
-
-  const save = async () => {
-    const n = Number(draft)
-    if (await onSave(Number.isFinite(n) && n > 0 ? n : null)) setOpen(false)
-  }
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={o => {
-        setOpen(o)
-        if (o) setDraft(target == null ? '' : String(target))
-      }}
-    >
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="xs">
-          {target == null ? 'Set a target' : `target ${fmt(target, 'MYR')}`}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[268px]" align="start">
-        <span className="eyebrow">Monthly target</span>
-        <p className="text-faint mt-1.5 text-[11.5px] leading-relaxed">
-          One figure for everything variable, not a budget per category. A budget compares an
-          intention against another intention; this compares one against what happened.
-        </p>
-        <div className="mt-3 flex items-center gap-2">
-          <Input
-            className="num h-8"
-            type="number"
-            min="0"
-            step="50"
-            autoFocus
-            placeholder="0"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && save()}
-            aria-label="Monthly target in RM"
-          />
-          <Button size="sm" onClick={save}>
-            Save
-          </Button>
-        </div>
-        {target == null ? null : (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="mt-2"
-            onClick={async () => {
-              setDraft('')
-              if (await onSave(null)) setOpen(false)
-            }}
-          >
-            No target
-          </Button>
-        )}
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-/**
- * Twelve months of logged spend, ending at the month on screen.
+ * Picking a month highlights its bar and re-reads the panels below it; it does
+ * not move the window. So the month that is happening is always the last bar,
+ * and always one click away — which is why this needs no way back beside it.
  *
  * A month nobody typed into is drawn as a gap rather than a zero bar. A zero bar
  * is a claim — it says nothing was spent — and every month before the log existed
  * would otherwise be making it.
  */
-function History({ months, target, ex, onPick, onTarget, drilled, onNow }) {
-  const most = Math.max(...months.map(m => m.totalRM), target ? target * 1.1 : 0)
-  // Headroom for the figure that sits above each bar, and for the target line
-  // when the target is above everything logged.
+function History({ months, ex, onPick }) {
+  // The usual month is drawn, so it has to be inside the scale — a line above
+  // every bar would otherwise sit off the top of the chart, which is exactly
+  // when it is most worth seeing.
+  const usual = ex.usualRM
+  const most = Math.max(...months.map(m => m.totalRM), usual ? usual * 1.1 : 0)
+  // Headroom for the figure that sits above each bar.
   const scale = most > 0 ? most * 1.16 : 1
-  const over = ex.loggedRM - (target || 0)
-  const left = ex.daysInMonth - ex.elapsedDays
 
   return (
     <div className="border-hairline border-b px-4 py-4">
@@ -242,31 +186,26 @@ function History({ months, target, ex, onPick, onTarget, drilled, onNow }) {
         <span className="eyebrow">Logged spend · {WINDOW} months</span>
         {/* Where the exception is stated, beside the control that is the
             exception. Every other Money screen shows the month that is
-            happening and has no way to be moved off it. */}
+            happening and has no way to be moved off it. This one does, and it
+            is a READ rather than a move: the window is anchored on today, so
+            picking a bar only changes which month is being read out below. A
+            "Back to September" button used to stand here because the window
+            re-anchored on the pick and the month that is happening fell off the
+            chart — the chart was a one-way door. It no longer is: that month is
+            the last bar whatever is selected, so the way back is the bar. */}
         <span className="text-faint text-[11px]">pick a month to read it — this screen only</span>
-        {/* AND THE WAY BACK, because the chart is a one-way door without it. The
-            window re-anchors on whatever month you pick — expenseHistory() builds
-            `sel-11 … sel`, so the month you drilled to is always the LAST bar and
-            there is never a bar later than it. Drill to August and September is
-            simply not on the chart any more. The stepper carried a "This month"
-            button and a next-month chevron and both went with it; the only route
-            left was leaving the tab and coming back, which nothing on the screen
-            said. Named rather than labelled "This month", because it is the
-            return path for a drill and not a month control: it exists only while
-            the screen is off today, and it is the last thing that happens before
-            it disappears. */}
-        {drilled ? (
-          <Button variant="outline" size="xs" onClick={onNow}>
-            Back to {monthLabel(currentMonth().y, currentMonth().m)}
-          </Button>
-        ) : null}
-        {target ? (
+        {/* The line is useless unless the figure is beside it: "a usual month"
+            drawn without a number is a rule the reader cannot check any bar
+            against. Named rather than labelled "average", because it is the
+            average of the months that HAVE a log — usualPhrase() says which. */}
+        {usual ? (
           <span className="text-faint flex items-center gap-1.5 text-[11px]">
             <span
-              className="border-foreground/50 inline-block w-4 border-t border-dashed"
+              className="inline-block w-4 border-t border-dotted"
+              style={{ borderColor: 'var(--chart-1)' }}
               aria-hidden="true"
             />
-            target
+            <span className="num">a usual month {fmt(usual, 'MYR')}</span>
           </span>
         ) : null}
         <span className="text-faint flex items-center gap-1.5 text-[11px]">
@@ -277,18 +216,6 @@ function History({ months, target, ex, onPick, onTarget, drilled, onNow }) {
           />
           the month still open
         </span>
-        <TargetControl target={target} onSave={onTarget} />
-        {target ? (
-          <span className="text-faint max-w-[420px] text-[11px] leading-[1.5]">
-            {ex.open
-              ? over > 0
-                ? `Over the target by ${fmt(over, 'MYR')} with ${left} ${left === 1 ? 'day' : 'days'} still to go.`
-                : `${fmt(-over, 'MYR')} of the target is unspent with ${left} ${left === 1 ? 'day' : 'days'} to go.`
-              : over > 0
-                ? `Over by ${fmt(over, 'MYR')}. A target is an intention and this is a fact.`
-                : `Under by ${fmt(-over, 'MYR')}. A target is an intention and this is a fact.`}
-          </span>
-        ) : null}
       </div>
 
       <div className="relative h-[150px]">
@@ -337,10 +264,14 @@ function History({ months, target, ex, onPick, onTarget, drilled, onNow }) {
             )
           })}
         </div>
-        {target ? (
+        {/* ONE LINE, AND IT IS A MEASUREMENT. It is drawn in the chart's own ink
+            and dotted, not in the foreground's and dashed, because nothing on
+            this chart is an intention any more: the target line stood here too,
+            and telling the two apart was the whole reason for the difference. */}
+        {usual ? (
           <div
-            className="border-foreground/40 pointer-events-none absolute inset-x-0 border-t border-dashed"
-            style={{ bottom: `${(target / scale) * 100}%` }}
+            className="pointer-events-none absolute inset-x-0 border-t border-dotted"
+            style={{ bottom: `${(usual / scale) * 100}%`, borderColor: 'var(--chart-1)' }}
             aria-hidden="true"
           />
         ) : null}
@@ -372,9 +303,19 @@ function DayStrip({ ex }) {
       <div className="min-w-[300px] flex-1">
         <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="eyebrow">Day by day</span>
+          {/* A month with nothing in it HAS no heaviest day, and this line must
+              not invent one: `most` falls back to 1, which is in no day, so
+              indexOf() returns -1 and the line would read "heaviest day 0 ·
+              RM 1.00". The strip below still draws — every elapsed day pale,
+              which is the true picture and the same shape a logged month draws. */}
           <span className="text-faint num text-[11px]">
-            heaviest day {heaviest} · {fmt(most, 'MYR')}
-            {blanks ? ` · ${blanks} ${blanks === 1 ? 'day' : 'days'} with nothing logged` : ''}
+            {ex.count === 0
+              ? ex.open
+                ? 'nothing logged yet'
+                : 'nothing logged'
+              : `heaviest day ${heaviest} · ${fmt(most, 'MYR')}${
+                  blanks ? ` · ${blanks} ${blanks === 1 ? 'day' : 'days'} with nothing logged` : ''
+                }`}
           </span>
         </div>
         <div
@@ -500,119 +441,10 @@ function FilterSelect({ name, value, onChange, items, disabled, width }) {
   )
 }
 
-/**
- * Two bases, and the gap between them.
- *
- * THE LOG SAYS ONE THING AND THE BANK SAYS ANOTHER, and both are measured, so the
- * difference is not an opinion — it is the spending that never got typed in.
- * expenses-plan.md §3 is the whole argument: an expense log gets abandoned and
- * then silently under-reports, and the only defence is a second figure derived
- * from something nobody has to maintain. That figure is the residual, and this is
- * where the two are put beside each other.
- *
- * COVERAGE IS ON OVERVIEW TOO, AND DELIBERATELY. There it sits against the
- * measured statement; here it sits against the itemised list it is checking. The
- * two are the same call, expensesFor(), so on the month they are both showing
- * they cannot disagree — and when this screen is drilled into a past one they are
- * answering about two different months, which the strip on each says out loud.
- *
- * A NEGATIVE GAP IS NOT GOOD NEWS. More logged than actually left points at a
- * double entry or an expense filed in the wrong month, not at thrift, and the
- * copy says so rather than showing a reassuring green number.
- */
-function TwoBases({ ex, onAddReading, readings }) {
-  const spend = ex.spend
-  if (spend.reason || ex.unloggedRM == null) return null
-
-  const over = ex.unloggedRM < 0
-  const rows = [
-    { label: 'What the log says', rm: ex.loggedInWindowRM, note: `${ex.count} entries you typed` },
-    {
-      label: 'What the wallet says',
-      rm: spend.spentRM,
-      note: 'income, less commitments and savings, plus what the buffer gave up',
-    },
-    {
-      label: over ? 'Logged but never left' : 'Never logged',
-      rm: Math.abs(ex.unloggedRM),
-      note: over
-        ? 'more typed in than actually left — a double entry, or a month filed wrongly'
-        : 'real spending with no entry behind it — cash, small taps, things forgotten',
-      tone: over ? 'text-loss' : 'text-muted-foreground',
-    },
-  ]
-
-  return (
-    <div className="border-hairline border-t px-4 py-4">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span className="eyebrow">Two bases, and the gap between them</span>
-        {ex.coveragePct != null ? (
-          <Badge variant="neutral" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
-            {pct1(ex.coveragePct)} covered
-          </Badge>
-        ) : null}
-      </div>
-      <div className="grid gap-1.5">
-        {rows.map((r, i) => (
-          <div
-            key={r.label}
-            className={`flex items-baseline justify-between gap-3 text-[12.5px] ${
-              i === 2 ? 'border-hairline border-t pt-1.5 font-semibold' : ''
-            }`}
-          >
-            <span className={i === 2 ? '' : 'text-muted-foreground'}>
-              {r.label}
-              <span className="text-faint block text-[11px] font-normal">{r.note}</span>
-            </span>
-            <span className={`num ${r.tone || ''}`}>{fmt(r.rm, 'MYR')}</span>
-          </div>
-        ))}
-      </div>
-
-      <p className="text-faint m-0 mt-2.5 max-w-[74ch] text-[11.5px] leading-relaxed text-pretty">
-        Both figures are measured, so neither is an estimate of the other. The residual stays on
-        this screen rather than being replaced by the log precisely because the log can go stale and
-        the residual cannot — it is derived from balances you would have anyway.
-      </p>
-
-      {readings.length ? (
-        <div className="border-hairline mt-3 border-t pt-3">
-          <div className="mb-1.5 flex flex-wrap items-center gap-2">
-            <span className="eyebrow">What you hold liquid</span>
-            <span className="text-faint text-[11px]">the readings the residual is measured against</span>
-            <div className="ml-auto">
-              <Button variant="outline" size="sm" onClick={onAddReading}>
-                Add a reading
-              </Button>
-            </div>
-          </div>
-          {readings.map(r => (
-            <div
-              key={r.id}
-              className="flex flex-wrap items-baseline justify-between gap-2 text-[12.5px]"
-            >
-              <span>
-                {r.name}
-                <span className="text-faint ml-1.5 text-[11px]">read {dfmt(r.date)}</span>
-              </span>
-              <span className="num">{fmt(r.amount, r.currency)}</span>
-            </div>
-          ))}
-          <p className="text-faint m-0 mt-2 max-w-[74ch] text-[11.5px] leading-relaxed text-pretty">
-            The window above is bracketed by two of these, not by the calendar month — which is why
-            it can run to {spend.days} days. Let them go stale and this whole screen degrades to
-            saying so, rather than to a plausible wrong figure.
-          </p>
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
 const ALL = '__all__'
 
 export default function Expenses() {
-  const { state, setTab, openExpense, openAssetEntry, deleteExpense, setPreference } = useVantage()
+  const { state, setTab, openExpense, deleteExpense } = useVantage()
   // THE ONE MONTH ANYWHERE THAT IS NOT TODAY'S, and it is a useState rather than
   // a shared value in the store on purpose.
   //
@@ -629,42 +461,19 @@ export default function Expenses() {
   // screens are all on today.
   const [month, setMonth] = useState(currentMonth)
   const { y, m } = month
-  // Whether the chart has been drilled off today, which decides whether the way
-  // back is offered. Recomputed rather than stored: the seed is currentMonth()
-  // and a session left open across midnight on the last of the month would
-  // otherwise still believe it was on the month it opened in.
-  const nowMonth = currentMonth()
-  const drilled = y !== nowMonth.y || m !== nowMonth.m
   // Its own call now, where Money used to pass one down. Pure and month-scoped,
   // so Overview computing it too costs a little work and cannot disagree.
   const ex = useMemo(() => expensesFor(state, y, m), [state, y, m])
   const onMonth = (year, monthIndex) => setMonth({ y: year, m: monthIndex })
 
-  // The readings the residual is measured against, newest first. Only WALLET
-  // accounts: money into ASB is a destination, not your pocket, so a reading
-  // there would close nothing.
-  const readings = useMemo(() => {
-    const wallets = new Map(
-      (state.assets || [])
-        .filter(a => !a.archived && a.liquidity === 'WALLET')
-        .map(a => [a.id, a]),
-    )
-    return (state.assetEntries || [])
-      .filter(e => e.type === 'BALANCE' && wallets.has(e.asset_id))
-      .map(e => ({ ...e, name: wallets.get(e.asset_id).name, currency: wallets.get(e.asset_id).currency }))
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-      .slice(0, 4)
-  }, [state])
   const [query, setQuery] = useState('')
   const [pick, setPick] = useState({ group: null, category: null })
-  const [sort, setSort] = useState('amount')
   const [showAllGroups, setShowAllGroups] = useState(false)
   const [order, setOrder] = useState('newest')
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
 
   const months = useMemo(() => expenseHistory(state, y, m, WINDOW), [state, y, m])
-  const target = expenseTarget(state)
   const label = monthLabel(y, m)
 
   const reset = patch => {
@@ -711,13 +520,11 @@ export default function Expenses() {
   const from = (p - 1) * pageSize
   const shown = ordered.slice(from, from + pageSize)
 
-  // A group with no history has no movement, so it sorts to the bottom rather
-  // than pretending to a position among the ones that do.
-  const byDelta = (a, b) =>
-    a.delta == null || b.delta == null ? (a.delta == null) - (b.delta == null) : b.delta - a.delta
-  const sortedGroups = sort === 'amount' ? ex.groups : [...ex.groups].sort(byDelta)
-  const visibleGroups = showAllGroups ? sortedGroups : sortedGroups.slice(0, 6)
-  const restCount = sortedGroups.length - visibleGroups.length
+  // Biggest first, always. Ordering by movement instead was a second way to read
+  // one list, and on a month whose groups mostly say "no history" it sorted on a
+  // figure that was not there — expensesFor() already hands them back by amount.
+  const visibleGroups = showAllGroups ? ex.groups : ex.groups.slice(0, 6)
+  const restCount = ex.groups.length - visibleGroups.length
 
   const groupItems = [
     { value: ALL, label: 'All groups', n: ex.count },
@@ -778,128 +585,108 @@ export default function Expenses() {
         </div>
       </div>
 
-      <History
-        drilled={drilled}
-        onNow={() => setMonth(nowMonth)}
-        months={months}
-        target={target}
-        ex={ex}
-        onPick={onMonth}
-        onTarget={v => setPreference({ expenseTargetRM: v })}
-      />
+      <History months={months} ex={ex} onPick={onMonth} />
 
-      {ex.count ? <DayStrip ex={ex} /> : null}
+      {/* EVERY SECTION, EVERY MONTH. These used to be gated on there being
+          entries, so clicking from a logged month to an empty one dropped two
+          sections and replaced the log with a centred block — the page changed
+          shape rather than changing month. Each says what it has instead. */}
+      <DayStrip ex={ex} />
 
-      {ex.groups.length ? (
-        <div className="border-hairline border-b px-4 py-4">
-          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="eyebrow">By group · against a usual month</span>
-            <span className="text-faint text-[11px]">
-              share of the logged total, and the movement against {usualPhrase(ex.monthsLogged)}.
-              Pick a group for its categories.
-            </span>
-            <div className="ml-auto flex gap-1.5">
-              {[
-                ['amount', 'Amount'],
-                ['delta', 'Movement'],
-              ].map(([k, text]) => (
-                <Button
-                  key={k}
-                  size="sm"
-                  variant={sort === k ? 'default' : 'outline'}
-                  aria-pressed={sort === k}
-                  className="rounded-full text-[11px] font-semibold"
-                  onClick={() => setSort(k)}
-                >
-                  {text}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
-            {visibleGroups.map(g => (
-              <GroupCard
-                key={g.group}
-                g={g}
-                on={pick.group === g.group}
-                onPick={() =>
-                  reset({ group: pick.group === g.group ? null : g.group, category: null })
-                }
-              />
-            ))}
-          </div>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
-            {restCount > 0 || showAllGroups ? (
-              <Button variant="outline" size="xs" onClick={() => setShowAllGroups(v => !v)}>
-                {showAllGroups ? 'Show the top six' : `Show the other ${restCount}`}
-              </Button>
-            ) : null}
-            <span className="text-faint text-[11px]">
-              {ex.emptyGroupCount
-                ? `${ex.emptyGroupCount} of the ${ex.groupCount} groups had nothing logged in ${label}.`
-                : `All ${ex.groupCount} groups had something logged in ${label}.`}
-            </span>
-          </div>
-
-          {openGroup ? (
-            <div className="border-hairline mt-3 rounded-md border px-4 py-3.5">
-              <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-                <span className="eyebrow">{openGroup.label} · by category</span>
-                <span className="text-faint text-[11px]">
-                  the log is filtered to this group; pick a category to narrow it further
-                </span>
-                <Button variant="ghost" size="xs" className="ml-auto" onClick={clearFilters}>
-                  Close
-                </Button>
-              </div>
-              <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
-                {/* Every category of the group, the empty ones included. An em
-                    dash rather than a zero, so the taxonomy stays legible and the
-                    owner can see what they are not using. */}
-                {openGroup.categories.map(c => {
-                  const most = Math.max(...openGroup.categories.map(x => x.amountRM), 1)
-                  const on = pick.category === c.category
-                  const has = c.amountRM > 0
-                  return (
-                    <button
-                      type="button"
-                      key={c.category}
-                      disabled={!has}
-                      aria-pressed={on}
-                      onClick={() => reset({ category: on ? null : c.category })}
-                      className="border-hairline aria-pressed:border-ring aria-pressed:bg-muted/60 grid gap-1.5 rounded-md border px-2.5 py-2 text-left disabled:cursor-default"
-                    >
-                      <span className="flex items-baseline gap-2">
-                        <span className="text-muted-foreground text-[12.5px]">{c.label}</span>
-                        <span
-                          className={`num ml-auto text-[12.5px] font-semibold ${has ? '' : 'text-faint'}`}
-                        >
-                          {has ? fmt(c.amountRM, 'MYR') : '—'}
-                        </span>
-                      </span>
-                      <span className="flex items-baseline gap-2">
-                        <span className="text-faint num text-[11px]">
-                          {c.count === 0
-                            ? 'nothing logged'
-                            : `${c.count} ${c.count === 1 ? 'entry' : 'entries'}`}
-                        </span>
-                        <span className="text-faint num ml-auto text-[11px]">
-                          {has ? `${pct1(c.shareOfGroup * 100)} of ${openGroup.label.toLowerCase()}` : ''}
-                        </span>
-                      </span>
-                      <Progress value={(c.amountRM / most) * 100} />
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ) : null}
+      <div className="border-hairline border-b px-4 py-4">
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="eyebrow">By group · against a usual month</span>
+          {/* There is nothing to pick when no group has anything in it, and the
+              line below already counts them. Promising categories behind a card
+              that is not there is the sort of instruction a reader blames
+              themselves for failing to follow. */}
+          <span className="text-faint text-[11px]">
+            {ex.groups.length
+              ? `share of the logged total, and the movement against ${usualPhrase(ex.monthsLogged)}. Pick a group for its categories.`
+              : 'share of the logged total, once there is one.'}
+          </span>
         </div>
-      ) : null}
 
-      <TwoBases ex={ex} onAddReading={() => openAssetEntry({ type: 'BALANCE' })} readings={readings} />
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(170px,1fr))]">
+          {visibleGroups.map(g => (
+            <GroupCard
+              key={g.group}
+              g={g}
+              on={pick.group === g.group}
+              onPick={() =>
+                reset({ group: pick.group === g.group ? null : g.group, category: null })
+              }
+            />
+          ))}
+        </div>
+
+        <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
+          {restCount > 0 || showAllGroups ? (
+            <Button variant="outline" size="xs" onClick={() => setShowAllGroups(v => !v)}>
+              {showAllGroups ? 'Show the top six' : `Show the other ${restCount}`}
+            </Button>
+          ) : null}
+          <span className="text-faint text-[11px]">
+            {ex.emptyGroupCount
+              ? `${ex.emptyGroupCount} of the ${ex.groupCount} groups had nothing logged in ${label}.`
+              : `All ${ex.groupCount} groups had something logged in ${label}.`}
+          </span>
+        </div>
+
+        {openGroup ? (
+          <div className="border-hairline mt-3 rounded-md border px-4 py-3.5">
+            <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+              <span className="eyebrow">{openGroup.label} · by category</span>
+              <span className="text-faint text-[11px]">
+                the log is filtered to this group; pick a category to narrow it further
+              </span>
+              <Button variant="ghost" size="xs" className="ml-auto" onClick={clearFilters}>
+                Close
+              </Button>
+            </div>
+            <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+              {/* Every category of the group, the empty ones included. An em
+                  dash rather than a zero, so the taxonomy stays legible and the
+                  owner can see what they are not using. */}
+              {openGroup.categories.map(c => {
+                const most = Math.max(...openGroup.categories.map(x => x.amountRM), 1)
+                const on = pick.category === c.category
+                const has = c.amountRM > 0
+                return (
+                  <button
+                    type="button"
+                    key={c.category}
+                    disabled={!has}
+                    aria-pressed={on}
+                    onClick={() => reset({ category: on ? null : c.category })}
+                    className="border-hairline aria-pressed:border-ring aria-pressed:bg-muted/60 grid gap-1.5 rounded-md border px-2.5 py-2 text-left disabled:cursor-default"
+                  >
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-muted-foreground text-[12.5px]">{c.label}</span>
+                      <span
+                        className={`num ml-auto text-[12.5px] font-semibold ${has ? '' : 'text-faint'}`}
+                      >
+                        {has ? fmt(c.amountRM, 'MYR') : '—'}
+                      </span>
+                    </span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-faint num text-[11px]">
+                        {c.count === 0
+                          ? 'nothing logged'
+                          : `${c.count} ${c.count === 1 ? 'entry' : 'entries'}`}
+                      </span>
+                      <span className="text-faint num ml-auto text-[11px]">
+                        {has ? `${pct1(c.shareOfGroup * 100)} of ${openGroup.label.toLowerCase()}` : ''}
+                      </span>
+                    </span>
+                    <Progress value={(c.amountRM / most) * 100} />
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {ex.count ? (
         <div className="px-4 py-4">
@@ -1082,14 +869,22 @@ export default function Expenses() {
           </div>
         </div>
       ) : (
-        <div className="px-4 py-8 text-center">
-          <h2 className="num text-[15px] font-semibold">Nothing recorded in {label}</h2>
-          <p className="text-muted-foreground mx-auto mt-2 max-w-[460px] text-[13px] leading-relaxed">
-            Groceries, fuel, eating out — the spending that is not the same every month. Rent,
-            insurance and subscriptions are commitments and belong above; entering them here as well
-            would count them twice against your income.
+        /* THE SAME SECTION, SAYING IT HAS NOTHING — not a different screen. This
+           was a centred block with its own heading, the one centred thing on a
+           page of left-aligned sections, so an empty month did not merely hold
+           less than a logged one, it was laid out differently. Same eyebrow, same
+           count in the same place, same padding as the log it stands in for. */
+        <div className="px-4 py-4">
+          <div className="mb-2.5 flex flex-wrap items-center gap-2">
+            <span className="eyebrow">Every entry</span>
+            <span className="text-faint num text-[11px]">0</span>
+          </div>
+          <p className="text-muted-foreground max-w-[560px] text-[13px] leading-relaxed">
+            Nothing recorded in {label}. Groceries, fuel, eating out — the spending that is not the
+            same every month. Rent, insurance and subscriptions are commitments and belong above;
+            entering them here as well would count them twice against your income.
           </p>
-          <Button size="sm" className="mt-4" onClick={() => openExpense()}>
+          <Button size="sm" className="mt-3" onClick={() => openExpense()}>
             <PlusIcon />
             Add expense
           </Button>
