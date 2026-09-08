@@ -1,207 +1,321 @@
 /**
  * Overview — what arrived, what was promised, and what living actually took.
  *
- * TWO QUESTIONS, KEPT APART, and this screen exists to keep them apart. The
- * column on the left is what HAPPENED: every figure in it actually arrived or
- * actually left, over the window two wallet readings bracket, and it closes
- * exactly. The card beside it is the run rate — what a usual month costs — and
- * it is forward-looking. Mixing a measured month with a monthly average is the
- * one mistake this layout exists to prevent, and money-redesign-plan.md §2.2 is
- * what it looks like when the mixing happens: a column out by exactly one
- * amortised road tax.
+ * TWO QUESTIONS IN ONE COLUMN NOW, AND THE SEAM IS DRAWN. They used to be two
+ * cards side by side: what HAPPENED on the left — every figure actually arrived
+ * or actually left, over the window two wallet readings bracket — and the run
+ * rate beside it, what a usual month costs, which is forward-looking. The card
+ * is gone and the column carries both, run rate first and measured after a
+ * stated rule.
  *
- * TWO VIEWS, ONE SET OF FIGURES. Waterfall and Flow are a stored preference, and
- * neither holds a number of its own — both render overviewRows(), for the reason
- * §2.4 gives: the canvas drew both with their own copies and they disagreed
- * about the same ringgit.
+ * THAT MOVES THE RISK RATHER THAN REMOVING IT, so read money-redesign-plan.md
+ * §2.2 before touching monthShape(): mixing a measured month with a monthly
+ * average is the mistake this screen was laid out to prevent, and §2.2 is what it
+ * looked like — a column out by exactly one amortised road tax. What keeps it
+ * honest now is arithmetic rather than distance: nothing sums across the rule,
+ * the five rate rows close on `Uncommitted` exactly, and the measured half
+ * carries no percentage because its three figures are not parts of one whole.
+ * Both properties are asserted in smoke.mjs; if either goes, the column is lying.
+ *
+ * TWO VIEWS, ONE SET OF FIGURES. Waterfall and Flow are a stored preference and
+ * neither holds a number of its own — both render monthShape(), which itself
+ * derives nothing and reads waterfall() and overviewRows() straight through. The
+ * reason is §2.4: the canvas drew both views with their own copies and they
+ * disagreed about the same ringgit.
  */
 import { useMemo } from 'react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import {
   OVERVIEW_MODE,
+  VARIABLE_MONTHS,
   currentMonth,
   expensesFor,
+  monthShape,
   overviewMode,
-  overviewRows,
   waterfall,
 } from '@/lib/calc'
 import { dfmt, fmt, fmtS, monthLabel, pct1 } from '@/lib/format'
 import { useVantage } from '@/lib/store'
 
-import { Line, Meta, MonthStrip, STICKY_TOP } from './money/parts'
+import { Meta, MonthStrip } from './money/parts'
+
+/** The declared half is solid; the averaged half is hatched, everywhere it appears. */
+const INCOME_HATCH =
+  'repeating-linear-gradient(115deg, color-mix(in srgb, var(--gain) 55%, transparent) 0 2px, transparent 2px 7px)'
 
 /**
- * How much of the measured living cost got itemised.
+ * What arrives, and how much of it is a promise rather than a payment.
  *
- * IT STAYS ON SCREEN WHILE THE LIST IS READ, which is the whole reason these two
- * halves are now one screen. The hatched remainder has no category and giving it
- * one would be an invention — it is the part that left the wallet without being
- * typed, and the app knows the total without being told.
+ * THE HATCHING IS THE ARGUMENT. A salary is a floor and freelance is a guess, and
+ * a total that draws them alike invites the reader to plan against the guess.
+ * `variableParts` carries the individual months behind the mean, so the figure
+ * shows its working instead of asserting itself — see incomeRows(): shorter than
+ * three months is noise, longer is stale.
  */
-function Coverage({ ex }) {
-  if (ex.spend.reason) return null
-  const known = ex.coveragePct != null
+function IncomeThisMonth({ shape, monthName }) {
+  const { firmRM, variableRM, incomeRM, variableParts } = shape
+  if (!incomeRM) return null
+  const firmPct = incomeRM > 0 ? (firmRM / incomeRM) * 100 : 0
+  const months = variableParts.flatMap(p => p.recentRM)
 
   return (
-    <div className="border-hairline border-t pt-3.5">
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="eyebrow">Of the living cost, itemised</span>
-        <span
-          className="num ml-auto text-[12px] font-semibold"
-          style={{
-            color: !known ? 'var(--faint)' : ex.unloggedRM > 1 ? 'var(--cash)' : 'var(--foreground)',
-          }}
-        >
-          {known ? pct1(ex.coveragePct) : '—'}
-        </span>
+    <div className="grid gap-3">
+      <div className="eyebrow">Income this month · {monthName}</div>
+
+      <div className="num text-[clamp(32px,5vw,58px)] leading-[0.95] font-semibold tracking-[-0.04em]">
+        {variableRM > 0 ? <span className="text-faint">≈</span> : null}
+        {fmt(incomeRM, 'MYR')}
       </div>
 
-      {known ? (
-        <>
-          <div className="border-hairline mt-2 flex h-[18px] overflow-hidden rounded-sm border">
-            <div
-              style={{
-                width: `${ex.coveragePct}%`,
-                backgroundColor: 'color-mix(in srgb, var(--chart-1) 70%, transparent)',
-              }}
-            />
-            <div
-              className="flex-1"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--cash) 12%, transparent)',
-                backgroundImage:
-                  'repeating-linear-gradient(115deg, color-mix(in srgb, var(--cash) 50%, transparent) 0 1.5px, transparent 1.5px 5px)',
-              }}
-            />
-          </div>
-          <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px]">
-            <span className="flex items-center gap-1.5">
-              <span
-                className="size-2.5 rounded-[2px]"
-                style={{ backgroundColor: 'color-mix(in srgb, var(--chart-1) 70%, transparent)' }}
-              />
-              logged <b className="num font-semibold">{fmt(ex.loggedInWindowRM, 'MYR')}</b>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className="border-cash size-2.5 rounded-[2px] border"
-                style={{
-                  backgroundImage:
-                    'repeating-linear-gradient(115deg, color-mix(in srgb, var(--cash) 50%, transparent) 0 1.5px, transparent 1.5px 5px)',
-                }}
-              />
-              unlogged <b className="num text-cash font-semibold">{fmt(ex.unloggedRM, 'MYR')}</b>
-            </span>
-          </div>
-        </>
-      ) : null}
-
-      <p className="text-faint mt-2 text-[11px] leading-relaxed">
-        {known ? (
-          ex.unloggedRM < -1 ? (
-            <>
-              More is logged than actually left the wallet, which points at a double entry or
-              something dated into the wrong month rather than at overspending.
-            </>
-          ) : (
-            <>
-              It stays on screen while you read the list, because the list is what it is being
-              checked against. The hatched remainder has no category, and giving it one would be an
-              invention.
-            </>
-          )
-        ) : (
+      <p className="text-muted-foreground m-0 max-w-[68ch] text-[12.5px] leading-relaxed text-pretty">
+        <b className="num text-foreground font-semibold">{fmt(firmRM, 'MYR')}</b> is declared — what
+        a recorded payment says, net of statutory deductions.
+        {variableRM > 0 ? (
           <>
-            Nothing left the wallet over the measured window, so there is no gap to report and
-            nothing for the list to be checked against.
+            {' '}
+            The remaining <b className="num text-foreground font-semibold">≈{fmt(variableRM, 'MYR')}</b>{' '}
+            is the mean of the last {VARIABLE_MONTHS} months
+            {months.length ? <> — {months.map(v => fmt(v, 'MYR')).join(', ')}</> : null} — and is
+            hatched everywhere it appears. A salary is a floor; irregular work is not a baseline.
           </>
+        ) : (
+          <> Nothing irregular fed this month, so none of it is an estimate.</>
         )}
       </p>
+
+      <div className="border-hairline flex h-6 overflow-hidden rounded-sm border">
+        <div
+          className="bg-gain flex items-center px-2"
+          style={{ width: `${firmPct}%` }}
+          title={`declared ${fmt(firmRM, 'MYR')}`}
+        >
+          <span className="num text-[10.5px] font-semibold whitespace-nowrap text-black/70">
+            {fmt(firmRM, 'MYR')} declared
+          </span>
+        </div>
+        {variableRM > 0 ? (
+          <div
+            className="flex-1"
+            style={{ backgroundImage: INCOME_HATCH }}
+            title={`projected ≈${fmt(variableRM, 'MYR')}`}
+          />
+        ) : null}
+      </div>
     </div>
   )
 }
 
-/** The column, read downward. Every row is overviewRows(); none is computed here. */
-function Waterfall({ view, monthShort }) {
+/**
+ * One row of the column: what it is, what it cost, and what fraction of WHAT.
+ *
+ * The bar and the percentage are one expression read twice, never two copies —
+ * money-redesign-plan.md §2.4 is what happens when a label and a bar each carry
+ * their own arithmetic. A row with no share prints no bar: the measured rows
+ * share no denominator worth drawing, and a bar with an invented width would be
+ * the same lie as an invented percentage.
+ */
+function ShapeRow({ row, tone }) {
   return (
-    <div className="grid gap-1.5">
-      {view.rows.map(r => (
-        <Line
-          key={r.key}
-          label={r.label}
-          value={fmtS(r.rm, 'MYR')}
-          tone={r.tone === 'gain' ? 'text-gain' : r.tone === 'loss' ? 'text-loss' : ''}
-          strong={!!r.total}
-          rule={!!r.total}
-        />
-      ))}
-      <Meta className="mt-1 block">
-        Measured over the window two wallet readings bracket, closing on {monthShort}. Nothing in
-        this column is an average.
-      </Meta>
+    <div className="border-hairline grid gap-1 border-b py-2 last:border-b-0">
+      <div className="flex items-baseline gap-3">
+        <span className="flex-1 text-[12.5px] font-semibold">{row.label}</span>
+        {row.sharePct == null ? null : (
+          <span className="num text-faint text-[11px]">{pct1(row.sharePct)}</span>
+        )}
+        <span className={`num w-[104px] text-right text-[12.5px] font-semibold ${tone}`}>
+          {fmtS(row.rm, 'MYR')}
+        </span>
+      </div>
+      <div className="flex items-center gap-3">
+        <Meta className="flex-1">{row.note}</Meta>
+      </div>
+      {row.sharePct == null ? null : (
+        <div className="bg-muted h-[3px] overflow-hidden rounded-full">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${Math.min(100, row.sharePct)}%`, background: `var(${tone === 'text-gain' ? '--gain' : tone === 'text-loss' ? '--loss' : '--cash'})` }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+const toneOf = row =>
+  row.key === 'income' ? 'text-gain'
+    : row.key === 'uncommitted' ? 'text-cash'
+      : row.rm > 0 ? 'text-gain'
+        : row.rm < 0 ? 'text-loss'
+          : ''
+
+/**
+ * The column, read downward — and it changes basis halfway, which is stated.
+ *
+ * THE SEAM IS DRAWN, NOT HIDDEN. Above it every figure is a run rate: what a
+ * usual month owes, quoted against declared income, and the five rows close on
+ * `Uncommitted` exactly. Below it every figure is measured over the window two
+ * wallet readings bracket, which is not the calendar month and does not have to
+ * be. money-redesign-plan.md §2.2 is what happens when the halves get added
+ * together, so nothing here adds across the rule — and the measured half prints
+ * no percentage, because its three figures are not parts of one whole.
+ */
+function Waterfall({ shape, monthShort, monthName }) {
+  return (
+    <div className="grid gap-4">
+      <IncomeThisMonth shape={shape} monthName={monthName} />
+
+      <div className="grid">
+        {shape.rateRows.map(r => (
+          <ShapeRow key={r.key} row={r} tone={toneOf(r)} />
+        ))}
+      </div>
+
+      {shape.reason ? (
+        <Meta className="block">
+          What living cost cannot be worked out for {monthShort} — the strip above names the reading
+          that is missing. Everything above this line is a run rate and is unaffected.
+        </Meta>
+      ) : (
+        <>
+          <div className="border-hairline flex items-center gap-2 border-t pt-2.5">
+            <span className="eyebrow">And what {monthShort} actually did</span>
+            <Meta>measured, not owed — over the reading window, not the calendar month</Meta>
+          </div>
+          <div className="grid">
+            {shape.measuredRows.map(r => (
+              <ShapeRow key={r.key} row={r} tone={toneOf(r)} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
 /** The same rows, laid out by where the money went rather than by subtraction. */
-function Flow({ view }) {
-  const arrives = view.rows.filter(r => r.rm > 0 && !r.total)
-  const leaves = view.rows.filter(r => r.rm < 0)
-  const left = view.rows.find(r => r.total)
-  const share = rm => (view.incomeRM ? Math.min(100, (Math.abs(rm) / view.incomeRM) * 100) : 0)
+function Flow({ shape, w }) {
+  const promised = shape.rateRows.filter(r => r.rm < 0)
+  const uncommitted = shape.rateRows.find(r => r.key === 'uncommitted')
+  const stayed = shape.measuredRows.find(r => r.key === 'stayed')
+  const living = shape.measuredRows.find(r => r.key === 'living')
 
   return (
     <div className="grid gap-3">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="grid content-start gap-1.5">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-[14px] font-semibold">Where the month goes</span>
+        <Meta className="flex-1">
+          Arrives on the left, promised in the middle, where it stands on the right. Widths are
+          shares of declared income.
+        </Meta>
+        <Meta className="num">
+          {fmt(shape.firmRM, 'MYR')} declared
+          {shape.variableRM > 0 ? <> · ≈{fmt(shape.variableRM, 'MYR')} projected</> : null}
+        </Meta>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        {/* ARRIVES. The declared sources are drawn solid and the irregular mean
+            hatched, the same treatment the hero above uses, so one glance says
+            which half of the income could fail to turn up. */}
+        <div className="grid content-start gap-2">
           <span className="eyebrow">Arrives</span>
-          {arrives.map(r => (
-            <div key={r.key}>
-              <div className="num text-gain text-[14px] font-semibold">{fmt(r.rm, 'MYR')}</div>
-              <Meta>{r.label}</Meta>
+          {w.rows.filter(r => !r.variable && r.monthlyRM > 0).map(r => (
+            <div key={r.id} className="border-hairline rounded-md border px-3 py-2.5">
+              <div className="flex items-baseline gap-2">
+                <span className="flex-1 text-[12.5px] font-semibold">{r.name}</span>
+                <span className="num text-gain text-[12.5px] font-semibold">
+                  {fmt(r.monthlyRM, 'MYR')}
+                </span>
+              </div>
+              <Meta>
+                net{r.nextDate ? <> · lands {dfmt(r.nextDate)}</> : null} · declared
+              </Meta>
+            </div>
+          ))}
+          {w.rows.filter(r => r.variable && r.monthlyRM > 0).map(r => (
+            <div
+              key={r.id}
+              className="border-hairline rounded-md border border-dashed px-3 py-2.5"
+              style={{ backgroundImage: INCOME_HATCH }}
+            >
+              <div className="flex items-baseline gap-2">
+                <span className="flex-1 text-[12.5px] font-semibold">{r.name}</span>
+                <span className="num text-[12.5px] font-semibold">≈{fmt(r.monthlyRM, 'MYR')}</span>
+              </div>
+              <Meta>irregular · projected from {VARIABLE_MONTHS} months</Meta>
             </div>
           ))}
         </div>
-        <div className="grid content-start gap-1.5">
-          <span className="eyebrow">Promised, and spent</span>
-          {leaves.map(r => (
-            <div key={r.key}>
+
+        {/* PROMISED. Run-rate rows only — what is owed in a usual month. What
+            living actually took is measured and belongs in the third column,
+            beside the balance it was measured against. */}
+        <div className="grid content-start gap-2">
+          <span className="eyebrow">Promised</span>
+          {promised.map(r => (
+            <div key={r.key} className="border-hairline rounded-md border px-3 py-2.5">
               <div className="flex items-baseline gap-2">
-                <span className="num text-loss text-[14px] font-semibold">
-                  {fmt(Math.abs(r.rm), 'MYR')}
+                <span className="flex-1 text-[12.5px] font-semibold">{r.label}</span>
+                {r.sharePct == null ? null : (
+                  <span className="num text-faint text-[11px]">{pct1(r.sharePct)}</span>
+                )}
+                <span className="num text-loss text-[12.5px] font-semibold">
+                  {fmtS(r.rm, 'MYR')}
                 </span>
-                <Meta>{pct1(share(r.rm))}</Meta>
               </div>
-              <Meta>{r.label}</Meta>
-              <div className="bg-muted mt-1 h-[4px] overflow-hidden rounded-full">
+              <div className="bg-muted mt-1.5 h-[3px] overflow-hidden rounded-full">
                 <div
                   className="h-full rounded-full"
-                  style={{ width: `${share(r.rm)}%`, background: 'var(--loss)' }}
+                  style={{ width: `${Math.min(100, r.sharePct || 0)}%`, background: 'var(--loss)' }}
                 />
               </div>
+              <Meta className="mt-1 block">{r.note}</Meta>
             </div>
           ))}
         </div>
-        {/* NOT A BALANCE, which is the trap this column fell into. The residual
-            the other two columns leave is what living TOOK — money already gone,
-            not money still to hand — so "Still here" stated the opposite of the
-            row printed directly underneath it. */}
-        <div className="grid content-start gap-1.5">
-          <span className="eyebrow">What that leaves</span>
-          {left ? (
-            <div>
-              <div className="num text-[14px] font-semibold">{fmt(left.rm, 'MYR')}</div>
-              <Meta>{left.label}</Meta>
+
+        {/* WHERE IT STANDS, and not "Still here" — the heading this column was
+            given once and lost for good reason. Two of the three things in it are
+            not money to hand: a wallet balance that FELL is the buffer being
+            spent, and a liability is owed. "Still here" over those would state
+            the opposite of the figures printed beneath it. */}
+        <div className="grid content-start gap-2">
+          <span className="eyebrow">Where it stands</span>
+          {stayed ? (
+            <div className="border-hairline rounded-md border px-3 py-2.5">
+              <span className="eyebrow">What stayed</span>
+              <div className={`num mt-0.5 text-[17px] font-semibold ${toneOf(stayed)}`}>
+                {fmtS(stayed.rm, 'MYR')}
+              </div>
+              <Meta className="mt-1 block">Measured, not derived — {stayed.note}.</Meta>
+            </div>
+          ) : null}
+          <div className="border-hairline rounded-md border px-3 py-2.5">
+            <span className="eyebrow">Uncommitted</span>
+            <div className="num text-cash mt-0.5 text-[17px] font-semibold">
+              {fmt(uncommitted.rm, 'MYR')}
+            </div>
+            <Meta className="mt-1 block">{uncommitted.note}.</Meta>
+          </div>
+          {living ? (
+            <div className="border-hairline rounded-md border px-3 py-2.5">
+              <span className="eyebrow">What living took</span>
+              <div className={`num mt-0.5 text-[17px] font-semibold ${toneOf(living)}`}>
+                {fmtS(living.rm, 'MYR')}
+              </div>
+              <Meta className="mt-1 block">{living.note}.</Meta>
             </div>
           ) : null}
         </div>
       </div>
-      <Meta className="block">
-        Widths are shares of what arrived. Every figure is the one the waterfall shows — the two
-        views cannot disagree, because neither computes anything.
+
+      <Meta className="block max-w-[74ch] leading-relaxed">
+        Widths are shares of declared income, and only the promised column has them: the right-hand
+        figures are measured over the window two wallet readings bracket, so they share no
+        denominator with the left. Every figure here is the one the waterfall shows — the two views
+        cannot disagree, because neither computes anything.
       </Meta>
     </div>
   )
@@ -217,11 +331,15 @@ export default function Overview() {
 
   const w = useMemo(() => waterfall(state), [state])
   const ex = useMemo(() => expensesFor(state, y, m), [state, y, m])
-  const view = useMemo(() => overviewRows(state, y, m), [state, y, m])
+
+  // One call, both views. Neither holds a figure of its own — §2.4 again: the
+  // canvas drew waterfall and flow with their own copies and they disagreed
+  // about the same ringgit.
+  const shape = useMemo(() => monthShape(state, y, m), [state, y, m])
 
   const mode = overviewMode(state)
-  const monthShort = monthLabel(y, m).slice(0, 3)
-  const over = w.rows.length > 0 && w.overclaimedRM > 0
+  const monthName = monthLabel(y, m)
+  const monthShort = monthName.slice(0, 3)
 
   if (!w.rows.length && !w.commitments.rows.length && !ex.count) {
     return (
@@ -253,12 +371,18 @@ export default function Overview() {
     <div className="grid gap-4">
       <MonthStrip />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(320px,420px)_minmax(0,1fr)] lg:items-start">
-        <div className={`grid content-start gap-3 lg:sticky ${STICKY_TOP}`}>
+      {/* ONE PANEL, FULL WIDTH. It carries a run-rate half and a measured half and
+          has to keep them apart on the page as well as in the arithmetic — eight
+          rows with their own bars and denominators never fitted the 420px rail
+          this screen used to put them in. The two cards that sat beside it are
+          gone: "a usual month" restated the run rate the column now opens with,
+          and the coverage bar answered a question Expenses asks on its own page. */}
+      <div className="grid gap-4">
+        <div className="grid content-start gap-3">
           <Card>
             <CardContent className="grid gap-2.5 px-4">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="eyebrow">What happened to the money</span>
+                <span className="eyebrow">Overview, drawn two ways</span>
                 <div className="flex-1" />
                 <div className="bg-muted flex rounded-md p-0.5">
                   {[OVERVIEW_MODE.WATERFALL, OVERVIEW_MODE.FLOW].map(v => (
@@ -276,80 +400,22 @@ export default function Overview() {
                 </div>
               </div>
 
-              {view.reason ? (
-                // SAID ONCE ON THIS SCREEN, and the strip is where. Both surfaces
-                // used to print SPEND_WHY[reason] in full, forty words apart, so
-                // the same sentence about the same missing reading appeared twice
-                // on one page and only one of the two offered the form that fixes
-                // it. This column still has to say why its own figures are absent
-                // — leaving the space blank reads as a month that cost nothing —
-                // so it says that, and points at the one statement of the reason.
-                <p className="text-muted-foreground m-0 text-[12px] leading-relaxed text-pretty">
-                  <b className="text-foreground font-semibold">
-                    What living cost cannot be worked out for {monthShort}.
-                  </b>{' '}
-                  The strip above names the reading that is missing, and opens the form for it.
-                </p>
-              ) : mode === OVERVIEW_MODE.FLOW ? (
-                <Flow view={view} />
+              {/* THE RUN-RATE HALF SURVIVES A MISSING READING, which is why the
+                  refusal moved inside the views. It used to replace the whole
+                  column: no reading, no income, no commitments, nothing but a
+                  sentence — and what a usual month owes was never the figure that
+                  went missing. Each view now draws what it still knows and says
+                  where the measured half went. The reason itself is still stated
+                  once, on the strip, which is the surface that can fix it. */}
+              {mode === OVERVIEW_MODE.FLOW ? (
+                <Flow shape={shape} w={w} />
               ) : (
-                <Waterfall view={view} monthShort={monthShort} />
+                <Waterfall shape={shape} monthShort={monthShort} monthName={monthName} />
               )}
-
-              {!view.reason && view.spend.floatRM != null ? (
-                <Meta className="border-hairline block border-t pt-2">
-                  The cards took on {fmt(view.spend.floatRM, 'MYR')} over the same window, which is
-                  spending that has happened and has not left your account yet. Living cost{' '}
-                  {fmt(view.spend.livingCostRM, 'MYR')} once it is counted.
-                </Meta>
-              ) : null}
-
-              {!view.reason ? (
-                <Meta className="block">
-                  Window {dfmt(view.spend.from)} to {dfmt(view.spend.to)} · {view.spend.days} days
-                  {view.closes ? '' : ' · this column does not close, which is a bug, not a rounding'}
-                </Meta>
-              ) : null}
             </CardContent>
           </Card>
-
-          <Coverage ex={ex} />
         </div>
 
-        <Card className="min-w-0">
-          <CardContent className="grid gap-1.5 px-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="eyebrow">The other question · a usual month</span>
-              {over ? (
-                <Badge variant="loss" className="px-1.5 py-0 text-[9.5px] tracking-[0.06em] uppercase">
-                  goals over by {fmt(w.overclaimedRM, 'MYR')}
-                </Badge>
-              ) : null}
-            </div>
-            {/* The stepper's caption, kept because it was never about the
-                stepper: these rows are a run rate, and the column on the left is
-                the measured month. Two bases on one screen, and this is the line
-                that says which one you are reading. */}
-            <Meta className="block">Run-rate figures say a month, never this month.</Meta>
-            <Line label="Net income" value={fmt(w.incomeRM, 'MYR')} tone="text-gain" />
-            {w.variableRM > 0 ? (
-              <Line label="of which estimated" value={fmt(w.variableRM, 'MYR')} tone="text-faint" />
-            ) : null}
-            <Line label="− Commitments, a month" value={fmt(w.committedRM, 'MYR')} tone="text-loss" />
-            <Line label="= Uncommitted" value={fmt(w.uncommittedRM, 'MYR')} strong rule />
-            {w.claimedRM > 0 ? (
-              <>
-                <Line label="− Claimed by goals" value={fmt(w.claimedRM, 'MYR')} tone="text-loss" />
-                <Line label="= Unclaimed" value={fmt(w.unclaimedRM, 'MYR')} strong rule />
-              </>
-            ) : null}
-            <p className="text-faint m-0 mt-1.5 max-w-[62ch] text-[11.5px] leading-relaxed text-pretty">
-              {over
-                ? 'Uncommitted is healthy; it is the goals that do not fit. Those are different problems with different fixes, which is why they are two lines and not one.'
-                : 'A ceiling, not a surplus. Everything you actually live on is still ahead of this figure — the column on the left is where it lands.'}
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

@@ -55,7 +55,7 @@ export const EMPTY_STATE = {
   incomeEvents: [],
   funds: [],
   fx: 4.22,
-  preferences: { pnlBasis: 'price', dashboardTheme: 'income', expenseTargetRM: null },
+  preferences: { pnlBasis: 'price', dashboardTheme: 'income' },
   lastSync: null,
 }
 
@@ -3742,6 +3742,152 @@ export function waterfall(S, opts = {}) {
   }
 }
 
+/** "House", "House and Myvi", "House, Myvi and the card" — never a bare list. */
+function listOf(names) {
+  if (!names.length) return ''
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
+/**
+ * The month as one column: what a usual month promises, then what this one did.
+ *
+ * TWO BASES IN ONE COLUMN, AND THE COLUMN SAYS SO. The first five rows are the
+ * run rate — waterfall() over commitmentRows(), a forward-looking average of what
+ * is owed. The last three are measured over the window two wallet readings
+ * bracket, which is NOT the calendar month. money-redesign-plan.md §2.2 is what
+ * it looks like when the two get added together, so they are not added here:
+ * `uncommitted` closes the rate half, `stayed` closes the measured half, and
+ * neither is a subtotal of the other. Nothing in this function sums across the
+ * seam.
+ *
+ * WHICH IS WHY EVERY ROW CARRIES ITS OWN DENOMINATOR. A share of declared income
+ * is a fair question for a rate row and a meaningless one for a measured row —
+ * the measured half did not happen over the month declared income is quoted for,
+ * so dividing one by the other yields a figure that looks precise and answers
+ * nothing. `base` names what each row's `sharePct` is a share OF, and a screen
+ * that prints the percentage must print the base with it.
+ *
+ * IT DERIVES NO MONEY OF ITS OWN. Every figure is waterfall()'s or
+ * overviewRows()' read straight through, for the reason §2.4 gives: two surfaces
+ * holding their own copies of one ringgit is how they come to disagree about it.
+ */
+export function monthShape(S, year, monthIndex, opts = {}) {
+  const w = waterfall(S, opts)
+  const measured = overviewRows(S, year, monthIndex)
+
+  // What the hatched half of income is made of, so the screen can show its
+  // working rather than asserting a mean. Same window incomeRows() averages over,
+  // recomputed here rather than widening that row: the figures are what actually
+  // arrived, each converted on its own day.
+  const nowISO = opts.nowISO || isoOf(Date.now())
+  const from = isoOf(msOf(nowISO) - VARIABLE_MONTHS * 31 * DAY)
+  const variableParts = w.rows
+    .filter(r => r.variable)
+    .map(r => ({
+      name: r.name,
+      monthlyRM: r.monthlyRM,
+      recentRM: r.events
+        .filter(e => e.date >= from)
+        .map(e => eventToRM(S, netOf(e), r.cur, e).rm),
+    }))
+
+  const of = kind => w.commitments.rows.filter(r => r.kind === kind)
+  const sumOf = rows => rows.reduce((t, r) => t + toRM(S, r.monthlyOut || 0, r.cur), 0)
+
+  const loans = of('LOAN')
+  const recurring = of('RECURRING')
+  const cards = of('REVOLVING')
+  // A recurring charge that does not fall every month is spread over its cadence,
+  // so the total is right while the count of what actually leaves is not.
+  const everyMonth = recurring.filter(r => (r.everyMonths || 1) === 1).length
+
+  // The rate half is quoted against DECLARED income. Not against `incomeRM`: the
+  // variable part is an average of the last three months and putting a firm
+  // obligation over a guess would make the obligation look softer than it is.
+  const rateBase = w.firmRM
+  const rate = (key, label, rm, note) => ({
+    key, label, rm, note,
+    basis: 'RATE',
+    base: 'net income',
+    sharePct: rateBase > 0 ? (Math.abs(rm) / rateBase) * 100 : null,
+  })
+
+  const rateRows = [
+    rate('income', 'Net income', w.firmRM,
+      w.variableRM > 0
+        ? 'declared only — the irregular part sits above, hatched'
+        : 'declared, and there is no irregular part this month'),
+    rate('loans', 'Loan instalments', -sumOf(loans),
+      loans.length ? listOf(loans.map(r => r.name)) : 'nothing owed on a loan'),
+    rate('recurring', 'Recurring charges', -sumOf(recurring),
+      recurring.length
+        ? `${listOf(recurring.map(r => r.name))}${
+            everyMonth === recurring.length ? '' : ` — ${everyMonth} of ${recurring.length} fall every month`}`
+        : 'nothing recurring'),
+    rate('cards', 'Card minimum', -sumOf(cards),
+      cards.length ? `${listOf(cards.map(r => r.name))} · the minimum only` : 'no card carries a balance'),
+    // NOT waterfall()'s uncommittedRM, and the difference is the whole reason
+    // this row is computed here. That one subtracts commitments from `incomeRM`,
+    // which includes the irregular average — so quoting it against declared
+    // income printed 121.6% on the live database, a column claiming more was left
+    // over than ever came in. Declared minus what is owed, so the five rate rows
+    // close: net income − loans − recurring − cards = uncommitted, exactly.
+    rate('uncommitted', 'Uncommitted', rateBase - w.commitments.monthlyOutRM,
+      'a fact about obligations, before living at all — the declared half only'),
+  ]
+
+  // The measured half cannot be drawn at all without two readings, and saying so
+  // is the honest output — an absent residual is not a month that cost nothing.
+  if (measured.reason) {
+    return { reason: measured.reason, spend: measured.spend, w, rateRows, measuredRows: [],
+      rateBase, measuredBase: null, incomeRM: w.incomeRM, firmRM: w.firmRM, variableRM: w.variableRM,
+      variableParts }
+  }
+
+  const spend = measured.spend
+  // THE MEASURED HALF PRINTS NO PERCENTAGE, and that is a finding rather than an
+  // omission. Its three figures share no denominator that means anything: a
+  // residual, a transfer out, and a balance delta are not parts of one whole, and
+  // the obvious candidate — what arrived in the window — is whatever happened to
+  // land between two readings. On the live database September's measured inflow
+  // is RM 205.72 against RM 2,000.00 moved to savings, which as a share reads
+  // 972% — a number that looks precise, invites comparison with the rate half's
+  // percentages, and answers nothing. The figures carry themselves.
+  const measuredBase = spend.inflowRM
+  const meas = (key, label, rm, note) => ({
+    key, label, rm, note,
+    basis: 'MEASURED',
+    base: null,
+    sharePct: null,
+  })
+
+  const gaveUp = spend.walletDeltaRM
+  const measuredRows = [
+    meas('living', 'Living costs', -spend.spentRM,
+      'the residual — measured against a bank balance, never typed in'),
+    meas('saved', 'Moved to savings', -spend.savedRM, 'out of pocket, but not spent'),
+    meas('stayed', 'What actually stayed', gaveUp,
+      gaveUp > 0 ? 'the sum of wallet balances rose this much'
+        : gaveUp < 0 ? 'the sum of wallet balances fell this much — out of the buffer'
+        : 'the balances ended exactly where they started'),
+  ]
+
+  return {
+    reason: null,
+    spend,
+    w,
+    rateRows,
+    measuredRows,
+    rateBase,
+    measuredBase,
+    incomeRM: w.incomeRM,
+    firmRM: w.firmRM,
+    variableRM: w.variableRM,
+    variableParts,
+  }
+}
+
 /**
  * What a loan has actually bought you, once the thing it bought is tracked.
  *
@@ -4884,12 +5030,6 @@ const USUAL_MONTHS = 3
 /** 365.25/12. Only ever used to put a monthly average on a daily footing. */
 const DAYS_PER_MONTH = 30.4375
 
-/** The owner's monthly spending target in RM, or null if none is set. */
-export function expenseTarget(S) {
-  const t = S.preferences && S.preferences.expenseTargetRM
-  return typeof t === 'number' && Number.isFinite(t) && t > 0 ? t : null
-}
-
 /**
  * What was logged in a month, and how it reads against the months before it.
  *
@@ -5063,7 +5203,17 @@ export function expensesFor(S, year, monthIndex, nowISO = isoOf(Date.now())) {
 }
 
 /**
- * A window of monthly totals ending at the given month, for the history chart.
+ * A window of monthly totals ending at the month that is happening, for the
+ * history chart. `(year, monthIndex)` says which of them is SELECTED — it does
+ * not move the window.
+ *
+ * The window is anchored on `nowISO`, and that is the whole point. Anchoring it
+ * on the selection slid the chart out from under the reader every time they
+ * clicked a bar: picking July rebuilt the window as `Aug…Jul`, so August and
+ * September — one of them the month still open — left the chart altogether, and
+ * the bar just clicked jumped to the far right. A month can only be selected by
+ * clicking a bar, so a selection outside the window cannot arise; if one ever
+ * did, no bar would be marked and the window would still read truthfully.
  *
  * `logged` tells a month with nothing typed apart from a month with nothing
  * spent. The chart draws the first as a gap rather than a zero bar, because a
@@ -5077,9 +5227,13 @@ export function expenseHistory(S, year, monthIndex, months = 12, nowISO = isoOf(
     totals.set(k, (totals.get(k) || 0) + toRM(S, e.amount, e.currency))
   }
 
+  // The last bar is the month nowISO falls in, whichever month is selected.
+  const endY = Number(nowISO.slice(0, 4))
+  const endM = Number(nowISO.slice(5, 7)) - 1
+
   const out = []
   for (let back = months - 1; back >= 0; back--) {
-    const d = new Date(Date.UTC(year, monthIndex - back, 1))
+    const d = new Date(Date.UTC(endY, endM - back, 1))
     const y = d.getUTCFullYear()
     const m = d.getUTCMonth()
     const k = monthKey(y, m)

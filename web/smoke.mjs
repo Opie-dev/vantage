@@ -604,13 +604,21 @@ try {
     // categories, 'Groceries' that the leaf survives into the log, 'Every entry'
     // that the list rendered rather than only the summary. The wallet prompt
     // proves the month cannot be closed without a reading — the fixture has no
-    // wallet — and 'Set a target' that an unset target is a state rather than an
-    // invented figure.
+    // wallet.
     // Six screens where there was one (money-redesign-plan.md §3). Each is
     // asserted on something only it can render, so a screen quietly rendering
     // another's content fails here rather than looking plausible.
-    ['overview', ['Run-rate figures say a month, never this month', 'What happened to the money',
-      'The other question', 'Net income', '= Uncommitted', 'RM 4,668.00', 'waterfall', 'flow']],
+    // 'Income this month' and 'Uncommitted' are the two halves of the rebuilt
+    // column: the first is the hero the run-rate rows hang from, the second is
+    // the row they close on. 'a fact about obligations' is the seam being stated
+    // — the sentence that tells the reader the rows below it changed basis.
+    //
+    // No figure is asserted here any more. The run-rate card that carried
+    // 'RM 4,668.00' is gone, and pinning the column's arithmetic to a copied
+    // number is what the block below replaced: it checks that the rate rows SUM
+    // to the uncommitted row, which a copied figure cannot test.
+    ['overview', ['Overview, drawn two ways', 'Income this month', 'a fact about obligations',
+      'Net income', 'Uncommitted', 'waterfall', 'flow']],
     ['income', ['Net, a month', 'Of that, firm', 'Of that, estimated', 'Sources',
       'RM 8,719.50', 'a salary is a floor'.replace('a s', 'A s')]],
     ['commitments', ['Committed run rate', 'Falling in', 'Commitments', 'All', 'Recurring',
@@ -624,7 +632,7 @@ try {
       'Due next', 'Carrying', 'never added']],
     ['loans', ['Instalments, a month', 'Of that, spent', 'Of that, kept', 'Outstanding']],
     ['expenses', ['Spending · what was actually spent', 'RM 285.30 logged',
-      'Logged spend · 12 months', 'Set a target', 'Day by day', 'By group', 'Food',
+      'Logged spend · 12 months', 'Day by day', 'By group', 'Food',
       'Transport', 'Groceries', 'Every entry', 'Jaya Grocer']],
     // The payoff: goal budgets checked against real uncommitted cash. RM 1,800
     // is the fixture's three budgets; RM 4,668.00 is income less commitments,
@@ -1262,6 +1270,41 @@ try {
     if (!/gave up/.test(wal.label)) throw new Error(`overview: mislabelled — "${wal.label}"`)
     console.log(`  overview   5 rows closing on ${total.rm.toFixed(2)}, wallet ${wal.label.toLowerCase()}`)
 
+    /* THE RATE HALF CLOSES, AND THE SEAM HOLDS.
+     *
+     * monthShape() puts a run rate and a measured month in one column, which is
+     * the arrangement money-redesign-plan.md §2.2 says goes wrong quietly. Two
+     * properties keep it honest and both are asserted here rather than trusted:
+     * the five rate rows sum to `uncommitted` exactly, and nothing in the
+     * measured half carries a percentage.
+     *
+     * The first caught a real bug on the live database. `waterfall()` subtracts
+     * commitments from `incomeRM` — declared PLUS the irregular three-month mean
+     * — so quoting that row against declared income printed "Uncommitted 121.6%",
+     * a column claiming more was left over than ever arrived. */
+    {
+      const { monthShape } = await server.ssrLoadModule('/src/lib/calc.js')
+      const s = monthShape(w, now.getFullYear(), now.getMonth())
+      const spent = s.rateRows.slice(0, 4).reduce((t, r) => t + r.rm, 0)
+      const unc = s.rateRows.find(r => r.key === 'uncommitted')
+      if (Math.abs(spent - unc.rm) > 0.005) {
+        throw new Error(`overview: the rate half does not close — ${spent} against uncommitted ${unc.rm}`)
+      }
+      if (s.rateRows.some(r => r.sharePct == null)) {
+        throw new Error('overview: a rate row lost the denominator it is quoted against')
+      }
+      // A share over 100% is the shape of the bug above: the row was computed on
+      // one base and printed against another.
+      const wild = s.rateRows.find(r => r.key !== 'income' && r.sharePct > 100)
+      if (wild) {
+        throw new Error(`overview: "${wild.label}" is ${wild.sharePct.toFixed(1)}% of declared income — it is quoted against a base it was not computed on`)
+      }
+      if (s.measuredRows.some(r => r.sharePct != null || r.base != null)) {
+        throw new Error('overview: a measured row carries a percentage, which shares no denominator with the rate half')
+      }
+      console.log(`  overview   the rate half closes on ${unc.rm.toFixed(2)}, and the measured half prints no share`)
+    }
+
     /* The same copy, actually RENDERED — and in Flow, which nothing ever drew.
      *
      * overviewMode() reads a stored preference and the fixture carries none, so
@@ -1282,28 +1325,36 @@ try {
       await tick(() => ctl.setTab('overview'))
       const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
 
-      for (const n of ['Arrives', 'Promised, and spent']) {
+      for (const n of ['Where the month goes', 'Arrives', 'Promised', 'Where it stands']) {
         if (!pane.includes(n)) throw new Error(`overview (flow): the "${n}" column did not draw`)
       }
-      // THE THIRD COLUMN IS THE RESIDUAL — what living took, money already gone.
-      // A heading claiming it is still on hand contradicts the row beneath it,
-      // and that row names itself, so the two are readable against each other.
+      // THE THIRD COLUMN STILL MAY NOT CLAIM MONEY IS ON HAND. It holds three
+      // things now — a wallet delta, what obligations leave, and what living took
+      // — and two of them are not money to hand: a balance that FELL is the
+      // buffer being spent. "Still here" over that states the opposite of the
+      // figures beneath it, which is the heading this column lost once already.
       if (pane.includes('Still here')) {
-        throw new Error('overview (flow): the residual is headed as money still held')
+        throw new Error('overview (flow): the third column is headed as money still held')
       }
-      if (!pane.includes('What that leaves')) {
-        throw new Error('overview (flow): the residual column lost its heading')
+      for (const n of ['What stayed', 'Uncommitted', 'What living took']) {
+        if (!pane.includes(n)) {
+          throw new Error(`overview (flow): the third column does not name "${n}"`)
+        }
       }
-      // And it is the TOTAL row under there, both halves of it — so a column
+      // And the residual under there is the measured one, to the cent — a column
       // wired to the wrong row fails here rather than looking plausible with a
       // right-shaped figure.
-      if (!pane.includes(total.label)) {
-        throw new Error(`overview (flow): the residual column does not name "${total.label}"`)
-      }
       if (!pane.includes(fmt(total.rm, 'MYR'))) {
-        throw new Error(`overview (flow): expected the residual ${fmt(total.rm, 'MYR')}`)
+        throw new Error(`overview (flow): expected the measured residual ${fmt(total.rm, 'MYR')}`)
       }
-      console.log(`  overview   flow draws 3 columns, the third "${total.label}" at ${fmt(total.rm, 'MYR')}`)
+      // THE SEAM, ASSERTED. Only the promised column carries percentages: the
+      // right-hand figures are measured over the reading window and share no
+      // denominator with declared income, so a share printed there would invite
+      // exactly the comparison the two bases cannot support.
+      if (!pane.includes('share no') && !pane.includes('shares of declared income')) {
+        throw new Error('overview (flow): the two bases are drawn together and not distinguished')
+      }
+      console.log(`  overview   flow draws 3 columns, the measured residual at ${fmt(total.rm, 'MYR')}`)
     } finally {
       globalThis.fetch = stub
       await act(async () => { await ctl.reload() })
@@ -2128,11 +2179,12 @@ try {
       throw new Error(`expenses: expected 240/31 a day over 31 days, got ${h.perDayRM} over ${h.elapsedDays}`)
     }
 
-    // The history window: twelve months ending at the one on screen, and a month
-    // nobody typed into is marked rather than drawn as a zero.
+    // The history window: twelve months ending at the month that is HAPPENING —
+    // not at the month selected — and a month nobody typed into is marked rather
+    // than drawn as a zero.
     const win = expenseHistory(hist, 2026, 0, 12, '2026-02-01')
-    if (win.length !== 12 || win[11].key !== '2026-01' || win[0].key !== '2025-02') {
-      throw new Error(`expenses: expected Feb 2025 to Jan 2026, got ${win[0].key} to ${win[11].key}`)
+    if (win.length !== 12 || win[11].key !== '2026-02' || win[0].key !== '2025-03') {
+      throw new Error(`expenses: expected Mar 2025 to Feb 2026, got ${win[0].key} to ${win[11].key}`)
     }
     if (win.filter(x => x.logged).length !== 3) {
       throw new Error('expenses: three of the twelve months were logged')
@@ -2140,6 +2192,22 @@ try {
     const november = win.find(x => x.key === '2025-11')
     if (november.logged || november.totalRM !== 0) {
       throw new Error('expenses: a month with nothing typed is not a month with nothing spent')
+    }
+    if (win.filter(x => x.selected).map(x => x.key).join() !== '2026-01') {
+      throw new Error('expenses: the month passed in is the one bar marked selected')
+    }
+
+    // AND PICKING A MONTH DOES NOT MOVE THAT WINDOW, which is the whole of it.
+    // Built as `sel-11 … sel`, picking October rebuilt the window as
+    // `Nov 2024 … Oct 2025`: every month AFTER the pick left the chart — the one
+    // still open among them — so the reader could not click back to what they
+    // had been looking at a moment earlier.
+    const picked = expenseHistory(hist, 2025, 9, 12, '2026-02-01')
+    if (picked.map(x => x.key).join() !== win.map(x => x.key).join()) {
+      throw new Error(`expenses: picking a month moved the window to ${picked[0].key}–${picked[11].key}`)
+    }
+    if (picked.filter(x => x.selected).map(x => x.key).join() !== '2025-10') {
+      throw new Error('expenses: picking a month must move the selection and nothing else')
     }
 
     // With a wallet and two readings the log is measured against what actually left.
@@ -2969,10 +3037,11 @@ try {
     }
 
     // ── DRILLED, and the two things that are only true then: the note stops
-    // promising the other five pages this month, and the way back exists.
-    // expenseHistory() re-anchors on the month picked — the selected month is
-    // always the LAST bar — so after a drill there is no bar for today and the
-    // chart alone cannot undo itself.
+    // promising the other five pages this month, and the chart holds a bar for a
+    // month it is not showing. The window is anchored on the month that is
+    // HAPPENING, so a pick moves the highlight and nothing else — which is what
+    // lets the chart undo its own drill, and why no "Back to …" button stands
+    // beside it any more.
     {
       await drillTo(PY, PM)
       const note = strip().textContent
@@ -2982,22 +3051,55 @@ try {
       if (!note.includes(`this screen only — the other five are on ${monthLabel(NY, NM)}`)) {
         throw new Error(`strip: a drilled Expenses does not say where the other five are — "${note}"`)
       }
-      if ([...pane().querySelectorAll('button[data-month]')].some(b => b.dataset.month === keyOf(NY, NM))) {
-        throw new Error('strip: the chart still holds a bar for this month, so the way back needs no button')
+      // THE REGRESSION, in the DOM: every month survives a drill into the past.
+      // They used to fall off the window's right edge one by one — pick July and
+      // August and September were simply not on the chart, so the only month you
+      // could reach from a drilled chart was an earlier one.
+      const bars = [...pane().querySelectorAll('button[data-month]')].map(b => b.dataset.month)
+      if (bars.length !== 12 || bars[bars.length - 1] !== keyOf(NY, NM)) {
+        throw new Error(`expenses: a drilled chart holds ${bars.length} bars ending ${bars[bars.length - 1]}, not 12 ending ${keyOf(NY, NM)}`)
       }
-      const back = [...pane().querySelectorAll('button')].find(
-        b => b.textContent.trim() === `Back to ${monthLabel(NY, NM)}`)
-      if (!back) throw new Error('expenses: drilled into the past with no way back to the month that is happening')
+      const current = pane().querySelector('button[data-month][aria-current="true"]')
+      if (!current || current.dataset.month !== keyOf(PY, PM)) {
+        throw new Error(`expenses: the drilled month is not the bar marked current — ${current?.dataset.month}`)
+      }
+      if ([...pane().querySelectorAll('button')].some(b => b.textContent.trim().startsWith('Back to '))) {
+        throw new Error('expenses: a drilled chart keeps every month and still offers a "Back to" button')
+      }
+      // AND THE PAGE KEEPS ITS SHAPE ACROSS THE DRILL. Every expense in the
+      // fixture is dated into the month that is happening, so the month drilled
+      // to has nothing in it — which used to drop Day by day and By group
+      // entirely and swap the log for a centred block. Clicking a bar changed
+      // what the screen was, not just which month it read. The eyebrows are the
+      // page's skeleton, so comparing them compares the shape.
+      const skeleton = () => [...pane().querySelectorAll('.eyebrow')].map(e => e.textContent.trim())
+      const empty = skeleton()
+      for (const want of ['Day by day', 'By group · against a usual month', 'Every entry']) {
+        if (!empty.includes(want)) {
+          throw new Error(`expenses: a month with nothing logged drops "${want}" — ${empty.join(' | ')}`)
+        }
+      }
+
+      // So the way back IS the bar, and clicking it is the way back.
+      const back = pane().querySelector(`button[data-month="${keyOf(NY, NM)}"]`)
       await tick(() => back.click())
       if (named() !== monthLabel(NY, NM)) {
         throw new Error(`expenses: the way back landed on ${named()} rather than ${monthLabel(NY, NM)}`)
       }
-      // And it is gone again, because it is the return path for a drill and not
-      // a month control: nothing on a Money screen showing today can move it.
+      // And nothing says it in words, on either month: a chart that can undo its
+      // own drill needs no button to, and one standing here would be a second
+      // control for a thing the bars already do.
       if ([...pane().querySelectorAll('button')].some(b => b.textContent.trim().startsWith('Back to '))) {
-        throw new Error('expenses: the way back is still offered on the month that is happening')
+        throw new Error('expenses: the chart can undo its own drill and still offers a "Back to" button')
       }
-      console.log(`  strip      a drilled Expenses says so, and offers the one way back to ${monthLabel(NY, NM)}`)
+      // The comparison the reader actually makes: a logged month and an empty one
+      // are the same run of sections in the same order, so clicking between them
+      // moves the figures and nothing else.
+      const logged = skeleton()
+      if (logged.join(' | ') !== empty.join(' | ')) {
+        throw new Error(`expenses: a logged month and an empty one are different pages\n  logged: ${logged.join(' | ')}\n  empty:  ${empty.join(' | ')}`)
+      }
+      console.log(`  strip      a drilled Expenses says so, keeps every month on the chart, and an empty month is the same ${logged.length} sections`)
     }
 
     // ── A WALLET THAT ENDED WHERE IT STARTED neither rose nor fell, and two
@@ -3146,6 +3248,49 @@ try {
       throw new Error('pay card: the sheet stayed open after recording — the save threw')
     }
     console.log('  pay card   a custom amount records and the sheet closes')
+  }
+
+  // The usual month is DRAWN now, not only stated in prose. A line the reader
+  // cannot check a bar against is a rule with no number, so the legend carries
+  // the figure — and the scale folds it in, or a usual month above every bar
+  // would sit off the top of the chart exactly when it matters most.
+  {
+    // THE FIXTURE HAS TO EARN A USUAL MONTH FIRST. Every expense in STATE is
+    // dated into the month that is happening, and a usual month averages the
+    // months that HAVE a log excluding this one — so usualRM is null on the
+    // fixture as it stands and the legend correctly draws nothing. Asserting
+    // against it unseeded tested only that. Seeded here and put back after, the
+    // way the strip's blocks seed their own readings.
+    const expenses0 = STATE.expenses
+    const p2 = n => String(n).padStart(2, '0')
+    const back = new Date(NOW)
+    back.setDate(1)
+    back.setMonth(back.getMonth() - 1)
+    const lastMonthDay = d => `${back.getFullYear()}-${p2(back.getMonth() + 1)}-${p2(d)}`
+    STATE.expenses = [
+      ...expenses0,
+      { id: 901, date: lastMonthDay(6), amount: 500, currency: 'MYR', category: 'GROCERIES',
+        note: '', asset_id: null, source: 'manual' },
+      { id: 902, date: lastMonthDay(9), amount: 300, currency: 'MYR', category: 'FUEL',
+        note: '', asset_id: null, source: 'manual' },
+    ]
+    await act(async () => { await ctl.reload() })
+    await tick(() => ctl.setTab('expenses'))
+    const pane = document.querySelector('[data-slot="tabs-content"][data-state="active"]').textContent
+    if (!/a usual month RM/.test(pane)) {
+      throw new Error('expenses: the usual month is neither drawn nor named')
+    }
+    // And it names THE figure, not any figure: one month before this one carries
+    // 800, so a usual month is 800. A legend reading a different average from
+    // the line drawn beside it is worse than no legend — the reader would check
+    // every bar against a number that is not the rule on the chart.
+    if (!/a usual month RM\s*800\.00/.test(pane)) {
+      throw new Error(`expenses: the legend names ${pane.match(/a usual month RM[\s\d,.]*/)?.[0]}, not a usual month of RM 800.00`)
+    }
+    console.log('  expenses   the usual month is drawn, and the legend names it')
+    STATE.expenses = expenses0
+    await act(async () => { await ctl.reload() })
+    await tick(() => ctl.setTab('dashboard'))
   }
 
   const real = errors.filter(e =>

@@ -8,8 +8,9 @@ cited and that is where the reasoning stays.
 Sources: `money-redesign-plan.md`, `commitments-and-income-plan.md`, `cards-canvas-gaps.md`,
 `income-canvas-gaps.md`.
 
-Last reconciled against the code and the live database on **7 September 2026**, with `main` at
-`36fe462`.
+Last reconciled against the code and the live database on **8 September 2026**, with `main` at
+`80b4d86`. The Expenses pass recorded under *Recently closed* is on the branch
+`expenses-average-line` and is not yet on `main`.
 
 ## How to read this
 
@@ -543,6 +544,56 @@ message.
   statutory copy corrected in all five places; `payer` and `Total deducted` now render; a foreign
   payslip converts.
 - **The wallet account itself** — see Phase 1.
+- **Expenses, the 8 September pass** — on `expenses-average-line`, not yet on `main`:
+  - *The chart stopped moving under the reader.* `expenseHistory()` built its window as
+    `sel-11 … sel`, so picking July rebuilt it as `Aug…Jul` and every month after the pick left the
+    chart. The window is anchored on `nowISO` now and the pick only moves the highlight, so the
+    month that is happening is always the last bar. The `Back to …` button went with the bug it
+    existed for — the way back is the bar.
+  - *A usual month is drawn, not only stated.* The dotted rule carries its figure in the legend and
+    is folded into the scale, or it would sit above every bar exactly when it matters most.
+  - *The Amount / Movement sort toggle is gone.* `expensesFor()` already returns groups by amount,
+    so it was a second way to read one list — and on a month whose groups mostly say "no history"
+    it sorted on a figure that was not there. The per-card movement figures stay.
+  - *Every section renders on every month.* Day by day, By group and Every entry were gated on
+    there being entries, so an empty month was a different page shape rather than the same page
+    with less in it. Each says what it has instead; a smoke assertion compares the eyebrow list of
+    an empty month against a logged one.
+  - *The residual panel is off this screen.* `TwoBases`, and with it "What you hold liquid" and
+    "Logged but never left". It needs two readings bracketing the month, so against the live
+    database it rendered on September and on no other month — the last section that appeared and
+    vanished as the reader clicked between months. **The derivation is untouched**: `expensesFor()`
+    still computes `unloggedRM` and `coveragePct`, and the coverage bar stays on Overview.
+  - *Overview redrawn to the income-first artifact.* `monthShape()` is new in `calc.js` and derives
+    no money of its own — it reads `waterfall()` and `overviewRows()` straight through, so it cannot
+    disagree with the panels already on the page. The Waterfall view now opens with an **Income this
+    month** hero (declared solid, the irregular mean hatched, showing the months behind it) over
+    five run-rate rows; the Flow view is **Where the month goes**, three columns. The main panel is
+    full width — eight rows with their own bars do not fit a 420px rail — and the coverage and
+    run-rate cards moved below it.
+    - **The column changes basis halfway and says so.** Five rate rows quoted against declared
+      income, then a stated seam, then three measured rows. Nothing sums across the rule.
+    - **Two findings the artifact could not have known**, both now asserted in `smoke.mjs`:
+      `waterfall().uncommittedRM` subtracts commitments from `incomeRM` — declared *plus* the
+      irregular mean — so quoting it against declared income printed **"Uncommitted 121.6%"** on the
+      live database. The row is computed declared − owed instead, and the five rate rows close
+      exactly. And the measured half prints **no percentage**: its only candidate base is whatever
+      arrived between two readings, which on live September is RM 205.72 against RM 2,000.00 moved
+      to savings — 972%, precise-looking and meaningless.
+    - **Both side cards removed.** *The other question · a usual month* restated the run rate the
+      column now opens with, and *Of the living cost, itemised* answered a question Expenses asks on
+      its own page. Overview is one full-width panel. The smoke list stopped asserting the copied
+      `RM 4,668.00` those cards printed — the closure assertion tests the arithmetic instead, which
+      a copied figure never could.
+    - **"Still here" was not restored.** The artifact's third column holds a wallet balance that
+      *fell* and, in its own draft, liabilities — neither is money to hand, so the heading would
+      state the opposite of the figures beneath it, which is what it lost the heading for. It is
+      **Where it stands**, and the smoke assertion that forbids "Still here" was kept and widened.
+  - *The monthly target is removed outright* **(decision, taken)** — the control, the dashed line,
+    its legend and copy, `expenseTarget()`, and the `expenseTargetRM` validator and default in
+    `src/services/preferences.service.js`. The stored value was `null`, so nothing was lost;
+    `preferences.get()` will keep echoing the dead key until the row is next written, and
+    `update()` now rejects it as unknown.
 
 ---
 
